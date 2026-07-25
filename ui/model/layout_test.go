@@ -117,7 +117,8 @@ func TestExpandedPlaylistUsesAvailableRows(t *testing.T) {
 
 func TestCollapsedPlaylistCentersFrameVertically(t *testing.T) {
 	m := newLayoutTestModel(80, 50)
-	content := strings.Join(m.mainSections(m.renderMainBody(), true, false), "\n")
+	body := ui.FitRect(m.renderMainBody(), m.layout.panelWidth, m.layout.bodyRows)
+	content := strings.Join(m.mainSections(body, true, false), "\n")
 	frameHeight := lipgloss.Height(ui.FrameStyle.Render(content))
 	wantTopPadding := (m.height - frameHeight) / 2
 
