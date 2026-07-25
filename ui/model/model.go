@@ -177,7 +177,7 @@ func (s topLevelScreen) label() string {
 }
 
 // maxPlVisible caps the playlist at a readable height even on tall terminals.
-// maxPlExpandVisible is the higher cap used when the user expands with 'x'.
+// maxPlExpandVisible is the higher cap used by content-first list screens.
 const (
 	maxPlVisible       = 12
 	maxPlExpandVisible = 24

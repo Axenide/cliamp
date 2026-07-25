@@ -291,14 +291,15 @@ func (m Model) renderCompactSource() string {
 	return labelStyle.Render("SRC ") + trackStyle.Render("["+name+"]") + dimStyle.Render(fmt.Sprintf(" %d/%d", m.provPillIdx+1, len(m.providers)))
 }
 
-// centerFrame horizontally centers a pre-rendered frame without wasting rows
-// that can instead hold playlist content.
+// centerFrame centers a pre-rendered frame in the terminal.
 func (m Model) centerFrame(frame string) string {
 	frameW := lipgloss.Width(frame)
+	frameH := lipgloss.Height(frame)
 	padLeft := max(0, (m.width-frameW)/2)
+	padTop := max(0, (m.height-frameH)/2)
 
 	if padLeft == 0 {
-		return frame
+		return strings.Repeat("\n", padTop) + frame
 	}
 	// Indent every line by padLeft spaces.
 	prefix := strings.Repeat(" ", padLeft)
@@ -306,7 +307,7 @@ func (m Model) centerFrame(frame string) string {
 	for i, l := range lines {
 		lines[i] = prefix + l
 	}
-	return strings.Join(lines, "\n")
+	return strings.Repeat("\n", padTop) + strings.Join(lines, "\n")
 }
 
 func (m Model) renderTitle() string {

@@ -80,7 +80,9 @@ func (m *Model) recomputeLayout() {
 	if !layout.tooSmall() {
 		layout.bodyRows = max(1, height-2*paddingV-layout.fixedRows-layout.footerRows)
 		limit := maxPlVisible
-		if m.heightExpanded || contentFirst {
+		if m.heightExpanded {
+			limit = layout.bodyRows
+		} else if contentFirst {
 			limit = maxPlExpandVisible
 		}
 		m.plVisible = min(limit, layout.bodyRows)
