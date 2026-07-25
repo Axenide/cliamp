@@ -99,6 +99,41 @@ func TestResponsiveViewsFitTerminal(t *testing.T) {
 	}
 }
 
+func TestExpandedPlaylistUsesAvailableRows(t *testing.T) {
+	m := newLayoutTestModel(80, 50)
+	if m.plVisible != maxPlVisible {
+		t.Fatalf("collapsed playlist rows = %d, want %d", m.plVisible, maxPlVisible)
+	}
+
+	m.heightExpanded = true
+	m.recomputeLayout()
+	if m.plVisible != m.layout.bodyRows {
+		t.Fatalf("expanded playlist rows = %d, want available body rows %d", m.plVisible, m.layout.bodyRows)
+	}
+	if m.plVisible <= maxPlExpandVisible {
+		t.Fatalf("expanded playlist rows = %d, want more than previous cap %d", m.plVisible, maxPlExpandVisible)
+	}
+}
+
+func TestCollapsedPlaylistCentersFrameVertically(t *testing.T) {
+	m := newLayoutTestModel(80, 50)
+	content := strings.Join(m.mainSections(m.renderMainBody(), true, false), "\n")
+	frameHeight := lipgloss.Height(ui.FrameStyle.Render(content))
+	wantTopPadding := (m.height - frameHeight) / 2
+
+	out := m.View().Content
+	gotTopPadding := 0
+	for _, line := range strings.Split(out, "\n") {
+		if line != "" {
+			break
+		}
+		gotTopPadding++
+	}
+	if gotTopPadding != wantTopPadding {
+		t.Fatalf("top padding = %d, want %d", gotTopPadding, wantTopPadding)
+	}
+}
+
 func TestResizeClampsActiveOverlayCursor(t *testing.T) {
 	m := newLayoutTestModel(120, 40)
 	m.themePicker.visible = true
