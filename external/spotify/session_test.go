@@ -11,9 +11,14 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 
 	"golang.org/x/oauth2"
 )
+
+type tokenSourceFunc func() (*oauth2.Token, error)
+
+func (f tokenSourceFunc) Token() (*oauth2.Token, error) { return f() }
 
 func TestIsInvalidGrant(t *testing.T) {
 	tests := []struct {
@@ -123,6 +128,101 @@ func TestOAuthCallbackHandlerRejectsUnknownState(t *testing.T) {
 	}
 	if len(callbacks) != 0 {
 		t.Errorf("unknown state queued %d callback(s), want 0", len(callbacks))
+	}
+}
+
+func TestPersistingTokenSourcePersistsRotationOnce(t *testing.T) {
+	var persisted []string
+	source := &persistingTokenSource{
+		source:       tokenSourceFunc(func() (*oauth2.Token, error) { return &oauth2.Token{AccessToken: "access", RefreshToken: "new"}, nil }),
+		refreshToken: "old",
+		persist: func(refreshToken string) error {
+			persisted = append(persisted, refreshToken)
+			return nil
+		},
+	}
+
+	for range 2 {
+		token, err := source.Token()
+		if err != nil {
+			t.Fatalf("Token() error = %v", err)
+		}
+		if token.AccessToken != "access" {
+			t.Errorf("access token = %q, want access", token.AccessToken)
+		}
+	}
+	if !slices.Equal(persisted, []string{"new"}) {
+		t.Errorf("persisted refresh tokens = %v, want [new]", persisted)
+	}
+}
+
+func TestPersistingTokenSourceDoesNotBlockOnSaveFailure(t *testing.T) {
+	wantErr := errors.New("disk full")
+	attempts := 0
+	source := &persistingTokenSource{
+		source:       tokenSourceFunc(func() (*oauth2.Token, error) { return &oauth2.Token{AccessToken: "access", RefreshToken: "new"}, nil }),
+		refreshToken: "old",
+		persist: func(string) error {
+			attempts++
+			return wantErr
+		},
+	}
+
+	for range 2 {
+		token, err := source.Token()
+		if err != nil {
+			t.Fatalf("Token() error = %v, want successful access despite persistence failure", err)
+		}
+		if token.AccessToken != "access" {
+			t.Errorf("access token = %q, want access", token.AccessToken)
+		}
+	}
+	if attempts != 1 {
+		t.Errorf("persistence attempts = %d, want 1 for one rotated token", attempts)
+	}
+}
+
+func TestWebAPITokenSourcePersistsRotatedRefreshToken(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	stored := storedCreds{
+		Username:     "user",
+		Data:         []byte("playback-credential"),
+		DeviceID:     "device",
+		RefreshToken: "old",
+	}
+	if err := saveCreds(&stored); err != nil {
+		t.Fatal(err)
+	}
+
+	source := webAPITokenSource("client", &oauth2.Token{
+		AccessToken:  "access",
+		RefreshToken: "new",
+		Expiry:       time.Now().Add(time.Hour),
+	}, stored)
+	if _, err := source.Token(); err != nil {
+		t.Fatalf("Token() error = %v", err)
+	}
+
+	got, err := loadCreds()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Username != stored.Username || got.DeviceID != stored.DeviceID || !slices.Equal(got.Data, stored.Data) {
+		t.Errorf("non-OAuth credentials changed: got %+v, want username/device/data from %+v", got, stored)
+	}
+	if got.RefreshToken != "new" {
+		t.Errorf("refresh token = %q, want new", got.RefreshToken)
+	}
+	path, err := CredsPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mode := info.Mode().Perm(); mode != 0o600 {
+		t.Errorf("credentials mode = %o, want 600", mode)
 	}
 }
 

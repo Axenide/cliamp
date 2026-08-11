@@ -14,12 +14,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"sync"
 	"sync/atomic"
 
 	"github.com/bjarneo/cliamp/applog"
 	"github.com/bjarneo/cliamp/internal/browser"
+	"github.com/bjarneo/cliamp/internal/fileutil"
 	"github.com/bjarneo/cliamp/playlist"
 
 	librespot "github.com/devgianlu/go-librespot"
@@ -172,20 +172,22 @@ func newSessionFromStored(ctx context.Context, clientID string, creds *storedCre
 		oauthToken = token
 	}
 
-	// Create an auto-refreshing token source — handles expiry transparently.
-	conf := spotifyOAuthConfig(clientID, oauthScopes)
-	ts := conf.TokenSource(context.Background(), oauthToken)
-
-	s := &Session{sess: sess, devID: devID, clientID: clientID, tokenSource: ts}
-
 	// Re-save credentials (including refresh token for next launch).
-	if err := saveCreds(&storedCreds{
+	stored := storedCreds{
 		Username:     sess.Username(),
 		Data:         sess.StoredCredentials(),
 		DeviceID:     devID,
 		RefreshToken: oauthToken.RefreshToken,
-	}); err != nil {
+	}
+	if err := saveCreds(&stored); err != nil {
 		applog.UserError("spotify: failed to save credentials: %v", err)
+	}
+
+	s := &Session{
+		sess:        sess,
+		devID:       devID,
+		clientID:    clientID,
+		tokenSource: webAPITokenSource(clientID, oauthToken, stored),
 	}
 
 	if err := s.initPlayer(); err != nil {
@@ -243,6 +245,49 @@ func silentTokenRefresh(clientID, refreshToken string) (*oauth2.Token, error) {
 	conf := spotifyOAuthConfig(clientID, oauthScopes)
 	src := conf.TokenSource(context.Background(), &oauth2.Token{RefreshToken: refreshToken})
 	return src.Token()
+}
+
+// persistingTokenSource saves refresh-token rotations without making a usable
+// access token fail when credential persistence itself fails.
+type persistingTokenSource struct {
+	source       oauth2.TokenSource
+	persist      func(string) error
+	mu           sync.Mutex
+	refreshToken string
+}
+
+func (s *persistingTokenSource) Token() (*oauth2.Token, error) {
+	token, err := s.source.Token()
+	if err != nil {
+		return nil, err
+	}
+	if token.RefreshToken == "" {
+		return token, nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if token.RefreshToken == s.refreshToken {
+		return token, nil
+	}
+	s.refreshToken = token.RefreshToken
+	if err := s.persist(token.RefreshToken); err != nil {
+		applog.UserError("spotify: failed to persist rotated refresh token: %v", err)
+	}
+	return token, nil
+}
+
+func webAPITokenSource(clientID string, token *oauth2.Token, creds storedCreds) oauth2.TokenSource {
+	conf := spotifyOAuthConfig(clientID, oauthScopes)
+	source := conf.TokenSource(context.Background(), token)
+	return &persistingTokenSource{
+		source:       source,
+		refreshToken: creds.RefreshToken,
+		persist: func(refreshToken string) error {
+			creds.RefreshToken = refreshToken
+			return saveCreds(&creds)
+		},
+	}
 }
 
 // isInvalidGrant reports whether err is an OAuth2 invalid_grant response
@@ -453,20 +498,22 @@ func newInteractiveSession(ctx context.Context, clientID string) (*Session, erro
 	}
 
 	// Persist stored credentials + refresh token for future sessions.
-	if err := saveCreds(&storedCreds{
+	stored := storedCreds{
 		Username:     sess.Username(),
 		Data:         sess.StoredCredentials(),
 		DeviceID:     devID,
 		RefreshToken: webToken.RefreshToken,
-	}); err != nil {
+	}
+	if err := saveCreds(&stored); err != nil {
 		applog.UserError("spotify: failed to save credentials: %v", err)
 	}
 
-	// Create an auto-refreshing token source for Web API calls.
-	conf := spotifyOAuthConfig(clientID, oauthScopes)
-	ts := conf.TokenSource(context.Background(), webToken)
-
-	s := &Session{sess: sess, devID: devID, clientID: clientID, tokenSource: ts}
+	s := &Session{
+		sess:        sess,
+		devID:       devID,
+		clientID:    clientID,
+		tokenSource: webAPITokenSource(clientID, webToken, stored),
+	}
 	if err := s.initPlayer(); err != nil {
 		sess.Close()
 		return nil, err
@@ -655,12 +702,9 @@ func saveCreds(creds *storedCreds) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
 	data, err := json.Marshal(creds)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o600)
+	return fileutil.WriteFileAtomic(path, data, 0o600)
 }
