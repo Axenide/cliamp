@@ -400,3 +400,111 @@ func TestItemRequestsExpanded(t *testing.T) {
 		t.Fatalf("tracks = %d, want 1", len(item.Media.Tracks))
 	}
 }
+
+func TestGetRetriesOnceAfterUnauthorized(t *testing.T) {
+	logins, gets := 0, 0
+	tokens := []string{"stale", "fresh"}
+	c := mockClient("", "listener", "secret", nil, func(req *http.Request) (*http.Response, error) {
+		switch req.URL.Path {
+		case "/login":
+			body := `{"user":{"id":"u-1","token":"` + tokens[logins] + `"}}`
+			logins++
+			return jsonResponse(body), nil
+		case "/api/libraries":
+			gets++
+			if req.Header.Get("Authorization") == "Bearer stale" {
+				return statusResponse(http.StatusUnauthorized, "401 Unauthorized"), nil
+			}
+			if got := req.Header.Get("Authorization"); got != "Bearer fresh" {
+				t.Fatalf("retry Authorization = %q, want Bearer fresh", got)
+			}
+			return jsonResponse(librariesJSON), nil
+		default:
+			t.Fatalf("unexpected path %s", req.URL.Path)
+			return nil, nil
+		}
+	})
+
+	libs, err := c.Libraries()
+	if err != nil {
+		t.Fatalf("Libraries() error: %v", err)
+	}
+	if len(libs) != 3 {
+		t.Fatalf("got %d libraries, want 3", len(libs))
+	}
+	if logins != 2 || gets != 2 {
+		t.Fatalf("logins = %d, gets = %d; want 2 and 2 (one re-login, one retry)", logins, gets)
+	}
+}
+
+func TestGetRetriesOnlyOnce(t *testing.T) {
+	logins, gets := 0, 0
+	c := mockClient("", "listener", "secret", nil, func(req *http.Request) (*http.Response, error) {
+		switch req.URL.Path {
+		case "/login":
+			logins++
+			return jsonResponse(`{"user":{"id":"u-1","token":"tok"}}`), nil
+		case "/api/libraries":
+			gets++
+			return statusResponse(http.StatusUnauthorized, "401 Unauthorized"), nil
+		default:
+			t.Fatalf("unexpected path %s", req.URL.Path)
+			return nil, nil
+		}
+	})
+
+	err := c.Ping()
+	if err == nil || !strings.Contains(err.Error(), "401") {
+		t.Fatalf("Ping() error = %v, want a 401", err)
+	}
+	if logins != 2 || gets != 2 {
+		t.Fatalf("logins = %d, gets = %d; want 2 and 2 (no retry loop)", logins, gets)
+	}
+}
+
+func TestGetDoesNotRetryWithConfiguredToken(t *testing.T) {
+	gets := 0
+	c := mockClient("tok", "", "", nil, func(req *http.Request) (*http.Response, error) {
+		if req.URL.Path == "/login" {
+			t.Fatal("must not attempt login when a token is configured")
+		}
+		gets++
+		return statusResponse(http.StatusUnauthorized, "401 Unauthorized"), nil
+	})
+
+	if err := c.Ping(); err == nil {
+		t.Fatal("Ping() error = nil, want a 401")
+	}
+	if gets != 1 {
+		t.Fatalf("requests = %d, want 1 (no credentials to retry with)", gets)
+	}
+}
+
+func TestSendJSONRetriesOnceAfterUnauthorized(t *testing.T) {
+	logins, patches := 0, 0
+	tokens := []string{"stale", "fresh"}
+	c := mockClient("", "listener", "secret", nil, func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.URL.Path == "/login":
+			body := `{"user":{"id":"u-1","token":"` + tokens[logins] + `"}}`
+			logins++
+			return jsonResponse(body), nil
+		case strings.HasPrefix(req.URL.Path, "/api/me/progress/"):
+			patches++
+			if req.Header.Get("Authorization") == "Bearer stale" {
+				return statusResponse(http.StatusUnauthorized, "401 Unauthorized"), nil
+			}
+			return statusResponse(http.StatusOK, "200 OK"), nil
+		default:
+			t.Fatalf("unexpected path %s", req.URL.Path)
+			return nil, nil
+		}
+	})
+
+	if err := c.UpdateProgress("item-1", "", 30, 600, false); err != nil {
+		t.Fatalf("UpdateProgress() error: %v", err)
+	}
+	if logins != 2 || patches != 2 {
+		t.Fatalf("logins = %d, patches = %d; want 2 and 2", logins, patches)
+	}
+}

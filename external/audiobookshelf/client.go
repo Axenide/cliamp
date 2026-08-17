@@ -131,9 +131,31 @@ func (c *Client) authToken() string {
 	return c.token
 }
 
+// get issues a GET, retrying once with a fresh login when the server rejects
+// the cached token and credentials are configured. Password logins hand back a
+// token that can expire, so a 401 is recoverable without user action.
 func (c *Client) get(p string, params url.Values, out any) error {
+	code, err := c.getOnce(p, params, out)
+	if code == http.StatusUnauthorized && c.canRelogin() {
+		c.clearToken()
+		_, err = c.getOnce(p, params, out)
+	}
+	return err
+}
+
+// canRelogin reports whether a rejected request can be retried after logging
+// in again. A token from config cannot be renewed.
+func (c *Client) canRelogin() bool { return c.user != "" && c.password != "" }
+
+func (c *Client) clearToken() {
+	c.mu.Lock()
+	c.token = ""
+	c.mu.Unlock()
+}
+
+func (c *Client) getOnce(p string, params url.Values, out any) (int, error) {
 	if err := c.ensureAuth(); err != nil {
-		return err
+		return 0, err
 	}
 
 	u := c.baseURL + p
@@ -142,44 +164,55 @@ func (c *Client) get(p string, params url.Values, out any) error {
 	}
 	req, err := http.NewRequest(http.MethodGet, u, nil)
 	if err != nil {
-		return fmt.Errorf("audiobookshelf: %s: %w", p, err)
+		return 0, fmt.Errorf("audiobookshelf: %s: %w", p, err)
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.authToken())
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("audiobookshelf: %s: %w", p, err)
+		return 0, fmt.Errorf("audiobookshelf: %s: %w", p, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("audiobookshelf: %s: http status %s", p, resp.Status)
+		return resp.StatusCode, fmt.Errorf("audiobookshelf: %s: http status %s", p, resp.Status)
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
 	if err != nil {
-		return fmt.Errorf("audiobookshelf: %s: %w", p, err)
+		return resp.StatusCode, fmt.Errorf("audiobookshelf: %s: %w", p, err)
 	}
 	if err := json.Unmarshal(body, out); err != nil {
-		return fmt.Errorf("audiobookshelf: %s: %w", p, err)
+		return resp.StatusCode, fmt.Errorf("audiobookshelf: %s: %w", p, err)
 	}
-	return nil
+	return resp.StatusCode, nil
 }
 
+// sendJSON issues a request with a JSON body, retrying once with a fresh login
+// on a 401 when credentials are configured.
 func (c *Client) sendJSON(method, p string, payload any) error {
+	code, err := c.sendJSONOnce(method, p, payload)
+	if code == http.StatusUnauthorized && c.canRelogin() {
+		c.clearToken()
+		_, err = c.sendJSONOnce(method, p, payload)
+	}
+	return err
+}
+
+func (c *Client) sendJSONOnce(method, p string, payload any) (int, error) {
 	if err := c.ensureAuth(); err != nil {
-		return err
+		return 0, err
 	}
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("audiobookshelf: %s: %w", p, err)
+		return 0, fmt.Errorf("audiobookshelf: %s: %w", p, err)
 	}
 
 	req, err := http.NewRequest(method, c.baseURL+p, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("audiobookshelf: %s: %w", p, err)
+		return 0, fmt.Errorf("audiobookshelf: %s: %w", p, err)
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
@@ -187,15 +220,15 @@ func (c *Client) sendJSON(method, p string, payload any) error {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("audiobookshelf: %s: %w", p, err)
+		return 0, fmt.Errorf("audiobookshelf: %s: %w", p, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("audiobookshelf: %s: http status %s", p, resp.Status)
+		return resp.StatusCode, fmt.Errorf("audiobookshelf: %s: http status %s", p, resp.Status)
 	}
 	io.Copy(io.Discard, io.LimitReader(resp.Body, maxResponseBody))
-	return nil
+	return resp.StatusCode, nil
 }
 
 const itemsPageLimit = 500
