@@ -167,7 +167,7 @@ func (c *Client) get(p string, params url.Values, out any) error {
 	return nil
 }
 
-func (c *Client) postJSON(p string, payload any) error {
+func (c *Client) sendJSON(method, p string, payload any) error {
 	if err := c.ensureAuth(); err != nil {
 		return err
 	}
@@ -177,7 +177,7 @@ func (c *Client) postJSON(p string, payload any) error {
 		return fmt.Errorf("audiobookshelf: %s: %w", p, err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+p, bytes.NewReader(body))
+	req, err := http.NewRequest(method, c.baseURL+p, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("audiobookshelf: %s: %w", p, err)
 	}
@@ -227,9 +227,12 @@ func (c *Client) Items(libraryID string) ([]LibraryItem, error) {
 }
 
 // Item returns one library item with its audio files, chapters, and episodes.
+// The expanded form is required: the plain response omits media.tracks and
+// media.duration, which books are built from.
 func (c *Client) Item(itemID string) (LibraryItem, error) {
 	var item LibraryItem
-	if err := c.get("/api/items/"+url.PathEscape(itemID), nil, &item); err != nil {
+	params := url.Values{"expanded": {"1"}}
+	if err := c.get("/api/items/"+url.PathEscape(itemID), params, &item); err != nil {
 		return LibraryItem{}, err
 	}
 	return item, nil
@@ -298,7 +301,7 @@ func (c *Client) UpdateProgress(itemID, episodeID string, currentTime, duration 
 		payload["duration"] = duration
 		payload["progress"] = currentTime / duration
 	}
-	return c.postJSON(p, payload)
+	return c.sendJSON(http.MethodPatch, p, payload)
 }
 
 func (c *Client) ensureAuth() error {

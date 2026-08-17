@@ -346,6 +346,9 @@ func TestProgressAndUpdateProgress(t *testing.T) {
 				{"libraryItemId":"item-1","currentTime":1200.5,"duration":36000,"isFinished":false}
 			]}`), nil
 		case strings.HasPrefix(req.URL.Path, "/api/me/progress/"):
+			if req.Method != http.MethodPatch {
+				t.Fatalf("progress method = %s, want PATCH (the server 404s on POST)", req.Method)
+			}
 			data, _ := io.ReadAll(req.Body)
 			gotPath, gotBody = req.URL.Path, string(data)
 			return statusResponse(http.StatusOK, "200 OK"), nil
@@ -373,5 +376,27 @@ func TestProgressAndUpdateProgress(t *testing.T) {
 		if !strings.Contains(gotBody, want) {
 			t.Fatalf("body %s missing %s", gotBody, want)
 		}
+	}
+}
+
+func TestItemRequestsExpanded(t *testing.T) {
+	var gotQuery string
+	c := mockClient("tok", "", "", nil, func(req *http.Request) (*http.Response, error) {
+		if req.URL.Path != "/api/items/book-1" {
+			t.Fatalf("unexpected path %s", req.URL.Path)
+		}
+		gotQuery = req.URL.RawQuery
+		return jsonResponse(`{"id":"book-1","media":{"duration":7200,"tracks":[{"index":1,"ino":"111"}]}}`), nil
+	})
+
+	item, err := c.Item("book-1")
+	if err != nil {
+		t.Fatalf("Item() error: %v", err)
+	}
+	if gotQuery != "expanded=1" {
+		t.Fatalf("query = %q, want expanded=1: without it the response omits media.tracks and media.duration", gotQuery)
+	}
+	if len(item.Media.Tracks) != 1 {
+		t.Fatalf("tracks = %d, want 1", len(item.Media.Tracks))
 	}
 }
