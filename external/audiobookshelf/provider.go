@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bjarneo/cliamp/applog"
 	"github.com/bjarneo/cliamp/config"
 	"github.com/bjarneo/cliamp/playlist"
 	"github.com/bjarneo/cliamp/provider"
@@ -528,7 +529,10 @@ func (p *Provider) report(track playlist.Track, position time.Duration, complete
 	}
 	current := offset + position.Seconds()
 	finished := complete && total > 0 && current >= total-finishSlack
-	_ = p.client.UpdateProgress(itemID, track.Meta(provider.MetaAudiobookshelfEpisode), current, total, finished)
+	episodeID := track.Meta(provider.MetaAudiobookshelfEpisode)
+	if err := p.client.UpdateProgress(itemID, episodeID, current, total, finished); err != nil {
+		applog.Warn("audiobookshelf: progress update failed for item %s episode %q: %v", itemID, episodeID, err)
+	}
 }
 
 // ResumeTarget returns where to continue an item: the track index and the

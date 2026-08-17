@@ -262,7 +262,10 @@ func providers() []providerSpec {
 					onlyIf: func(v map[string]string) bool { return v[keyABSAuth] == "password" }},
 			},
 			validate: func(v map[string]string) error {
-				return audiobookshelf.NewClient(v["url"], v["token"], v["user"], v["password"], nil).Ping()
+				if err := audiobookshelf.NewClient(v["url"], v["token"], v["user"], v["password"], nil).Ping(); err != nil {
+					return fmt.Errorf("audiobookshelf: validation: %w", err)
+				}
+				return nil
 			},
 			body: func(v map[string]string) string {
 				lines := []string{fmt.Sprintf("url      = %q", v["url"])}
