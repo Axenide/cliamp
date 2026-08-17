@@ -207,3 +207,146 @@ func TestIsStreamURL(t *testing.T) {
 		})
 	}
 }
+
+func TestItemsFollowsPagination(t *testing.T) {
+	pages := 0
+	c := mockClient("tok", "", "", nil, func(req *http.Request) (*http.Response, error) {
+		if req.URL.Path != "/api/libraries/lib-b/items" {
+			t.Fatalf("unexpected path %s", req.URL.Path)
+		}
+		if got := req.URL.Query().Get("limit"); got != "500" {
+			t.Fatalf("limit = %q, want 500", got)
+		}
+		page := req.URL.Query().Get("page")
+		pages++
+		switch page {
+		case "0":
+			items := make([]string, 0, itemsPageLimit)
+			for i := 0; i < itemsPageLimit; i++ {
+				items = append(items, `{"id":"item-a"}`)
+			}
+			return jsonResponse(`{"total":501,"results":[` + strings.Join(items, ",") + `]}`), nil
+		case "1":
+			return jsonResponse(`{"total":501,"results":[{"id":"item-b"}]}`), nil
+		default:
+			t.Fatalf("unexpected page %q", page)
+			return nil, nil
+		}
+	})
+
+	items, err := c.Items("lib-b")
+	if err != nil {
+		t.Fatalf("Items() error: %v", err)
+	}
+	if len(items) != itemsPageLimit+1 {
+		t.Fatalf("got %d items, want %d", len(items), itemsPageLimit+1)
+	}
+	if pages != 2 {
+		t.Fatalf("pages fetched = %d, want 2", pages)
+	}
+}
+
+func TestItemAndAuthors(t *testing.T) {
+	c := mockClient("tok", "", "", nil, func(req *http.Request) (*http.Response, error) {
+		switch req.URL.Path {
+		case "/api/items/item-1":
+			return jsonResponse(`{"id":"item-1","mediaType":"book","media":{"metadata":{"title":"Mistborn"}}}`), nil
+		case "/api/libraries/lib-b/authors":
+			return jsonResponse(`{"authors":[{"id":"au-1","name":"Brandon Sanderson","numBooks":9}]}`), nil
+		case "/api/authors/au-1":
+			if got := req.URL.Query().Get("include"); got != "items" {
+				t.Fatalf("include = %q, want items", got)
+			}
+			return jsonResponse(`{"id":"au-1","name":"Brandon Sanderson","libraryItems":[{"id":"item-1"}]}`), nil
+		default:
+			t.Fatalf("unexpected path %s", req.URL.Path)
+			return nil, nil
+		}
+	})
+
+	item, err := c.Item("item-1")
+	if err != nil {
+		t.Fatalf("Item() error: %v", err)
+	}
+	if item.Media.Metadata.Title != "Mistborn" {
+		t.Fatalf("title = %q, want Mistborn", item.Media.Metadata.Title)
+	}
+
+	authors, err := c.Authors("lib-b")
+	if err != nil {
+		t.Fatalf("Authors() error: %v", err)
+	}
+	if len(authors) != 1 || authors[0].NumBooks != 9 {
+		t.Fatalf("authors = %+v", authors)
+	}
+
+	items, err := c.AuthorItems("au-1")
+	if err != nil {
+		t.Fatalf("AuthorItems() error: %v", err)
+	}
+	if len(items) != 1 || items[0].ID != "item-1" {
+		t.Fatalf("author items = %+v", items)
+	}
+}
+
+func TestSearchFlattensBooksAndPodcasts(t *testing.T) {
+	c := mockClient("tok", "", "", nil, func(req *http.Request) (*http.Response, error) {
+		if req.URL.Path != "/api/libraries/lib-b/search" {
+			t.Fatalf("unexpected path %s", req.URL.Path)
+		}
+		if got := req.URL.Query().Get("q"); got != "mistborn" {
+			t.Fatalf("q = %q, want mistborn", got)
+		}
+		return jsonResponse(`{
+			"book":[{"libraryItem":{"id":"item-1","mediaType":"book"}}],
+			"podcast":[{"libraryItem":{"id":"item-2","mediaType":"podcast"}}]
+		}`), nil
+	})
+
+	items, err := c.Search("lib-b", "mistborn", 10)
+	if err != nil {
+		t.Fatalf("Search() error: %v", err)
+	}
+	if len(items) != 2 || items[0].ID != "item-1" || items[1].ID != "item-2" {
+		t.Fatalf("items = %+v", items)
+	}
+}
+
+func TestProgressAndUpdateProgress(t *testing.T) {
+	var gotPath, gotBody string
+	c := mockClient("tok", "", "", nil, func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.URL.Path == "/api/me":
+			return jsonResponse(`{"id":"u-1","mediaProgress":[
+				{"libraryItemId":"item-1","currentTime":1200.5,"duration":36000,"isFinished":false}
+			]}`), nil
+		case strings.HasPrefix(req.URL.Path, "/api/me/progress/"):
+			data, _ := io.ReadAll(req.Body)
+			gotPath, gotBody = req.URL.Path, string(data)
+			return statusResponse(http.StatusOK, "200 OK"), nil
+		default:
+			t.Fatalf("unexpected path %s", req.URL.Path)
+			return nil, nil
+		}
+	})
+
+	list, err := c.Progress()
+	if err != nil {
+		t.Fatalf("Progress() error: %v", err)
+	}
+	if len(list) != 1 || list[0].CurrentTime != 1200.5 {
+		t.Fatalf("progress = %+v", list)
+	}
+
+	if err := c.UpdateProgress("item-1", "ep-9", 30, 600, true); err != nil {
+		t.Fatalf("UpdateProgress() error: %v", err)
+	}
+	if gotPath != "/api/me/progress/item-1/ep-9" {
+		t.Fatalf("path = %q, want /api/me/progress/item-1/ep-9", gotPath)
+	}
+	for _, want := range []string{`"currentTime":30`, `"duration":600`, `"isFinished":true`, `"progress":0.05`} {
+		if !strings.Contains(gotBody, want) {
+			t.Fatalf("body %s missing %s", gotBody, want)
+		}
+	}
+}

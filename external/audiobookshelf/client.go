@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -195,6 +196,107 @@ func (c *Client) postJSON(p string, payload any) error {
 	}
 	io.Copy(io.Discard, io.LimitReader(resp.Body, maxResponseBody))
 	return nil
+}
+
+const itemsPageLimit = 500
+
+// Items returns every item in a library, following pagination.
+func (c *Client) Items(libraryID string) ([]LibraryItem, error) {
+	p := "/api/libraries/" + url.PathEscape(libraryID) + "/items"
+	var out []LibraryItem
+	for page := 0; ; page++ {
+		params := url.Values{
+			"limit": {strconv.Itoa(itemsPageLimit)},
+			"page":  {strconv.Itoa(page)},
+			"sort":  {"media.metadata.title"},
+		}
+		var resp itemsResponse
+		if err := c.get(p, params, &resp); err != nil {
+			return nil, err
+		}
+		out = append(out, resp.Results...)
+		if len(resp.Results) < itemsPageLimit {
+			return out, nil
+		}
+		if resp.Total > 0 && len(out) >= resp.Total {
+			return out, nil
+		}
+	}
+}
+
+// Item returns one library item with its audio files, chapters, and episodes.
+func (c *Client) Item(itemID string) (LibraryItem, error) {
+	var item LibraryItem
+	if err := c.get("/api/items/"+url.PathEscape(itemID), nil, &item); err != nil {
+		return LibraryItem{}, err
+	}
+	return item, nil
+}
+
+// Authors returns the authors in a book library.
+func (c *Client) Authors(libraryID string) ([]Author, error) {
+	var resp authorsResponse
+	if err := c.get("/api/libraries/"+url.PathEscape(libraryID)+"/authors", nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Authors, nil
+}
+
+// AuthorItems returns the books written by one author.
+func (c *Client) AuthorItems(authorID string) ([]LibraryItem, error) {
+	var a Author
+	params := url.Values{"include": {"items"}}
+	if err := c.get("/api/authors/"+url.PathEscape(authorID), params, &a); err != nil {
+		return nil, err
+	}
+	return a.LibraryItems, nil
+}
+
+// Search returns library items matching query, books first.
+func (c *Client) Search(libraryID, query string, limit int) ([]LibraryItem, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	params := url.Values{"q": {query}, "limit": {strconv.Itoa(limit)}}
+	var resp searchResponse
+	if err := c.get("/api/libraries/"+url.PathEscape(libraryID)+"/search", params, &resp); err != nil {
+		return nil, err
+	}
+	out := make([]LibraryItem, 0, len(resp.Book)+len(resp.Podcast))
+	for _, hit := range resp.Book {
+		out = append(out, hit.LibraryItem)
+	}
+	for _, hit := range resp.Podcast {
+		out = append(out, hit.LibraryItem)
+	}
+	return out, nil
+}
+
+// Progress returns every stored listening position for the current user.
+func (c *Client) Progress() ([]MediaProgress, error) {
+	var me meResponse
+	if err := c.get("/api/me", nil, &me); err != nil {
+		return nil, err
+	}
+	return me.MediaProgress, nil
+}
+
+// UpdateProgress stores the listening position for an item, or for one podcast
+// episode when episodeID is non-empty.
+func (c *Client) UpdateProgress(itemID, episodeID string, currentTime, duration float64, isFinished bool) error {
+	p := "/api/me/progress/" + url.PathEscape(itemID)
+	if episodeID != "" {
+		p += "/" + url.PathEscape(episodeID)
+	}
+	payload := map[string]any{
+		"currentTime": currentTime,
+		"isFinished":  isFinished,
+	}
+	if duration > 0 {
+		payload["duration"] = duration
+		payload["progress"] = currentTime / duration
+	}
+	return c.postJSON(p, payload)
 }
 
 func (c *Client) ensureAuth() error {
