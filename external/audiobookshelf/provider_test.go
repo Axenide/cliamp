@@ -777,27 +777,53 @@ func TestBrowseLabels(t *testing.T) {
 	}
 }
 
-func TestSearchTracksStopsWhenContextCancelled(t *testing.T) {
-	calls := 0
-	p := mockProvider(func(req *http.Request) (*http.Response, error) {
-		calls++
-		if req.URL.Path != "/api/libraries" {
-			t.Fatalf("unexpected request after cancellation: %s", req.URL.Path)
-		}
-		return jsonResponse(`{"libraries":[{"id":"lib-b","name":"Audiobooks","mediaType":"book"}]}`), nil
-	})
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	tracks, err := p.SearchTracks(ctx, "mistborn", 50)
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("err = %v, want context.Canceled", err)
+func TestSearchTracksHonoursCancellation(t *testing.T) {
+	const searchPath = "/api/libraries/lib-b/search"
+	tests := []struct {
+		name      string
+		cancelOn  string
+		wantCalls int
+	}{
+		{name: "before the call", cancelOn: "", wantCalls: 1},
+		{name: "after the library list", cancelOn: "/api/libraries", wantCalls: 1},
+		{name: "after the search hits", cancelOn: searchPath, wantCalls: 2},
 	}
-	if len(tracks) != 0 {
-		t.Fatalf("tracks = %d, want 0", len(tracks))
-	}
-	if calls != 1 {
-		t.Fatalf("http calls = %d, want 1 (libraries only; no search should be issued)", calls)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			calls := 0
+			p := mockProvider(func(req *http.Request) (*http.Response, error) {
+				calls++
+				var body string
+				switch req.URL.Path {
+				case "/api/libraries":
+					body = `{"libraries":[{"id":"lib-b","name":"Audiobooks","mediaType":"book"}]}`
+				case searchPath:
+					body = `{"book":[{"libraryItem":{"id":"book-1","mediaType":"book"}}]}`
+				default:
+					t.Fatalf("request issued after cancellation: %s", req.URL.Path)
+				}
+				if req.URL.Path == tt.cancelOn {
+					cancel()
+				}
+				return jsonResponse(body), nil
+			})
+			if tt.cancelOn == "" {
+				cancel()
+			}
+
+			tracks, err := p.SearchTracks(ctx, "mistborn", 50)
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("err = %v, want context.Canceled", err)
+			}
+			if len(tracks) != 0 {
+				t.Fatalf("tracks = %d, want 0", len(tracks))
+			}
+			if calls != tt.wantCalls {
+				t.Fatalf("http calls = %d, want %d", calls, tt.wantCalls)
+			}
+		})
 	}
 }

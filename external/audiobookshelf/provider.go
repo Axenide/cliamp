@@ -325,7 +325,7 @@ func (p *Provider) SearchTracks(ctx context.Context, query string, limit int) ([
 	var out []playlist.Track
 	for _, lib := range libs {
 		if err := ctx.Err(); err != nil {
-			return out, err
+			return out, fmt.Errorf("audiobookshelf: search tracks: %w", err)
 		}
 		hits, err := p.client.Search(lib.ID, query, searchItemLimit)
 		if err != nil {
@@ -333,7 +333,7 @@ func (p *Provider) SearchTracks(ctx context.Context, query string, limit int) ([
 		}
 		for _, hit := range hits {
 			if err := ctx.Err(); err != nil {
-				return out, err
+				return out, fmt.Errorf("audiobookshelf: search tracks: %w", err)
 			}
 			id := prefixBook + hit.ID
 			if mediaTypeOf(lib, hit) == mediaTypePodcast {
