@@ -641,6 +641,12 @@ func TestResumeTargetBook(t *testing.T) {
 			wantIndex:  0,
 			wantOffset: 0,
 		},
+		{
+			name:       "past end of last file",
+			progress:   `{"mediaProgress":[{"libraryItemId":"book-1","currentTime":8000,"duration":7200}]}`,
+			wantIndex:  1,
+			wantOffset: 0,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

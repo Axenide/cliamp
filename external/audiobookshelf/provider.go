@@ -549,7 +549,7 @@ func (p *Provider) ResumeTarget(playlistID string, tracks []playlist.Track) (int
 		end := start + float64(t.DurationSecs)
 		if mp.CurrentTime < end || i == len(tracks)-1 {
 			offset := mp.CurrentTime - start
-			if offset <= 0 {
+			if offset <= 0 || (t.DurationSecs > 0 && offset >= float64(t.DurationSecs)) {
 				return i, 0
 			}
 			return i, time.Duration(offset * float64(time.Second))
