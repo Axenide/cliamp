@@ -313,7 +313,7 @@ func (p *Provider) AlbumTracks(albumID string) ([]playlist.Track, error) {
 
 // SearchTracks searches every visible library and returns the tracks of the
 // matching books and shows. Implements provider.Searcher.
-func (p *Provider) SearchTracks(_ context.Context, query string, limit int) ([]playlist.Track, error) {
+func (p *Provider) SearchTracks(ctx context.Context, query string, limit int) ([]playlist.Track, error) {
 	if limit <= 0 {
 		limit = 50
 	}
@@ -324,11 +324,17 @@ func (p *Provider) SearchTracks(_ context.Context, query string, limit int) ([]p
 
 	var out []playlist.Track
 	for _, lib := range libs {
+		if err := ctx.Err(); err != nil {
+			return out, err
+		}
 		hits, err := p.client.Search(lib.ID, query, searchItemLimit)
 		if err != nil {
 			return nil, err
 		}
 		for _, hit := range hits {
+			if err := ctx.Err(); err != nil {
+				return out, err
+			}
 			id := prefixBook + hit.ID
 			if mediaTypeOf(lib, hit) == mediaTypePodcast {
 				id = prefixPodcast + hit.ID

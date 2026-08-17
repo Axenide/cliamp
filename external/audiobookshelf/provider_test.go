@@ -2,6 +2,7 @@ package audiobookshelf
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -773,5 +774,30 @@ func TestBrowseLabels(t *testing.T) {
 	var any_ any = p
 	if _, ok := any_.(provider.BrowseLabeler); !ok {
 		t.Fatal("Provider does not implement provider.BrowseLabeler")
+	}
+}
+
+func TestSearchTracksStopsWhenContextCancelled(t *testing.T) {
+	calls := 0
+	p := mockProvider(func(req *http.Request) (*http.Response, error) {
+		calls++
+		if req.URL.Path != "/api/libraries" {
+			t.Fatalf("unexpected request after cancellation: %s", req.URL.Path)
+		}
+		return jsonResponse(`{"libraries":[{"id":"lib-b","name":"Audiobooks","mediaType":"book"}]}`), nil
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	tracks, err := p.SearchTracks(ctx, "mistborn", 50)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if len(tracks) != 0 {
+		t.Fatalf("tracks = %d, want 0", len(tracks))
+	}
+	if calls != 1 {
+		t.Fatalf("http calls = %d, want 1 (libraries only; no search should be issued)", calls)
 	}
 }

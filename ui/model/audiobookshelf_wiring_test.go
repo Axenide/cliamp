@@ -21,6 +21,12 @@ func TestAudiobookshelfEmptyStateHint(t *testing.T) {
 func TestAudiobookshelfCommandRegistryEntry(t *testing.T) {
 	for _, c := range commandRegistry {
 		if c.Mode == commandModeMain && len(c.Keys) == 1 && c.Keys[0] == "B" {
+			if c.Label != "Open Audiobookshelf provider" {
+				t.Fatalf("B entry label = %q, want Open Audiobookshelf provider", c.Label)
+			}
+			if !c.Keymap {
+				t.Fatal("B entry is missing from the keymap")
+			}
 			return
 		}
 	}

@@ -192,6 +192,9 @@ implements, the UI will automatically:
 - Enable add-to-playlist in search results if the searched provider implements `PlaylistWriter`
 - Scrobble playback if `Scrobbler` is implemented
 - Run interactive auth on first use if `Authenticator` is implemented
+- Place the cursor on the in-progress track and start it at the stored position if `ResumeTarget` is implemented
+- Push an interim listening position every 15 seconds while a track plays if `ProgressReporter` is implemented
+- Label the browse overlay's two levels with your own nouns if `BrowseLabeler` is implemented
 - Call `Close()` on shutdown if `Closer` is implemented
 
 The "N" and "F" shortcuts work regardless of which provider is currently active
