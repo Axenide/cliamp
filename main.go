@@ -12,6 +12,7 @@ import (
 
 	"github.com/bjarneo/cliamp/applog"
 	"github.com/bjarneo/cliamp/config"
+	"github.com/bjarneo/cliamp/external/audiobookshelf"
 	"github.com/bjarneo/cliamp/external/emby"
 	"github.com/bjarneo/cliamp/external/jellyfin"
 	"github.com/bjarneo/cliamp/external/local"
@@ -93,6 +94,10 @@ func run(overrides config.Overrides, positional []string, daemon bool) error {
 
 	if embyProv := emby.NewFromConfig(cfg.Emby); embyProv != nil {
 		providers = append(providers, model.ProviderEntry{Key: "emby", Name: "Emby", Provider: embyProv})
+	}
+
+	if absProv := audiobookshelf.NewFromConfig(cfg.Audiobookshelf); absProv != nil {
+		providers = append(providers, model.ProviderEntry{Key: "audiobookshelf", Name: "Audiobookshelf", Provider: absProv})
 	}
 
 	var spotifyProv *spotify.SpotifyProvider
@@ -280,7 +285,7 @@ func run(overrides config.Overrides, positional []string, daemon bool) error {
 	}
 
 	p.RegisterBufferedURLMatcher(func(u string) bool {
-		return navidrome.IsSubsonicStreamURL(u) || jellyfin.IsStreamURL(u) || emby.IsStreamURL(u) || plex.IsStreamURL(u) || qobuz.IsStreamURL(u)
+		return navidrome.IsSubsonicStreamURL(u) || jellyfin.IsStreamURL(u) || emby.IsStreamURL(u) || plex.IsStreamURL(u) || qobuz.IsStreamURL(u) || audiobookshelf.IsStreamURL(u)
 	})
 
 	// Pull now-playing for stations that carry no inline ICY metadata (NTS, FIP).

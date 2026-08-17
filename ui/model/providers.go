@@ -139,6 +139,8 @@ func providerKeyForShortcut(key string) string {
 		return "jellyfin"
 	case "E":
 		return "emby"
+	case "B":
+		return "audiobookshelf"
 	case "Y":
 		return "yt"
 	case "C":

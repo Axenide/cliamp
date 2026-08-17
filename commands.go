@@ -33,7 +33,7 @@ func buildApp() *cli.Command {
 		&cli.BoolFlag{Name: "no-mono", Usage: "disable mono output"},
 		&cli.BoolFlag{Name: "auto-play", Usage: "start playback immediately"},
 		&cli.BoolFlag{Name: "compact", Usage: "compact mode (80 columns)"},
-		&cli.StringFlag{Name: "provider", Usage: "default provider: radio, navidrome, plex, jellyfin, emby, spotify, qobuz, soundcloud, netease, yt, youtube, ytmusic"},
+		&cli.StringFlag{Name: "provider", Usage: "default provider: radio, navidrome, plex, jellyfin, emby, spotify, qobuz, soundcloud, netease, audiobookshelf, abs, yt, youtube, ytmusic"},
 		&cli.StringFlag{Name: "start-theme", Usage: "UI theme name"},
 		&cli.StringFlag{Name: "visualizer", Usage: "visualizer mode"},
 		&cli.StringFlag{Name: "eq-preset", Usage: "EQ preset name"},
@@ -154,11 +154,14 @@ func overridesFromFlags(c *cli.Command) (config.Overrides, error) {
 	}
 	if c.IsSet("provider") {
 		v := strings.ToLower(c.String("provider"))
+		if v == "abs" {
+			v = "audiobookshelf"
+		}
 		switch v {
-		case "radio", "navidrome", "spotify", "qobuz", "plex", "jellyfin", "emby", "soundcloud", "netease", "yt", "youtube", "ytmusic":
+		case "radio", "navidrome", "spotify", "qobuz", "plex", "jellyfin", "emby", "audiobookshelf", "soundcloud", "netease", "yt", "youtube", "ytmusic":
 			ov.Provider = &v
 		default:
-			return ov, fmt.Errorf("--provider must be radio, navidrome, spotify, qobuz, plex, jellyfin, emby, soundcloud, netease, yt, youtube, or ytmusic (got %q)", v)
+			return ov, fmt.Errorf("--provider must be radio, navidrome, spotify, qobuz, plex, jellyfin, emby, audiobookshelf, soundcloud, netease, yt, youtube, or ytmusic (got %q)", v)
 		}
 	}
 	if c.IsSet("start-theme") {
@@ -331,8 +334,8 @@ func setupCommand() *cli.Command {
 		Name:  "setup",
 		Usage: "interactive wizard to configure remote providers",
 		Description: "Walks through configuring Navidrome, Plex, Jellyfin, Spotify,\n" +
-			"Qobuz, NetEase, and YouTube Music. Validates connections and writes\n" +
-			"~/.config/cliamp/config.toml.",
+			"Qobuz, NetEase, Audiobookshelf, and YouTube Music. Validates connections\n" +
+			"and writes ~/.config/cliamp/config.toml.",
 		Action: func(ctx context.Context, c *cli.Command) error {
 			return cmd.Setup()
 		},
