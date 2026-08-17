@@ -21,6 +21,7 @@ var (
 	_ provider.Searcher         = (*Provider)(nil)
 	_ provider.ProgressReporter = (*Provider)(nil)
 	_ provider.ResumeTarget     = (*Provider)(nil)
+	_ provider.BrowseLabeler    = (*Provider)(nil)
 )
 
 const (
@@ -566,3 +567,6 @@ func findProgress(list []MediaProgress, itemID, episodeID string) (MediaProgress
 	}
 	return MediaProgress{}, false
 }
+
+// BrowseLabels returns the audiobook vocabulary for the browse overlay.
+func (p *Provider) BrowseLabels() (string, string) { return "Author", "Book" }

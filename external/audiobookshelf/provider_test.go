@@ -712,3 +712,15 @@ func TestResumeTargetInterface(t *testing.T) {
 		t.Fatal("Provider does not implement provider.ResumeTarget")
 	}
 }
+
+func TestBrowseLabels(t *testing.T) {
+	p := newProvider(NewClient("https://abs.example.com", "tok", "", "", nil))
+	artist, album := p.BrowseLabels()
+	if artist != "Author" || album != "Book" {
+		t.Fatalf("BrowseLabels() = (%q, %q), want (Author, Book)", artist, album)
+	}
+	var any_ any = p
+	if _, ok := any_.(provider.BrowseLabeler); !ok {
+		t.Fatal("Provider does not implement provider.BrowseLabeler")
+	}
+}

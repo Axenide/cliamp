@@ -66,6 +66,14 @@ type ResumeTarget interface {
 	ResumeTarget(playlistID string, tracks []playlist.Track) (index int, offset time.Duration)
 }
 
+// BrowseLabeler is implemented by providers whose catalog is not music, so the
+// browse overlay can use the right vocabulary.
+type BrowseLabeler interface {
+	// BrowseLabels returns the singular nouns for the artist and album levels,
+	// e.g. ("Author", "Book").
+	BrowseLabels() (artist, album string)
+}
+
 // PlaylistWriter is implemented by providers that support adding tracks
 // to existing playlists.
 type PlaylistWriter interface {
