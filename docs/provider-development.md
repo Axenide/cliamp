@@ -12,6 +12,7 @@ See the existing providers for reference:
 - `external/spotify/`: Spotify, search, playlist management, custom streaming
 - `external/radio/`: internet radio, favorites
 - `external/local/`: local TOML playlist files
+- `external/audiobookshelf/`: Audiobookshelf, sectioned playlists, resume
 
 ## Base Interface (required)
 
@@ -47,6 +48,9 @@ interfaces are defined in `provider/interfaces.go`.
 | `FavoriteToggler` | Favorite toggling | `ToggleFavorite(id)` |
 | `Closer` | Cleanup on shutdown | `Close()` |
 | `Authenticator` | Interactive sign-in flow | `Authenticate() error` (in `playlist` package) |
+| `ResumeTarget` | Server-side resume position | `ResumeTarget(playlistID, tracks)` |
+| `ProgressReporter` | Interim position updates while playing, in addition to `PlaybackReporter`'s start/finish reports | `ReportProgress(track, position)` |
+| `BrowseLabeler` | Relabel the browse overlay's two levels (e.g. Authors/Books instead of Artists/Albums) | `BrowseLabels()` |
 
 ## Steps
 

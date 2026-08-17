@@ -93,6 +93,7 @@ active when the picker opened. While typing a filter, `Enter` finishes it and
 | `C` | Open SoundCloud provider |
 | `M` | Open NetEase provider |
 | `Q` | Open Qobuz provider |
+| `B` | Open Audiobookshelf provider |
 
 ## Playlist and Queue
 
