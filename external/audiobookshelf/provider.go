@@ -104,7 +104,9 @@ func (p *Provider) Playlists() ([]playlist.PlaylistInfo, error) {
 		}
 	}
 
-	out := append(books, shows...)
+	out := make([]playlist.PlaylistInfo, 0, len(books)+len(shows))
+	out = append(out, books...)
+	out = append(out, shows...)
 	p.mu.Lock()
 	p.playlistCache = out
 	p.mu.Unlock()
