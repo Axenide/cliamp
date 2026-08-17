@@ -1,6 +1,7 @@
 package audiobookshelf
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strconv"
@@ -12,6 +13,13 @@ import (
 	"github.com/bjarneo/cliamp/provider"
 )
 
+var (
+	_ provider.ArtistBrowser    = (*Provider)(nil)
+	_ provider.AlbumBrowser     = (*Provider)(nil)
+	_ provider.AlbumTrackLoader = (*Provider)(nil)
+	_ provider.Searcher         = (*Provider)(nil)
+)
+
 const (
 	prefixBook    = "b:"
 	prefixPodcast = "p:"
@@ -21,7 +29,19 @@ const (
 
 	// chapterSlack absorbs rounding between chapter marks and file boundaries.
 	chapterSlack = 1.0
+
+	SortBooksByTitle  = "title"
+	SortBooksByAdded  = "addedAt"
+	SortBooksByAuthor = "author"
+
+	searchItemLimit = 10
 )
+
+var bookSortTypes = []provider.SortType{
+	{ID: SortBooksByTitle, Label: "By Title"},
+	{ID: SortBooksByAdded, Label: "Recently Added"},
+	{ID: SortBooksByAuthor, Label: "By Author"},
+}
 
 // Provider implements playlist.Provider for an Audiobookshelf server.
 // Playlists() returns books and podcast shows in two sections; Tracks()
@@ -204,6 +224,186 @@ func (p *Provider) episodeTracks(item LibraryItem) []playlist.Track {
 		})
 	}
 	return out
+}
+
+// Artists returns the authors across every book library, sorted by name.
+func (p *Provider) Artists() ([]provider.ArtistInfo, error) {
+	libs, err := p.client.Libraries()
+	if err != nil {
+		return nil, err
+	}
+
+	var out []provider.ArtistInfo
+	for _, lib := range libs {
+		if lib.MediaType != mediaTypeBook {
+			continue
+		}
+		authors, err := p.client.Authors(lib.ID)
+		if err != nil {
+			return nil, err
+		}
+		for _, a := range authors {
+			out = append(out, provider.ArtistInfo{ID: a.ID, Name: a.Name, AlbumCount: a.NumBooks})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
+	})
+	return out, nil
+}
+
+// ArtistAlbums returns one author's books, sorted by title.
+func (p *Provider) ArtistAlbums(artistID string) ([]provider.AlbumInfo, error) {
+	items, err := p.client.AuthorItems(artistID)
+	if err != nil {
+		return nil, err
+	}
+	sorted := append([]LibraryItem(nil), items...)
+	sortItems(sorted, SortBooksByTitle)
+
+	out := make([]provider.AlbumInfo, 0, len(sorted))
+	for _, it := range sorted {
+		out = append(out, albumInfo(it, artistID))
+	}
+	return out, nil
+}
+
+// AlbumList returns one page of the full book catalog.
+func (p *Provider) AlbumList(sortType string, offset, size int) ([]provider.AlbumInfo, error) {
+	items, err := p.books()
+	if err != nil {
+		return nil, err
+	}
+	sorted := append([]LibraryItem(nil), items...)
+	sortItems(sorted, sortType)
+
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= len(sorted) {
+		return nil, nil
+	}
+	end := len(sorted)
+	if size > 0 && offset+size < end {
+		end = offset + size
+	}
+
+	out := make([]provider.AlbumInfo, 0, end-offset)
+	for _, it := range sorted[offset:end] {
+		out = append(out, albumInfo(it, ""))
+	}
+	return out, nil
+}
+
+func (p *Provider) AlbumSortTypes() []provider.SortType { return bookSortTypes }
+
+func (p *Provider) DefaultAlbumSort() string { return SortBooksByTitle }
+
+// AlbumTracks returns the audio files of one book.
+func (p *Provider) AlbumTracks(albumID string) ([]playlist.Track, error) {
+	return p.Tracks(albumID)
+}
+
+// SearchTracks searches every visible library and returns the tracks of the
+// matching books and shows. Implements provider.Searcher.
+func (p *Provider) SearchTracks(_ context.Context, query string, limit int) ([]playlist.Track, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	libs, err := p.client.Libraries()
+	if err != nil {
+		return nil, err
+	}
+
+	var out []playlist.Track
+	for _, lib := range libs {
+		hits, err := p.client.Search(lib.ID, query, searchItemLimit)
+		if err != nil {
+			return nil, err
+		}
+		for _, hit := range hits {
+			id := prefixBook + hit.ID
+			if mediaTypeOf(lib, hit) == mediaTypePodcast {
+				id = prefixPodcast + hit.ID
+			}
+			tracks, err := p.Tracks(id)
+			if err != nil {
+				continue
+			}
+			out = append(out, tracks...)
+			if len(out) >= limit {
+				return out[:limit], nil
+			}
+		}
+	}
+	return out, nil
+}
+
+// books returns every item in every book library, cached after the first call.
+func (p *Provider) books() ([]LibraryItem, error) {
+	p.mu.Lock()
+	cached := p.bookCache
+	p.mu.Unlock()
+	if cached != nil {
+		return cached, nil
+	}
+
+	libs, err := p.client.Libraries()
+	if err != nil {
+		return nil, err
+	}
+
+	var out []LibraryItem
+	for _, lib := range libs {
+		if lib.MediaType != mediaTypeBook {
+			continue
+		}
+		items, err := p.client.Items(lib.ID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, items...)
+	}
+
+	p.mu.Lock()
+	p.bookCache = out
+	p.mu.Unlock()
+	return out, nil
+}
+
+func albumInfo(it LibraryItem, artistID string) provider.AlbumInfo {
+	md := it.Media.Metadata
+	if artistID == "" && len(md.Authors) > 0 {
+		artistID = md.Authors[0].ID
+	}
+	return provider.AlbumInfo{
+		ID:         prefixBook + it.ID,
+		Name:       md.Title,
+		Artist:     md.AuthorName,
+		ArtistID:   artistID,
+		Year:       parseYear(md.PublishedYear),
+		TrackCount: it.Media.NumTracks,
+	}
+}
+
+func sortItems(items []LibraryItem, sortType string) {
+	switch sortType {
+	case SortBooksByAdded:
+		sort.SliceStable(items, func(i, j int) bool { return items[i].AddedAt > items[j].AddedAt })
+	case SortBooksByAuthor:
+		sort.SliceStable(items, func(i, j int) bool {
+			ai := strings.ToLower(items[i].Media.Metadata.AuthorName)
+			aj := strings.ToLower(items[j].Media.Metadata.AuthorName)
+			if ai == aj {
+				return strings.ToLower(items[i].Media.Metadata.Title) < strings.ToLower(items[j].Media.Metadata.Title)
+			}
+			return ai < aj
+		})
+	default:
+		sort.SliceStable(items, func(i, j int) bool {
+			return strings.ToLower(items[i].Media.Metadata.Title) < strings.ToLower(items[j].Media.Metadata.Title)
+		})
+	}
 }
 
 func parsePlaylistID(id string) (string, bool) {

@@ -1,6 +1,7 @@
 package audiobookshelf
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
@@ -237,5 +238,202 @@ func TestRefreshClearsCaches(t *testing.T) {
 	}
 	if calls != 2 {
 		t.Fatalf("http calls = %d, want 2", calls)
+	}
+}
+
+func TestArtistsListsAuthorsFromBookLibraries(t *testing.T) {
+	p := mockProvider(func(req *http.Request) (*http.Response, error) {
+		switch req.URL.Path {
+		case "/api/libraries":
+			return jsonResponse(`{"libraries":[
+				{"id":"lib-b","name":"Audiobooks","mediaType":"book"},
+				{"id":"lib-p","name":"Podcasts","mediaType":"podcast"}
+			]}`), nil
+		case "/api/libraries/lib-b/authors":
+			return jsonResponse(`{"authors":[
+				{"id":"au-2","name":"andy weir","numBooks":2},
+				{"id":"au-1","name":"Brandon Sanderson","numBooks":9}
+			]}`), nil
+		default:
+			t.Fatalf("unexpected path %s", req.URL.Path)
+			return nil, nil
+		}
+	})
+
+	artists, err := p.Artists()
+	if err != nil {
+		t.Fatalf("Artists() error: %v", err)
+	}
+	if len(artists) != 2 {
+		t.Fatalf("got %d artists, want 2", len(artists))
+	}
+	if artists[0].Name != "andy weir" || artists[1].Name != "Brandon Sanderson" {
+		t.Fatalf("artists not sorted case-insensitively: %+v", artists)
+	}
+	if artists[1].ID != "au-1" || artists[1].AlbumCount != 9 {
+		t.Fatalf("artist = %+v", artists[1])
+	}
+}
+
+func TestArtistAlbumsPrefixesBookIDs(t *testing.T) {
+	p := mockProvider(func(req *http.Request) (*http.Response, error) {
+		if req.URL.Path != "/api/authors/au-1" {
+			t.Fatalf("unexpected path %s", req.URL.Path)
+		}
+		return jsonResponse(`{"id":"au-1","name":"Brandon Sanderson","libraryItems":[
+			{"id":"book-2","media":{"numTracks":3,"metadata":{"title":"Warbreaker","authorName":"Brandon Sanderson","publishedYear":"2009"}}},
+			{"id":"book-1","media":{"numTracks":2,"metadata":{"title":"Mistborn","authorName":"Brandon Sanderson","publishedYear":"2006"}}}
+		]}`), nil
+	})
+
+	albums, err := p.ArtistAlbums("au-1")
+	if err != nil {
+		t.Fatalf("ArtistAlbums() error: %v", err)
+	}
+	if len(albums) != 2 {
+		t.Fatalf("got %d albums, want 2", len(albums))
+	}
+	if albums[0].Name != "Mistborn" {
+		t.Fatalf("albums not title-sorted: %+v", albums)
+	}
+	if albums[0].ID != "b:book-1" || albums[0].ArtistID != "au-1" || albums[0].Year != 2006 || albums[0].TrackCount != 2 {
+		t.Fatalf("album = %+v", albums[0])
+	}
+}
+
+func TestAlbumListSortAndPaging(t *testing.T) {
+	p := mockProvider(func(req *http.Request) (*http.Response, error) {
+		switch req.URL.Path {
+		case "/api/libraries":
+			return jsonResponse(`{"libraries":[{"id":"lib-b","name":"Audiobooks","mediaType":"book"}]}`), nil
+		case "/api/libraries/lib-b/items":
+			return jsonResponse(`{"total":3,"results":[
+				{"id":"b1","addedAt":100,"media":{"metadata":{"title":"Cibola Burn","authorName":"James Corey"}}},
+				{"id":"b2","addedAt":300,"media":{"metadata":{"title":"Artemis","authorName":"Andy Weir"}}},
+				{"id":"b3","addedAt":200,"media":{"metadata":{"title":"Bobiverse","authorName":"Dennis Taylor"}}}
+			]}`), nil
+		default:
+			t.Fatalf("unexpected path %s", req.URL.Path)
+			return nil, nil
+		}
+	})
+
+	byTitle, err := p.AlbumList(SortBooksByTitle, 0, 0)
+	if err != nil {
+		t.Fatalf("AlbumList() error: %v", err)
+	}
+	if len(byTitle) != 3 || byTitle[0].Name != "Artemis" || byTitle[2].Name != "Cibola Burn" {
+		t.Fatalf("title order = %+v", byTitle)
+	}
+
+	byAdded, err := p.AlbumList(SortBooksByAdded, 0, 2)
+	if err != nil {
+		t.Fatalf("AlbumList(added) error: %v", err)
+	}
+	if len(byAdded) != 2 || byAdded[0].ID != "b:b2" || byAdded[1].ID != "b:b3" {
+		t.Fatalf("added order = %+v", byAdded)
+	}
+
+	page2, err := p.AlbumList(SortBooksByTitle, 2, 2)
+	if err != nil {
+		t.Fatalf("AlbumList(page 2) error: %v", err)
+	}
+	if len(page2) != 1 || page2[0].Name != "Cibola Burn" {
+		t.Fatalf("page 2 = %+v", page2)
+	}
+
+	if past, err := p.AlbumList(SortBooksByTitle, 99, 2); err != nil || len(past) != 0 {
+		t.Fatalf("offset past end = %+v, %v", past, err)
+	}
+
+	if got := p.DefaultAlbumSort(); got != SortBooksByTitle {
+		t.Fatalf("DefaultAlbumSort() = %q, want %q", got, SortBooksByTitle)
+	}
+	if len(p.AlbumSortTypes()) != 3 {
+		t.Fatalf("AlbumSortTypes() = %+v, want 3 options", p.AlbumSortTypes())
+	}
+}
+
+func TestSearchTracksExpandsHits(t *testing.T) {
+	p := mockProvider(func(req *http.Request) (*http.Response, error) {
+		switch req.URL.Path {
+		case "/api/libraries":
+			return jsonResponse(`{"libraries":[{"id":"lib-b","name":"Audiobooks","mediaType":"book"}]}`), nil
+		case "/api/libraries/lib-b/search":
+			return jsonResponse(`{"book":[{"libraryItem":{"id":"book-1","mediaType":"book"}}]}`), nil
+		case "/api/items/book-1":
+			return jsonResponse(bookItemJSON), nil
+		default:
+			t.Fatalf("unexpected path %s", req.URL.Path)
+			return nil, nil
+		}
+	})
+
+	tracks, err := p.SearchTracks(context.Background(), "mistborn", 50)
+	if err != nil {
+		t.Fatalf("SearchTracks() error: %v", err)
+	}
+	if len(tracks) != 2 {
+		t.Fatalf("got %d tracks, want 2", len(tracks))
+	}
+	if tracks[0].Album != "Mistborn" {
+		t.Fatalf("track = %+v", tracks[0])
+	}
+}
+
+func TestSearchTracksHonoursLimit(t *testing.T) {
+	p := mockProvider(func(req *http.Request) (*http.Response, error) {
+		switch req.URL.Path {
+		case "/api/libraries":
+			return jsonResponse(`{"libraries":[{"id":"lib-b","name":"Audiobooks","mediaType":"book"}]}`), nil
+		case "/api/libraries/lib-b/search":
+			return jsonResponse(`{"book":[{"libraryItem":{"id":"book-1","mediaType":"book"}}]}`), nil
+		case "/api/items/book-1":
+			return jsonResponse(bookItemJSON), nil
+		default:
+			t.Fatalf("unexpected path %s", req.URL.Path)
+			return nil, nil
+		}
+	})
+
+	tracks, err := p.SearchTracks(context.Background(), "mistborn", 1)
+	if err != nil {
+		t.Fatalf("SearchTracks() error: %v", err)
+	}
+	if len(tracks) != 1 {
+		t.Fatalf("got %d tracks, want 1", len(tracks))
+	}
+}
+
+func TestAlbumTracksDelegatesToTracks(t *testing.T) {
+	p := mockProvider(func(req *http.Request) (*http.Response, error) {
+		if req.URL.Path != "/api/items/book-1" {
+			t.Fatalf("unexpected path %s", req.URL.Path)
+		}
+		return jsonResponse(bookItemJSON), nil
+	})
+
+	tracks, err := p.AlbumTracks("b:book-1")
+	if err != nil {
+		t.Fatalf("AlbumTracks() error: %v", err)
+	}
+	if len(tracks) != 2 {
+		t.Fatalf("got %d tracks, want 2", len(tracks))
+	}
+}
+
+func TestCapabilityInterfaces(t *testing.T) {
+	var p any = newProvider(NewClient("https://abs.example.com", "tok", "", "", nil))
+	if _, ok := p.(provider.ArtistBrowser); !ok {
+		t.Fatal("Provider does not implement provider.ArtistBrowser")
+	}
+	if _, ok := p.(provider.AlbumBrowser); !ok {
+		t.Fatal("Provider does not implement provider.AlbumBrowser")
+	}
+	if _, ok := p.(provider.AlbumTrackLoader); !ok {
+		t.Fatal("Provider does not implement provider.AlbumTrackLoader")
+	}
+	if _, ok := p.(provider.Searcher); !ok {
+		t.Fatal("Provider does not implement provider.Searcher")
 	}
 }
