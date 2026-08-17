@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/bjarneo/cliamp/config"
 	"github.com/bjarneo/cliamp/playlist"
@@ -18,6 +19,7 @@ var (
 	_ provider.AlbumBrowser     = (*Provider)(nil)
 	_ provider.AlbumTrackLoader = (*Provider)(nil)
 	_ provider.Searcher         = (*Provider)(nil)
+	_ provider.ProgressReporter = (*Provider)(nil)
 )
 
 const (
@@ -475,4 +477,39 @@ func metaFloat(t playlist.Track, key string) float64 {
 		return 0
 	}
 	return v
+}
+
+// finishSlack is how close to the end of a book counts as finished.
+const finishSlack = 5.0
+
+func (p *Provider) CanReportPlayback(track playlist.Track) bool {
+	return track.Meta(provider.MetaAudiobookshelfID) != ""
+}
+
+func (p *Provider) ReportNowPlaying(track playlist.Track, position time.Duration, _ bool) {
+	p.report(track, position, false)
+}
+
+func (p *Provider) ReportScrobble(track playlist.Track, elapsed, _ time.Duration, _ bool) {
+	p.report(track, elapsed, true)
+}
+
+// ReportProgress pushes an interim listening position.
+func (p *Provider) ReportProgress(track playlist.Track, position time.Duration) {
+	p.report(track, position, false)
+}
+
+func (p *Provider) report(track playlist.Track, position time.Duration, complete bool) {
+	itemID := track.Meta(provider.MetaAudiobookshelfID)
+	if itemID == "" {
+		return
+	}
+	offset := metaFloat(track, provider.MetaAudiobookshelfOffset)
+	total := metaFloat(track, provider.MetaAudiobookshelfTotal)
+	if total <= 0 {
+		total = float64(track.DurationSecs)
+	}
+	current := offset + position.Seconds()
+	finished := complete && total > 0 && current >= total-finishSlack
+	_ = p.client.UpdateProgress(itemID, track.Meta(provider.MetaAudiobookshelfEpisode), current, total, finished)
 }

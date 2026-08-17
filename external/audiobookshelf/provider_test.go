@@ -2,9 +2,13 @@ package audiobookshelf
 
 import (
 	"context"
+	"io"
 	"net/http"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/bjarneo/cliamp/playlist"
 	"github.com/bjarneo/cliamp/provider"
 )
 
@@ -466,5 +470,122 @@ func TestCapabilityInterfaces(t *testing.T) {
 	}
 	if _, ok := p.(provider.Searcher); !ok {
 		t.Fatal("Provider does not implement provider.Searcher")
+	}
+}
+
+func TestReportProgressSendsBookTimelinePosition(t *testing.T) {
+	var gotPath, gotBody string
+	p := mockProvider(func(req *http.Request) (*http.Response, error) {
+		if !strings.HasPrefix(req.URL.Path, "/api/me/progress/") {
+			t.Fatalf("unexpected path %s", req.URL.Path)
+		}
+		data, _ := io.ReadAll(req.Body)
+		gotPath, gotBody = req.URL.Path, string(data)
+		return statusResponse(http.StatusOK, "200 OK"), nil
+	})
+
+	track := playlist.Track{
+		DurationSecs: 3600,
+		ProviderMeta: map[string]string{
+			provider.MetaAudiobookshelfID:     "book-1",
+			provider.MetaAudiobookshelfOffset: "3600",
+			provider.MetaAudiobookshelfTotal:  "7200",
+		},
+	}
+
+	p.ReportProgress(track, 120*time.Second)
+
+	if gotPath != "/api/me/progress/book-1" {
+		t.Fatalf("path = %q, want /api/me/progress/book-1", gotPath)
+	}
+	if !strings.Contains(gotBody, `"currentTime":3720`) {
+		t.Fatalf("body = %s, want currentTime 3720 (offset + position)", gotBody)
+	}
+	if !strings.Contains(gotBody, `"isFinished":false`) {
+		t.Fatalf("body = %s, want isFinished false", gotBody)
+	}
+}
+
+func TestReportScrobbleMarksFinishedOnLastFile(t *testing.T) {
+	tests := []struct {
+		name         string
+		offset       string
+		duration     int
+		elapsed      time.Duration
+		wantFinished bool
+	}{
+		{name: "last file complete", offset: "3600", duration: 3600, elapsed: 3600 * time.Second, wantFinished: true},
+		{name: "first file complete", offset: "0", duration: 3600, elapsed: 3600 * time.Second, wantFinished: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotBody string
+			p := mockProvider(func(req *http.Request) (*http.Response, error) {
+				data, _ := io.ReadAll(req.Body)
+				gotBody = string(data)
+				return statusResponse(http.StatusOK, "200 OK"), nil
+			})
+
+			track := playlist.Track{
+				DurationSecs: tt.duration,
+				ProviderMeta: map[string]string{
+					provider.MetaAudiobookshelfID:     "book-1",
+					provider.MetaAudiobookshelfOffset: tt.offset,
+					provider.MetaAudiobookshelfTotal:  "7200",
+				},
+			}
+
+			p.ReportScrobble(track, tt.elapsed, time.Duration(tt.duration)*time.Second, true)
+
+			want := `"isFinished":false`
+			if tt.wantFinished {
+				want = `"isFinished":true`
+			}
+			if !strings.Contains(gotBody, want) {
+				t.Fatalf("body = %s, want %s", gotBody, want)
+			}
+		})
+	}
+}
+
+func TestReportProgressUsesEpisodePath(t *testing.T) {
+	var gotPath string
+	p := mockProvider(func(req *http.Request) (*http.Response, error) {
+		gotPath = req.URL.Path
+		return statusResponse(http.StatusOK, "200 OK"), nil
+	})
+
+	track := playlist.Track{
+		DurationSecs: 1800,
+		ProviderMeta: map[string]string{
+			provider.MetaAudiobookshelfID:      "pod-1",
+			provider.MetaAudiobookshelfEpisode: "ep-2",
+		},
+	}
+
+	p.ReportProgress(track, 60*time.Second)
+
+	if gotPath != "/api/me/progress/pod-1/ep-2" {
+		t.Fatalf("path = %q, want /api/me/progress/pod-1/ep-2", gotPath)
+	}
+}
+
+func TestCanReportPlayback(t *testing.T) {
+	p := newProvider(NewClient("https://abs.example.com", "tok", "", "", nil))
+	own := playlist.Track{ProviderMeta: map[string]string{provider.MetaAudiobookshelfID: "book-1"}}
+	other := playlist.Track{ProviderMeta: map[string]string{provider.MetaJellyfinID: "jf-1"}}
+
+	if !p.CanReportPlayback(own) {
+		t.Fatal("CanReportPlayback(own) = false, want true")
+	}
+	if p.CanReportPlayback(other) {
+		t.Fatal("CanReportPlayback(other) = true, want false")
+	}
+}
+
+func TestProgressReporterInterface(t *testing.T) {
+	var p any = newProvider(NewClient("https://abs.example.com", "tok", "", "", nil))
+	if _, ok := p.(provider.ProgressReporter); !ok {
+		t.Fatal("Provider does not implement provider.ProgressReporter")
 	}
 }

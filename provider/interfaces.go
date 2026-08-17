@@ -48,6 +48,15 @@ type PlaybackReporter interface {
 	ReportScrobble(track playlist.Track, elapsed, duration time.Duration, canSeek bool)
 }
 
+// ProgressReporter is implemented by providers that track listening position
+// server-side and accept interim updates while a track plays, not only at its
+// start and end.
+type ProgressReporter interface {
+	PlaybackReporter
+	// ReportProgress sends an interim position update for a playing track.
+	ReportProgress(track playlist.Track, position time.Duration)
+}
+
 // PlaylistWriter is implemented by providers that support adding tracks
 // to existing playlists.
 type PlaylistWriter interface {
