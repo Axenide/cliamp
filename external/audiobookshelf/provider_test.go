@@ -784,7 +784,7 @@ func TestSearchTracksHonoursCancellation(t *testing.T) {
 		cancelOn  string
 		wantCalls int
 	}{
-		{name: "before the call", cancelOn: "", wantCalls: 1},
+		{name: "before the call", cancelOn: "", wantCalls: 0},
 		{name: "after the library list", cancelOn: "/api/libraries", wantCalls: 1},
 		{name: "after the search hits", cancelOn: searchPath, wantCalls: 2},
 	}

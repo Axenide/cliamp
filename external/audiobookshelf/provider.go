@@ -317,6 +317,9 @@ func (p *Provider) SearchTracks(ctx context.Context, query string, limit int) ([
 	if limit <= 0 {
 		limit = 50
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("audiobookshelf: search tracks: %w", err)
+	}
 	libs, err := p.client.Libraries()
 	if err != nil {
 		return nil, err
