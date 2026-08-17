@@ -353,7 +353,7 @@ func (p *Provider) books() ([]LibraryItem, error) {
 		return nil, err
 	}
 
-	var out []LibraryItem
+	out := make([]LibraryItem, 0)
 	for _, lib := range libs {
 		if lib.MediaType != mediaTypeBook {
 			continue

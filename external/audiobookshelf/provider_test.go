@@ -354,6 +354,37 @@ func TestAlbumListSortAndPaging(t *testing.T) {
 	}
 }
 
+func TestAlbumListEmptyCatalogCached(t *testing.T) {
+	calls := 0
+	p := mockProvider(func(req *http.Request) (*http.Response, error) {
+		calls++
+		switch req.URL.Path {
+		case "/api/libraries":
+			return jsonResponse(`{"libraries":[{"id":"lib-b","name":"Audiobooks","mediaType":"book"}]}`), nil
+		case "/api/libraries/lib-b/items":
+			return jsonResponse(`{"total":0,"results":[]}`), nil
+		default:
+			t.Fatalf("unexpected path %s", req.URL.Path)
+			return nil, nil
+		}
+	})
+
+	albums, err := p.AlbumList(SortBooksByTitle, 0, 0)
+	if err != nil {
+		t.Fatalf("AlbumList() error: %v", err)
+	}
+	if len(albums) != 0 {
+		t.Fatalf("got %d albums, want 0", len(albums))
+	}
+
+	if _, err := p.AlbumList(SortBooksByTitle, 0, 0); err != nil {
+		t.Fatalf("cached AlbumList() error: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("http calls = %d, want 2 (libraries + items on the first call; second call must hit the cache)", calls)
+	}
+}
+
 func TestSearchTracksExpandsHits(t *testing.T) {
 	p := mockProvider(func(req *http.Request) (*http.Response, error) {
 		switch req.URL.Path {
