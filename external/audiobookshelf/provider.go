@@ -18,6 +18,7 @@ var (
 	_ provider.ArtistBrowser    = (*Provider)(nil)
 	_ provider.AlbumBrowser     = (*Provider)(nil)
 	_ provider.AlbumTrackLoader = (*Provider)(nil)
+	_ provider.PlaybackReporter = (*Provider)(nil)
 	_ provider.Searcher         = (*Provider)(nil)
 	_ provider.ProgressReporter = (*Provider)(nil)
 	_ provider.ResumeTarget     = (*Provider)(nil)
