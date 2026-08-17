@@ -190,3 +190,28 @@ func (m *Model) findPlaybackReporter(track playlist.Track) provider.PlaybackRepo
 	}
 	return nil
 }
+
+// progressReportInterval bounds how often interim listening positions are
+// pushed to providers that accept them.
+const progressReportInterval = 15 * time.Second
+
+// tickProgressReport pushes an interim position update for the playing track to
+// providers that accept them, at most once per progressReportInterval.
+func (m *Model) tickProgressReport(now time.Time) {
+	if m.player == nil || !m.player.IsPlaying() || m.player.IsPaused() {
+		return
+	}
+	if !m.lastProgressReport.IsZero() && now.Sub(m.lastProgressReport) < progressReportInterval {
+		return
+	}
+	track, idx := m.currentPlaybackTrack()
+	if idx < 0 {
+		return
+	}
+	reporter, ok := m.findPlaybackReporter(track).(provider.ProgressReporter)
+	if !ok {
+		return
+	}
+	m.lastProgressReport = now
+	go reporter.ReportProgress(track, m.player.Position())
+}

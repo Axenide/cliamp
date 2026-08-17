@@ -64,6 +64,17 @@ func (m *Model) fetchProviderTracks(playlistID string) tea.Cmd {
 	return fetchTracksCmd(m.provider, playlistID, nextRequest(&m.requests.tracks))
 }
 
+// applyTracksResume positions the cursor on the in-progress track and arms the
+// seek when the provider reported a stored listening position.
+func (m *Model) applyTracksResume(msg tracksLoadedMsg) {
+	if msg.resumeOffset <= 0 || msg.resumeIdx < 0 || msg.resumeIdx >= len(msg.tracks) {
+		return
+	}
+	m.plCursor = msg.resumeIdx
+	m.resume.path = msg.tracks[msg.resumeIdx].Path
+	m.resume.secs = int(msg.resumeOffset.Seconds())
+}
+
 func (m Model) isActiveProvider(name string) bool {
 	return m.provider != nil && m.provider.Name() == name
 }
