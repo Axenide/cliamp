@@ -1,0 +1,276 @@
+package audiobookshelf
+
+import (
+	"fmt"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+
+	"github.com/bjarneo/cliamp/config"
+	"github.com/bjarneo/cliamp/playlist"
+	"github.com/bjarneo/cliamp/provider"
+)
+
+const (
+	prefixBook    = "b:"
+	prefixPodcast = "p:"
+
+	sectionAudiobooks = "Audiobooks"
+	sectionPodcasts   = "Podcasts"
+
+	// chapterSlack absorbs rounding between chapter marks and file boundaries.
+	chapterSlack = 1.0
+)
+
+// Provider implements playlist.Provider for an Audiobookshelf server.
+// Playlists() returns books and podcast shows in two sections; Tracks()
+// returns a book's audio files or a show's episodes.
+type Provider struct {
+	client        *Client
+	mu            sync.Mutex
+	playlistCache []playlist.PlaylistInfo
+	trackCache    map[string][]playlist.Track
+	bookCache     []LibraryItem
+}
+
+func newProvider(client *Client) *Provider {
+	return &Provider{client: client}
+}
+
+// NewFromConfig returns a Provider from an AudiobookshelfConfig, or nil when
+// the server URL or credentials are missing.
+func NewFromConfig(cfg config.AudiobookshelfConfig) *Provider {
+	if !cfg.IsSet() {
+		return nil
+	}
+	return newProvider(NewClient(cfg.URL, cfg.Token, cfg.User, cfg.Password, cfg.Libraries))
+}
+
+// Name returns the display name used in the provider selector.
+func (p *Provider) Name() string { return "Audiobookshelf" }
+
+// Refresh clears cached catalog data so the next call re-fetches from the
+// server. Implements playlist.Refresher.
+func (p *Provider) Refresh() {
+	p.mu.Lock()
+	p.playlistCache = nil
+	p.trackCache = nil
+	p.bookCache = nil
+	p.mu.Unlock()
+	p.client.ClearCache()
+}
+
+// Playlists returns every book, then every podcast show, each tagged with its
+// section. Results are cached after the first successful call.
+func (p *Provider) Playlists() ([]playlist.PlaylistInfo, error) {
+	p.mu.Lock()
+	if p.playlistCache != nil {
+		cached := p.playlistCache
+		p.mu.Unlock()
+		return cached, nil
+	}
+	p.mu.Unlock()
+
+	libs, err := p.client.Libraries()
+	if err != nil {
+		return nil, err
+	}
+
+	var books, shows []playlist.PlaylistInfo
+	for _, lib := range libs {
+		items, err := p.client.Items(lib.ID)
+		if err != nil {
+			return nil, err
+		}
+		for _, it := range items {
+			switch mediaTypeOf(lib, it) {
+			case mediaTypePodcast:
+				shows = append(shows, playlist.PlaylistInfo{
+					ID:         prefixPodcast + it.ID,
+					Name:       it.Media.Metadata.Title,
+					TrackCount: it.Media.NumEpisodes,
+					Section:    sectionPodcasts,
+				})
+			default:
+				books = append(books, playlist.PlaylistInfo{
+					ID:           prefixBook + it.ID,
+					Name:         bookLabel(it),
+					TrackCount:   it.Media.NumTracks,
+					DurationSecs: int(it.Media.Duration),
+					Section:      sectionAudiobooks,
+				})
+			}
+		}
+	}
+
+	out := append(books, shows...)
+	p.mu.Lock()
+	p.playlistCache = out
+	p.mu.Unlock()
+	return out, nil
+}
+
+// Tracks returns a book's audio files or a podcast show's episodes.
+// Results are cached per playlist id.
+func (p *Provider) Tracks(playlistID string) ([]playlist.Track, error) {
+	p.mu.Lock()
+	if cached, ok := p.trackCache[playlistID]; ok {
+		p.mu.Unlock()
+		return cached, nil
+	}
+	p.mu.Unlock()
+
+	itemID, podcast := parsePlaylistID(playlistID)
+	if itemID == "" {
+		return nil, fmt.Errorf("audiobookshelf: unknown playlist id %q", playlistID)
+	}
+
+	item, err := p.client.Item(itemID)
+	if err != nil {
+		return nil, err
+	}
+
+	out := p.bookTracks(item)
+	if podcast {
+		out = p.episodeTracks(item)
+	}
+
+	p.mu.Lock()
+	if p.trackCache == nil {
+		p.trackCache = make(map[string][]playlist.Track)
+	}
+	p.trackCache[playlistID] = out
+	p.mu.Unlock()
+	return out, nil
+}
+
+func (p *Provider) bookTracks(item LibraryItem) []playlist.Track {
+	md := item.Media.Metadata
+	year := parseYear(md.PublishedYear)
+	total := strconv.FormatFloat(item.Media.Duration, 'f', -1, 64)
+
+	out := make([]playlist.Track, 0, len(item.Media.Tracks))
+	for _, at := range item.Media.Tracks {
+		out = append(out, playlist.Track{
+			Path:         p.client.StreamURL(item.ID, at.Ino),
+			Title:        fileTitle(at, item.Media.Chapters),
+			Artist:       md.AuthorName,
+			Album:        md.Title,
+			Year:         year,
+			TrackNumber:  at.Index,
+			DurationSecs: int(at.Duration),
+			Stream:       true,
+			ProviderMeta: map[string]string{
+				provider.MetaAudiobookshelfID:     item.ID,
+				provider.MetaAudiobookshelfOffset: strconv.FormatFloat(at.StartOffset, 'f', -1, 64),
+				provider.MetaAudiobookshelfTotal:  total,
+			},
+		})
+	}
+	return out
+}
+
+func (p *Provider) episodeTracks(item LibraryItem) []playlist.Track {
+	md := item.Media.Metadata
+	eps := append([]Episode(nil), item.Media.Episodes...)
+	sort.SliceStable(eps, func(i, j int) bool { return eps[i].PublishedAt > eps[j].PublishedAt })
+
+	out := make([]playlist.Track, 0, len(eps))
+	for _, ep := range eps {
+		duration := ep.AudioTrack.Duration
+		if duration <= 0 {
+			duration = ep.AudioFile.Duration
+		}
+		ino := ep.AudioFile.Ino
+		if ino == "" {
+			ino = ep.AudioTrack.Ino
+		}
+		out = append(out, playlist.Track{
+			Path:         p.client.StreamURL(item.ID, ino),
+			Title:        ep.Title,
+			Artist:       md.Author,
+			Album:        md.Title,
+			TrackNumber:  ep.Index,
+			DurationSecs: int(duration),
+			Stream:       true,
+			ProviderMeta: map[string]string{
+				provider.MetaAudiobookshelfID:      item.ID,
+				provider.MetaAudiobookshelfEpisode: ep.ID,
+				provider.MetaAudiobookshelfTotal:   strconv.FormatFloat(duration, 'f', -1, 64),
+			},
+		})
+	}
+	return out
+}
+
+func parsePlaylistID(id string) (string, bool) {
+	switch {
+	case strings.HasPrefix(id, prefixBook):
+		return strings.TrimPrefix(id, prefixBook), false
+	case strings.HasPrefix(id, prefixPodcast):
+		return strings.TrimPrefix(id, prefixPodcast), true
+	}
+	return "", false
+}
+
+func mediaTypeOf(lib Library, it LibraryItem) string {
+	if it.MediaType != "" {
+		return it.MediaType
+	}
+	return lib.MediaType
+}
+
+func bookLabel(it LibraryItem) string {
+	md := it.Media.Metadata
+	if md.AuthorName == "" {
+		return md.Title
+	}
+	return md.AuthorName + " — " + md.Title
+}
+
+// fileTitle prefers the chapter name when a file covers exactly one chapter,
+// then the file's embedded title, then its filename.
+func fileTitle(at AudioTrack, chapters []Chapter) string {
+	if title := soleChapterTitle(at, chapters); title != "" {
+		return title
+	}
+	if at.Title != "" {
+		return at.Title
+	}
+	return at.Metadata.Filename
+}
+
+func soleChapterTitle(at AudioTrack, chapters []Chapter) string {
+	if at.Duration <= 0 {
+		return ""
+	}
+	start, end := at.StartOffset, at.StartOffset+at.Duration
+	found := ""
+	for _, ch := range chapters {
+		if ch.End <= start+chapterSlack || ch.Start >= end-chapterSlack {
+			continue
+		}
+		if found != "" {
+			return ""
+		}
+		found = ch.Title
+	}
+	return found
+}
+
+func parseYear(s string) int {
+	year, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil {
+		return 0
+	}
+	return year
+}
+
+func metaFloat(t playlist.Track, key string) float64 {
+	v, err := strconv.ParseFloat(t.Meta(key), 64)
+	if err != nil {
+		return 0
+	}
+	return v
+}
