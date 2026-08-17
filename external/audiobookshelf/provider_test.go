@@ -506,6 +506,34 @@ func TestReportProgressSendsBookTimelinePosition(t *testing.T) {
 	}
 }
 
+func TestReportNowPlayingSkipsZeroPosition(t *testing.T) {
+	track := playlist.Track{
+		DurationSecs: 3600,
+		ProviderMeta: map[string]string{
+			provider.MetaAudiobookshelfID:     "book-1",
+			provider.MetaAudiobookshelfOffset: "3600",
+			provider.MetaAudiobookshelfTotal:  "7200",
+		},
+	}
+
+	p := mockProvider(func(req *http.Request) (*http.Response, error) {
+		t.Fatal("no request expected for a zero position")
+		return nil, nil
+	})
+	p.ReportNowPlaying(track, 0, false)
+
+	var gotBody string
+	p2 := mockProvider(func(req *http.Request) (*http.Response, error) {
+		data, _ := io.ReadAll(req.Body)
+		gotBody = string(data)
+		return statusResponse(http.StatusOK, "200 OK"), nil
+	})
+	p2.ReportNowPlaying(track, 120*time.Second, false)
+	if !strings.Contains(gotBody, `"currentTime":3720`) {
+		t.Fatalf("body = %s, want currentTime 3720 (offset + position)", gotBody)
+	}
+}
+
 func TestReportScrobbleMarksFinishedOnLastFile(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -689,6 +717,29 @@ func TestResumeTargetPodcastPicksInProgressEpisode(t *testing.T) {
 	idx, offset := p.ResumeTarget("p:pod-1", tracks)
 	if idx != 1 || offset != 300*time.Second {
 		t.Fatalf("ResumeTarget() = (%d, %v), want (1, 5m0s)", idx, offset)
+	}
+}
+
+func TestResumeTargetPodcastSkipsSeekWhenDurationUnknown(t *testing.T) {
+	p := mockProvider(func(req *http.Request) (*http.Response, error) {
+		if req.URL.Path != "/api/me" {
+			t.Fatalf("unexpected path %s", req.URL.Path)
+		}
+		return jsonResponse(`{"mediaProgress":[
+			{"libraryItemId":"pod-1","episodeId":"ep-1","currentTime":300,"duration":0}
+		]}`), nil
+	})
+
+	tracks := []playlist.Track{
+		{Path: "ep1", DurationSecs: 0, ProviderMeta: map[string]string{
+			provider.MetaAudiobookshelfID:      "pod-1",
+			provider.MetaAudiobookshelfEpisode: "ep-1",
+		}},
+	}
+
+	idx, offset := p.ResumeTarget("p:pod-1", tracks)
+	if idx != 0 || offset != 0 {
+		t.Fatalf("ResumeTarget() = (%d, %v), want (0, 0) when the target track's duration is unknown", idx, offset)
 	}
 }
 

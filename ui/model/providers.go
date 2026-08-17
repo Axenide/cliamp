@@ -68,11 +68,25 @@ func (m *Model) fetchProviderTracks(playlistID string) tea.Cmd {
 // seek when the provider reported a stored listening position.
 func (m *Model) applyTracksResume(msg tracksLoadedMsg) {
 	if msg.resumeOffset <= 0 || msg.resumeIdx < 0 || msg.resumeIdx >= len(msg.tracks) {
+		if m.resume.path != "" && !tracksContainPath(msg.tracks, m.resume.path) {
+			m.resume.path = ""
+			m.resume.secs = 0
+		}
 		return
 	}
 	m.plCursor = msg.resumeIdx
 	m.resume.path = msg.tracks[msg.resumeIdx].Path
 	m.resume.secs = int(msg.resumeOffset.Seconds())
+}
+
+// tracksContainPath reports whether any track in tracks has the given path.
+func tracksContainPath(tracks []playlist.Track, path string) bool {
+	for _, t := range tracks {
+		if t.Path == path {
+			return true
+		}
+	}
+	return false
 }
 
 func (m Model) isActiveProvider(name string) bool {

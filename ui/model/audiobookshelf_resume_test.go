@@ -68,11 +68,13 @@ func TestFetchTracksCmdWithoutResumeCapability(t *testing.T) {
 
 func TestApplyTracksResume(t *testing.T) {
 	tests := []struct {
-		name       string
-		msg        tracksLoadedMsg
-		wantCursor int
-		wantPath   string
-		wantSecs   int
+		name         string
+		preArmedPath string
+		preArmedSecs int
+		msg          tracksLoadedMsg
+		wantCursor   int
+		wantPath     string
+		wantSecs     int
 	}{
 		{
 			name: "resumes second track",
@@ -99,10 +101,30 @@ func TestApplyTracksResume(t *testing.T) {
 			},
 			wantCursor: 0,
 		},
+		{
+			name:         "stale armed state cleared when new list lacks the armed path",
+			preArmedPath: "https://abs/finished-book",
+			preArmedSecs: 1200,
+			msg:          tracksLoadedMsg{tracks: stubTracks()},
+			wantCursor:   0,
+			wantPath:     "",
+			wantSecs:     0,
+		},
+		{
+			name:         "armed state preserved when new list still contains the armed path",
+			preArmedPath: "https://abs/one",
+			preArmedSecs: 45,
+			msg:          tracksLoadedMsg{tracks: stubTracks()},
+			wantCursor:   0,
+			wantPath:     "https://abs/one",
+			wantSecs:     45,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := Model{}
+			m.resume.path = tt.preArmedPath
+			m.resume.secs = tt.preArmedSecs
 			m.applyTracksResume(tt.msg)
 
 			if m.plCursor != tt.wantCursor {

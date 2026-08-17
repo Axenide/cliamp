@@ -157,9 +157,11 @@ func (p *Provider) Tracks(playlistID string) ([]playlist.Track, error) {
 		return nil, err
 	}
 
-	out := p.bookTracks(item)
+	var out []playlist.Track
 	if podcast {
 		out = p.episodeTracks(item)
+	} else {
+		out = p.bookTracks(item)
 	}
 
 	p.mu.Lock()
@@ -489,6 +491,9 @@ func (p *Provider) CanReportPlayback(track playlist.Track) bool {
 }
 
 func (p *Provider) ReportNowPlaying(track playlist.Track, position time.Duration, _ bool) {
+	if position <= 0 {
+		return
+	}
 	p.report(track, position, false)
 }
 
@@ -535,6 +540,9 @@ func (p *Provider) ResumeTarget(playlistID string, tracks []playlist.Track) (int
 			mp, ok := findProgress(list, itemID, t.Meta(provider.MetaAudiobookshelfEpisode))
 			if !ok || mp.IsFinished || mp.CurrentTime <= 0 {
 				continue
+			}
+			if t.DurationSecs == 0 {
+				return i, 0
 			}
 			return i, time.Duration(mp.CurrentTime * float64(time.Second))
 		}

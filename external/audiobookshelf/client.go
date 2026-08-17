@@ -199,12 +199,13 @@ func (c *Client) postJSON(p string, payload any) error {
 }
 
 const itemsPageLimit = 500
+const itemsMaxPages = 1000
 
 // Items returns every item in a library, following pagination.
 func (c *Client) Items(libraryID string) ([]LibraryItem, error) {
 	p := "/api/libraries/" + url.PathEscape(libraryID) + "/items"
 	var out []LibraryItem
-	for page := 0; ; page++ {
+	for page := 0; page < itemsMaxPages; page++ {
 		params := url.Values{
 			"limit": {strconv.Itoa(itemsPageLimit)},
 			"page":  {strconv.Itoa(page)},
@@ -222,6 +223,7 @@ func (c *Client) Items(libraryID string) ([]LibraryItem, error) {
 			return out, nil
 		}
 	}
+	return out, nil
 }
 
 // Item returns one library item with its audio files, chapters, and episodes.

@@ -246,6 +246,31 @@ func TestItemsFollowsPagination(t *testing.T) {
 	}
 }
 
+func TestItemsStopsAtPageCap(t *testing.T) {
+	items := make([]string, 0, itemsPageLimit)
+	for i := 0; i < itemsPageLimit; i++ {
+		items = append(items, `{"id":"item-a"}`)
+	}
+	fullPage := `{"total":0,"results":[` + strings.Join(items, ",") + `]}`
+
+	pages := 0
+	c := mockClient("tok", "", "", nil, func(req *http.Request) (*http.Response, error) {
+		pages++
+		return jsonResponse(fullPage), nil
+	})
+
+	got, err := c.Items("lib-b")
+	if err != nil {
+		t.Fatalf("Items() error: %v", err)
+	}
+	if pages != itemsMaxPages {
+		t.Fatalf("pages fetched = %d, want %d (must stop at the page cap)", pages, itemsMaxPages)
+	}
+	if len(got) != itemsMaxPages*itemsPageLimit {
+		t.Fatalf("got %d items, want %d", len(got), itemsMaxPages*itemsPageLimit)
+	}
+}
+
 func TestItemAndAuthors(t *testing.T) {
 	c := mockClient("tok", "", "", nil, func(req *http.Request) (*http.Response, error) {
 		switch req.URL.Path {
