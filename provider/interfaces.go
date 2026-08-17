@@ -57,6 +57,15 @@ type ProgressReporter interface {
 	ReportProgress(track playlist.Track, position time.Duration)
 }
 
+// ResumeTarget is implemented by providers that track listening position
+// server-side and can point the UI at where to continue.
+type ResumeTarget interface {
+	// ResumeTarget returns the index within tracks to continue from and the
+	// offset into that track. It returns (0, 0) when there is no stored
+	// position.
+	ResumeTarget(playlistID string, tracks []playlist.Track) (index int, offset time.Duration)
+}
+
 // PlaylistWriter is implemented by providers that support adding tracks
 // to existing playlists.
 type PlaylistWriter interface {

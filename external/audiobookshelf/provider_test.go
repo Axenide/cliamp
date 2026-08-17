@@ -589,3 +589,120 @@ func TestProgressReporterInterface(t *testing.T) {
 		t.Fatal("Provider does not implement provider.ProgressReporter")
 	}
 }
+
+func bookResumeTracks() []playlist.Track {
+	meta := func(offset string) map[string]string {
+		return map[string]string{
+			provider.MetaAudiobookshelfID:     "book-1",
+			provider.MetaAudiobookshelfOffset: offset,
+			provider.MetaAudiobookshelfTotal:  "7200",
+		}
+	}
+	return []playlist.Track{
+		{Path: "file1", DurationSecs: 3600, ProviderMeta: meta("0")},
+		{Path: "file2", DurationSecs: 3600, ProviderMeta: meta("3600")},
+	}
+}
+
+func TestResumeTargetBook(t *testing.T) {
+	tests := []struct {
+		name       string
+		progress   string
+		wantIndex  int
+		wantOffset time.Duration
+	}{
+		{
+			name:       "mid second file",
+			progress:   `{"mediaProgress":[{"libraryItemId":"book-1","currentTime":4200,"duration":7200}]}`,
+			wantIndex:  1,
+			wantOffset: 600 * time.Second,
+		},
+		{
+			name:       "mid first file",
+			progress:   `{"mediaProgress":[{"libraryItemId":"book-1","currentTime":90,"duration":7200}]}`,
+			wantIndex:  0,
+			wantOffset: 90 * time.Second,
+		},
+		{
+			name:       "finished",
+			progress:   `{"mediaProgress":[{"libraryItemId":"book-1","currentTime":7200,"duration":7200,"isFinished":true}]}`,
+			wantIndex:  0,
+			wantOffset: 0,
+		},
+		{
+			name:       "no progress stored",
+			progress:   `{"mediaProgress":[]}`,
+			wantIndex:  0,
+			wantOffset: 0,
+		},
+		{
+			name:       "other item only",
+			progress:   `{"mediaProgress":[{"libraryItemId":"book-9","currentTime":500,"duration":7200}]}`,
+			wantIndex:  0,
+			wantOffset: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := mockProvider(func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/api/me" {
+					t.Fatalf("unexpected path %s", req.URL.Path)
+				}
+				return jsonResponse(tt.progress), nil
+			})
+
+			idx, offset := p.ResumeTarget("b:book-1", bookResumeTracks())
+			if idx != tt.wantIndex || offset != tt.wantOffset {
+				t.Fatalf("ResumeTarget() = (%d, %v), want (%d, %v)", idx, offset, tt.wantIndex, tt.wantOffset)
+			}
+		})
+	}
+}
+
+func TestResumeTargetPodcastPicksInProgressEpisode(t *testing.T) {
+	p := mockProvider(func(req *http.Request) (*http.Response, error) {
+		if req.URL.Path != "/api/me" {
+			t.Fatalf("unexpected path %s", req.URL.Path)
+		}
+		return jsonResponse(`{"mediaProgress":[
+			{"libraryItemId":"pod-1","episodeId":"ep-1","currentTime":300,"duration":1800}
+		]}`), nil
+	})
+
+	tracks := []playlist.Track{
+		{Path: "ep2", DurationSecs: 2400, ProviderMeta: map[string]string{
+			provider.MetaAudiobookshelfID:      "pod-1",
+			provider.MetaAudiobookshelfEpisode: "ep-2",
+		}},
+		{Path: "ep1", DurationSecs: 1800, ProviderMeta: map[string]string{
+			provider.MetaAudiobookshelfID:      "pod-1",
+			provider.MetaAudiobookshelfEpisode: "ep-1",
+		}},
+	}
+
+	idx, offset := p.ResumeTarget("p:pod-1", tracks)
+	if idx != 1 || offset != 300*time.Second {
+		t.Fatalf("ResumeTarget() = (%d, %v), want (1, 5m0s)", idx, offset)
+	}
+}
+
+func TestResumeTargetGuards(t *testing.T) {
+	p := mockProvider(func(req *http.Request) (*http.Response, error) {
+		t.Fatal("no request expected")
+		return nil, nil
+	})
+
+	if idx, offset := p.ResumeTarget("b:book-1", nil); idx != 0 || offset != 0 {
+		t.Fatalf("empty tracks = (%d, %v), want (0, 0)", idx, offset)
+	}
+	if idx, offset := p.ResumeTarget("bogus", bookResumeTracks()); idx != 0 || offset != 0 {
+		t.Fatalf("bad id = (%d, %v), want (0, 0)", idx, offset)
+	}
+}
+
+func TestResumeTargetInterface(t *testing.T) {
+	var p any = newProvider(NewClient("https://abs.example.com", "tok", "", "", nil))
+	if _, ok := p.(provider.ResumeTarget); !ok {
+		t.Fatal("Provider does not implement provider.ResumeTarget")
+	}
+}

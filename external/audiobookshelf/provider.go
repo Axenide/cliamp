@@ -20,6 +20,7 @@ var (
 	_ provider.AlbumTrackLoader = (*Provider)(nil)
 	_ provider.Searcher         = (*Provider)(nil)
 	_ provider.ProgressReporter = (*Provider)(nil)
+	_ provider.ResumeTarget     = (*Provider)(nil)
 )
 
 const (
@@ -512,4 +513,56 @@ func (p *Provider) report(track playlist.Track, position time.Duration, complete
 	current := offset + position.Seconds()
 	finished := complete && total > 0 && current >= total-finishSlack
 	_ = p.client.UpdateProgress(itemID, track.Meta(provider.MetaAudiobookshelfEpisode), current, total, finished)
+}
+
+// ResumeTarget returns where to continue an item: the track index and the
+// offset into it. Podcast shows resume the first in-progress episode in
+// display order.
+func (p *Provider) ResumeTarget(playlistID string, tracks []playlist.Track) (int, time.Duration) {
+	itemID, podcast := parsePlaylistID(playlistID)
+	if itemID == "" || len(tracks) == 0 {
+		return 0, 0
+	}
+
+	list, err := p.client.Progress()
+	if err != nil {
+		return 0, 0
+	}
+
+	if podcast {
+		for i, t := range tracks {
+			mp, ok := findProgress(list, itemID, t.Meta(provider.MetaAudiobookshelfEpisode))
+			if !ok || mp.IsFinished || mp.CurrentTime <= 0 {
+				continue
+			}
+			return i, time.Duration(mp.CurrentTime * float64(time.Second))
+		}
+		return 0, 0
+	}
+
+	mp, ok := findProgress(list, itemID, "")
+	if !ok || mp.IsFinished || mp.CurrentTime <= 0 {
+		return 0, 0
+	}
+	for i, t := range tracks {
+		start := metaFloat(t, provider.MetaAudiobookshelfOffset)
+		end := start + float64(t.DurationSecs)
+		if mp.CurrentTime < end || i == len(tracks)-1 {
+			offset := mp.CurrentTime - start
+			if offset <= 0 {
+				return i, 0
+			}
+			return i, time.Duration(offset * float64(time.Second))
+		}
+	}
+	return 0, 0
+}
+
+func findProgress(list []MediaProgress, itemID, episodeID string) (MediaProgress, bool) {
+	for _, mp := range list {
+		if mp.LibraryItemID == itemID && mp.EpisodeID == episodeID {
+			return mp, true
+		}
+	}
+	return MediaProgress{}, false
 }
