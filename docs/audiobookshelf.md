@@ -73,11 +73,13 @@ A file's title is the chapter name when that file covers exactly one chapter. Ot
 
 cliamp reports listening position back to the server: when a track starts, roughly every 15 seconds while playing, and when a track finishes. A book reports its position on the whole-book timeline; a podcast episode reports its own. Finishing a file marks the underlying item (book or episode) as finished only once the reported position lands within 5 seconds of that item's total duration — so finishing the last file of a multi-file book marks the book finished, while finishing an earlier file does not.
 
-Loading a book or podcast show places the cursor on the in-progress file or episode and starts playback at the stored position. A podcast show resumes the newest in-progress episode. An item with no stored progress, or one already marked finished, starts from the beginning. If the server reports a stored position past the end of the target file, cliamp starts that file from the beginning instead of seeking out of range.
+Loading a book or podcast show from the provider pane (`B`) places the cursor on the in-progress file or episode and starts playback at the stored position. A podcast show resumes the newest in-progress episode. An item with no stored progress, or one already marked finished, starts from the beginning. If the server reports a stored position past the end of the target file, cliamp starts that file from the beginning instead of seeking out of range. This resume behavior applies to the provider pane; queuing a book or show through the `N` browse overlay does not.
 
 ## How it works
 
 cliamp authenticates with the configured token or with username/password, lists your libraries (optionally filtered by `libraries`), and enumerates books and podcast shows from them. Playback streams through Audiobookshelf's item-file endpoint, which goes through cliamp's buffered download pipeline — the same treatment Jellyfin, Emby, Plex, and Navidrome stream URLs get, so `ffmpeg`-backed formats work the same way here.
+
+That buffered pipeline downloads the whole stream into memory as it plays, with no partial-range requests. For a book stored as one large file (a single `.m4b` covering the whole book), that means memory use proportional to the file size, and resuming far into the book waits for the download to reach that point before playback continues. Books split into per-chapter files avoid both, since each file is comparatively small.
 
 ## Troubleshooting
 
