@@ -607,7 +607,14 @@ func PlaylistBookmarks() error {
 }
 
 // PlaylistEnrich probes duration and derives album metadata for SSH tracks.
-func PlaylistEnrich(name string) error {
+func PlaylistEnrich(name string, source string) error {
+	src := normalizeSortKey(source)
+	switch src {
+	case "path", "metadata":
+	default:
+		return fmt.Errorf("unsupported source key %q (use path or metadata)", source)
+	}
+
 	prov, err := newProvider()
 	if err != nil {
 		return err
@@ -637,9 +644,23 @@ func PlaylistEnrich(name string) error {
 		}
 
 		if t.Album == "" {
-			if dir := albumFromPath(t.Path); dir != "" {
-				tracks[i].Album = dir
+			if src == "path" {
+				if dir := albumFromPath(t.Path); dir != "" {
+					tracks[i].Album = dir
+					changed = true
+				}
+			} else if src == "metadata" {
+				if album := probeAlbum(t.Path); album != "" {
+					tracks[i].Album = album
+					changed = true
+				}
+			}
+		}
+		if t.Year == 0 {
+			if year := probeYear(t.Path); year != 0 {
+				tracks[i].Year = year
 				changed = true
+				fmt.Fprintf(os.Stderr, "  %s: %d\n", t.DisplayName(), year)
 			}
 		}
 
@@ -717,6 +738,16 @@ func parseProbeDuration(out []byte) int {
 	return int(dur)
 }
 
+func probeYear(path string) int {
+	t := playlist.TrackFromPath(path)
+	return t.Year
+}
+
+func probeAlbum(path string) string {
+	t := playlist.TrackFromPath(path)
+	return t.Album
+}
+
 func albumFromPath(path string) string {
 	if path == "" || playlist.IsURL(path) {
 		return ""
@@ -744,7 +775,9 @@ func collectLocalAudio(paths []string) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("scanning %q: %w", p, err)
 		}
-		all = append(all, files...)
+		for _, f := range files {
+			all = append(all, strings.ReplaceAll(f, "\\", "/"))
+		}
 	}
 	return all, nil
 }
