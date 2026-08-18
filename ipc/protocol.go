@@ -70,6 +70,7 @@ type Response struct {
 // Empty hex fields mean the default (ANSI fallback) theme is active.
 type ThemeInfo struct {
 	Name     string `json:"name"`
+	BG       string `json:"bg,omitempty"`
 	Accent   string `json:"accent,omitempty"`
 	Fg       string `json:"fg,omitempty"`
 	BrightFg string `json:"bright_fg,omitempty"`

@@ -93,7 +93,7 @@ func (m *Model) cycleEQPreset() {
 func (m *Model) saveEQ() {
 	name := m.EQPresetName()
 	if err := m.configSaver.Save("eq_preset", fmt.Sprintf("%q", name)); err != nil {
-		m.status.Showf(statusTTLDefault, "Config save failed: %s", err)
+		m.status.Errorf(statusTTLDefault, "Config save failed: %s", err)
 	}
 	bands := m.eqCustomBands
 	parts := make([]string, len(bands))
@@ -102,7 +102,7 @@ func (m *Model) saveEQ() {
 	}
 	eqVal := "[" + strings.Join(parts, ", ") + "]"
 	if err := m.configSaver.Save("eq", eqVal); err != nil {
-		m.status.Showf(statusTTLDefault, "Config save failed: %s", err)
+		m.status.Errorf(statusTTLDefault, "Config save failed: %s", err)
 	}
 }
 
@@ -110,7 +110,7 @@ func (m *Model) saveEQ() {
 func (m *Model) saveSpeed() {
 	speed := m.player.Speed()
 	if err := m.configSaver.Save("speed", fmt.Sprintf("%.2f", speed)); err != nil {
-		m.status.Showf(statusTTLDefault, "Config save failed: %s", err)
+		m.status.Errorf(statusTTLDefault, "Config save failed: %s", err)
 	}
 }
 

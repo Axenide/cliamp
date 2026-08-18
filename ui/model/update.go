@@ -393,7 +393,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.navBrowser.loading = false
 		if msg.err != nil {
-			m.status.Showf(statusTTLDefault, "Artist load failed: %s", msg.err)
+			m.status.Errorf(statusTTLDefault, "Artist load failed: %s", msg.err)
 			return m, nil
 		}
 		m.navBrowser.artists = msg.artists
@@ -408,7 +408,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.navBrowser.albumLoading = false
 		m.navBrowser.loading = false
 		if msg.err != nil {
-			m.status.Showf(statusTTLDefault, "Album load failed: %s", msg.err)
+			m.status.Errorf(statusTTLDefault, "Album load failed: %s", msg.err)
 			return m, nil
 		}
 		if msg.offset == 0 {
@@ -436,7 +436,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.navBrowser.loading = false
 		if msg.err != nil {
-			m.status.Showf(statusTTLDefault, "Track load failed: %s", msg.err)
+			m.status.Errorf(statusTTLDefault, "Track load failed: %s", msg.err)
 			return m, nil
 		}
 		m.navBrowser.tracks = msg.tracks
@@ -453,7 +453,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.catalogBatch.loading = false
 		if msg.err != nil {
 			m.catalogBatch.done = true
-			m.status.Show("Catalog load failed", statusTTLDefault)
+			m.status.Error("Catalog load failed", statusTTLDefault)
 			return m, nil
 		}
 		if msg.added == 0 {
@@ -475,7 +475,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.provLoading = false
 		if msg.err != nil {
-			m.status.Show("Search failed", statusTTLDefault)
+			m.status.Error("Search failed", statusTTLDefault)
 		} else {
 			if lists, err := m.provider.Playlists(); err == nil {
 				m.providerLists = lists
@@ -483,7 +483,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.provCursor = 0
 			m.provScroll = 0
 			if msg.count == 0 {
-				m.status.Show("No stations found", statusTTLDefault)
+				m.status.Warning("No stations found", statusTTLDefault)
 			}
 		}
 		return m, nil
@@ -496,7 +496,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ytdlBatch.loading = false
 		if msg.err != nil {
 			m.ytdlBatch.done = true
-			m.status.Showf(statusTTLBatch, "Radio batch load failed: %v", msg.err)
+			m.status.Errorf(statusTTLBatch, "Radio batch load failed: %v", msg.err)
 			return m, nil
 		}
 		if len(msg.tracks) == 0 {
@@ -518,7 +518,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case feedTrackResolvedMsg:
 		m.feedLoading = false
 		if len(msg.tracks) == 0 {
-			m.status.Show("No episodes found in feed.", statusTTLDefault)
+			m.status.Warning("No episodes found in feed.", statusTTLDefault)
 			return m, nil
 		}
 		m.playlist.Replace(msg.tracks)
@@ -541,7 +541,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.addToHeaderState(msg.tracks)
 			m.status.Showf(statusTTLDefault, "Loaded %d track(s)", len(msg.tracks))
 		} else {
-			m.status.Show("No tracks found at URL.", statusTTLDefault)
+			m.status.Warning("No tracks found at URL.", statusTTLDefault)
 		}
 		if len(msg.tracks) > 0 {
 			// Set up incremental loading for YouTube Radio playlists.
@@ -597,17 +597,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case fbTracksResolvedMsg:
 		if len(msg.tracks) == 0 {
-			m.status.Show("No audio files found", statusTTLDefault)
+			m.status.Warning("No audio files found", statusTTLDefault)
 			return m, nil
 		}
 		if msg.targetPlaylist != "" {
 			added, skipped, err := m.writeTracksToPlaylist(msg.targetPlaylist, msg.tracks)
 			if err != nil {
-				m.status.Showf(statusTTLDefault, "Add failed: %s", err)
+				m.status.Errorf(statusTTLDefault, "Add failed: %s", err)
 			} else if skipped > 0 {
-				m.status.Showf(statusTTLBatch, "Added %d to %q, skipped %d duplicates", added, msg.targetPlaylist, skipped)
-			} else {
+				m.status.Warningf(statusTTLBatch, "Added %d to %q, skipped %d duplicates", added, msg.targetPlaylist, skipped)
+			} else if added > 0 {
 				m.status.Showf(statusTTLDefault, "Added %d to %q", added, msg.targetPlaylist)
+			} else {
+				m.status.Warningf(statusTTLDefault, "Nothing added to %q", msg.targetPlaylist)
 			}
 			m.refreshPlaylistManagerAfterWrite(msg.targetPlaylist)
 			return m, nil
@@ -657,7 +659,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.err = msg.err
 			if track, idx := m.currentPlaybackTrack(); idx >= 0 {
-				m.status.Showf(statusTTLLong, "Couldn't play %s — track is gated, restricted, or unavailable.", track.DisplayName())
+				m.status.Errorf(statusTTLLong, "Couldn't play %s — track is gated, restricted, or unavailable.", track.DisplayName())
 			}
 		} else {
 			m.err = nil
@@ -678,7 +680,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ytdlSavedMsg:
 		m.save.finishDownload()
 		if msg.err != nil {
-			m.status.Showf(statusTTLMedium, "Download failed: %s", msg.err)
+			m.status.Errorf(statusTTLMedium, "Download failed: %s", msg.err)
 		} else {
 			m.status.Showf(statusTTLMedium, "Saved to %s", msg.path)
 		}
@@ -725,9 +727,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spotSearch.results = msg.tracks
 		m.spotSearch.cursor = 0
 		m.spotSearch.screen = spotSearchResults
-		if len(msg.tracks) == 0 {
-			m.spotSearch.err = "No results found"
-		}
 		m.applyHeightMode()
 		m.clampActiveScrollState()
 		return m, nil
@@ -803,7 +802,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case devicesListedMsg:
 		m.devicePicker.loading = false
 		if msg.err != nil {
-			m.status.Showf(statusTTLDefault, "Device list failed: %s", msg.err)
+			m.status.Errorf(statusTTLDefault, "Device list failed: %s", msg.err)
 			m.devicePicker.visible = false
 		} else {
 			m.devicePicker.devices = msg.devices
@@ -812,7 +811,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case deviceSwitchedMsg:
 		if msg.err != nil {
-			m.status.Showf(statusTTLDefault, "Switch failed: %s", msg.err)
+			m.status.Errorf(statusTTLDefault, "Switch failed: %s", msg.err)
 		} else {
 			m.status.Showf(statusTTLDefault, "Audio output: %s", msg.name)
 			_ = m.configSaver.Save("audio_device", msg.name)
@@ -1020,7 +1019,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		shuffled := m.playlist.Shuffled()
 		if err := m.configSaver.Save("shuffle", fmt.Sprintf("%v", shuffled)); err != nil {
-			m.status.Showf(statusTTLDefault, "Config save failed: %s", err)
+			m.status.Errorf(statusTTLDefault, "Config save failed: %s", err)
 		}
 		m.player.ClearPreload()
 		cmd := m.preloadNext()
@@ -1042,7 +1041,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		mode := m.playlist.Repeat()
 		if err := m.configSaver.Save("repeat", fmt.Sprintf("%q", mode.String())); err != nil {
-			m.status.Showf(statusTTLDefault, "Config save failed: %s", err)
+			m.status.Errorf(statusTTLDefault, "Config save failed: %s", err)
 		}
 		m.player.ClearPreload()
 		cmd := m.preloadNext()
@@ -1174,6 +1173,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			t := m.themes[m.themeIdx]
 			resp.Theme = &ipc.ThemeInfo{
 				Name:     t.Name,
+				BG:       t.BG,
 				Accent:   t.Accent,
 				Fg:       t.FG,
 				BrightFg: t.BrightFG,

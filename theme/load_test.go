@@ -36,6 +36,7 @@ func TestLoadAllIncludesWinampPalette(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	want := Theme{
 		Name:     "winamp",
+		BG:       "#000000",
 		Accent:   "#00FF00",
 		BrightFG: "#FFFFFF",
 		FG:       "#969696",

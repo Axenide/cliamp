@@ -225,6 +225,9 @@ func TestPlayCurrentTrackUnplayableUsesSelectionOrder(t *testing.T) {
 	if m.status.text != "Track unavailable, skipping..." {
 		t.Fatalf("status.text = %q, want %q", m.status.text, "Track unavailable, skipping...")
 	}
+	if m.status.kind != feedbackWarning {
+		t.Fatalf("status.kind = %v, want %v", m.status.kind, feedbackWarning)
+	}
 	if p.QueueLen() != 1 {
 		t.Fatalf("QueueLen() = %d, want 1", p.QueueLen())
 	}
@@ -259,6 +262,9 @@ func TestPlayCurrentTrackUnplayableStopsWhenNoReplacementExists(t *testing.T) {
 	}
 	if m.status.text != "No available tracks" {
 		t.Fatalf("status.text = %q, want %q", m.status.text, "No available tracks")
+	}
+	if m.status.kind != feedbackWarning {
+		t.Fatalf("status.kind = %v, want %v", m.status.kind, feedbackWarning)
 	}
 }
 
