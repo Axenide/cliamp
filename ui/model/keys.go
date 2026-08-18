@@ -394,6 +394,8 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 			return m.switchToProvider("jellyfin")
 		case "E":
 			return m.switchToProvider("emby")
+		case "B":
+			return m.switchToProvider("audiobookshelf")
 		case "S":
 			return m.switchToProvider("spotify")
 		case "P":
@@ -731,6 +733,8 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return m.switchToProvider("jellyfin")
 	case "E":
 		return m.switchToProvider("emby")
+	case "B":
+		return m.switchToProvider("audiobookshelf")
 	case "p":
 		if m.localProvider != nil {
 			m.openPlaylistManager()
