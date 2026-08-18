@@ -40,7 +40,7 @@ type storedCreds struct {
 func CredsPath() (string, error) {
 	dir, err := appdir.Dir()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("tidal: config dir: %w", err)
 	}
 	return filepath.Join(dir, "tidal_credentials.json"), nil
 }
@@ -56,7 +56,7 @@ func DeleteCreds() (bool, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return false, nil
 		}
-		return false, err
+		return false, fmt.Errorf("tidal: remove credentials: %w", err)
 	}
 	return true, nil
 }

@@ -157,7 +157,7 @@ When you press `N` to drill into a provider (Navidrome, Plex, Jellyfin, Emby, Au
 | `a` | Append all visible tracks to the queue |
 | `q` | Queue the highlighted track to play next |
 | `s` | Cycle album sort (album list only) |
-| `S` `N` `P` `J` `E` `Y` `C` `M` `Q` `L` | Quick-switch to that provider without going back through the main pane. `R` replaces the queue on the track screen. |
+| `S` `N` `P` `J` `E` `Y` `C` `M` `Q` `T` `L` | Quick-switch to that provider without going back through the main pane. `R` replaces the queue on the track screen. |
 | `Esc` `b` | Walk back one level / close the browser |
 
 The header shows a source breadcrumb such as `Navidrome / Miles Davis / Kind of Blue / Tracks`, so the current provider and drill-down location remain visible. Track rows show right-aligned durations when the provider returns them.

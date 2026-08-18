@@ -89,6 +89,10 @@ func TestFetchListMaxItems(t *testing.T) {
 }
 
 func TestDoRequestRefreshesOn401(t *testing.T) {
+	// The refresh path persists rotated tokens; keep the write away from the
+	// user's real credentials file.
+	t.Setenv("CLIAMP_CONFIG_DIR", t.TempDir())
+
 	var apiCalls, tokenCalls atomic.Int32
 	mux := http.NewServeMux()
 	mux.HandleFunc("/sessions", func(w http.ResponseWriter, r *http.Request) {
