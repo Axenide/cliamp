@@ -1,6 +1,6 @@
 # Themes
 
-cliamp ships with 20 built-in color themes and supports custom themes via simple TOML files.
+cliamp ships with 21 built-in color themes and supports custom themes via simple TOML files.
 
 Press `t` during playback to open the theme picker. Navigate with `↑`/`↓`, preview live as you move, confirm with `Enter`, or cancel with `Esc`.
 
@@ -8,7 +8,7 @@ Your selection is saved automatically and restored on next launch.
 
 ## Built-in themes
 
-ayu-mirage-dark, catppuccin, catppuccin-latte, dracula, ember, ethereal, everforest, flexoki-light, gruvbox, hackerman, kanagawa, matte-black, miasma, neon-blade-runner, nord, osaka-jade, ristretto, rose-pine, tokyo-night, vantablack
+ayu-mirage-dark, catppuccin, catppuccin-latte, dracula, ember, ethereal, everforest, flexoki-light, gruvbox, hackerman, kanagawa, matte-black, miasma, neon-blade-runner, nord, osaka-jade, ristretto, rose-pine, tokyo-night, vantablack, winamp
 
 ## Creating a custom theme
 
