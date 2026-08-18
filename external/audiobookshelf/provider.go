@@ -100,14 +100,14 @@ func (p *Provider) Playlists() ([]playlist.PlaylistInfo, error) {
 
 	libs, err := p.client.Libraries()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("audiobookshelf: list libraries: %w", err)
 	}
 
 	var books, shows []playlist.PlaylistInfo
 	for _, lib := range libs {
 		items, err := p.client.Items(lib.ID)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("audiobookshelf: list items for library %s: %w", lib.ID, err)
 		}
 		for _, it := range items {
 			switch mediaTypeOf(lib, it) {
@@ -156,7 +156,7 @@ func (p *Provider) Tracks(playlistID string) ([]playlist.Track, error) {
 
 	item, err := p.client.Item(itemID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("audiobookshelf: load item %s: %w", itemID, err)
 	}
 
 	var out []playlist.Track
@@ -238,7 +238,7 @@ func (p *Provider) episodeTracks(item LibraryItem) []playlist.Track {
 func (p *Provider) Artists() ([]provider.ArtistInfo, error) {
 	libs, err := p.client.Libraries()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("audiobookshelf: list libraries: %w", err)
 	}
 
 	var out []provider.ArtistInfo
@@ -248,7 +248,7 @@ func (p *Provider) Artists() ([]provider.ArtistInfo, error) {
 		}
 		authors, err := p.client.Authors(lib.ID)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("audiobookshelf: list authors for library %s: %w", lib.ID, err)
 		}
 		for _, a := range authors {
 			out = append(out, provider.ArtistInfo{ID: a.ID, Name: a.Name, AlbumCount: a.NumBooks})
@@ -264,7 +264,7 @@ func (p *Provider) Artists() ([]provider.ArtistInfo, error) {
 func (p *Provider) ArtistAlbums(artistID string) ([]provider.AlbumInfo, error) {
 	items, err := p.client.AuthorItems(artistID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("audiobookshelf: list books for author %s: %w", artistID, err)
 	}
 	sorted := append([]LibraryItem(nil), items...)
 	sortItems(sorted, SortBooksByTitle)
@@ -323,7 +323,7 @@ func (p *Provider) SearchTracks(ctx context.Context, query string, limit int) ([
 	}
 	libs, err := p.client.Libraries()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("audiobookshelf: list libraries: %w", err)
 	}
 
 	var out []playlist.Track
@@ -333,7 +333,7 @@ func (p *Provider) SearchTracks(ctx context.Context, query string, limit int) ([
 		}
 		hits, err := p.client.Search(lib.ID, query, searchItemLimit)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("audiobookshelf: search library %s: %w", lib.ID, err)
 		}
 		for _, hit := range hits {
 			if err := ctx.Err(); err != nil {
@@ -367,7 +367,7 @@ func (p *Provider) books() ([]LibraryItem, error) {
 
 	libs, err := p.client.Libraries()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("audiobookshelf: list libraries: %w", err)
 	}
 
 	out := make([]LibraryItem, 0)
@@ -377,7 +377,7 @@ func (p *Provider) books() ([]LibraryItem, error) {
 		}
 		items, err := p.client.Items(lib.ID)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("audiobookshelf: list items for library %s: %w", lib.ID, err)
 		}
 		out = append(out, items...)
 	}
