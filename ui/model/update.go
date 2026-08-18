@@ -18,6 +18,16 @@ import (
 	"github.com/bjarneo/cliamp/ui"
 )
 
+func (m *Model) scheduleReconnect(now time.Time) {
+	if !m.reconnect.at.IsZero() || m.reconnect.attempts >= 5 {
+		return
+	}
+	delay := time.Second << m.reconnect.attempts
+	m.reconnect.at = now.Add(delay)
+	m.reconnect.attempts++
+	m.err = fmt.Errorf("reconnecting in %s", delay)
+}
+
 // Update handles messages: key presses, ticks, and window resizes.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	wasScreen := m.activeScreen()
@@ -152,13 +162,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			track, idx := m.currentPlaybackTrack()
 			isStream := idx >= 0 && (track.Stream || playlist.IsYouTubeURL(track.Path) || playlist.IsYTDL(track.Path))
 			if isStream && m.reconnect.attempts < 5 {
-				// Schedule reconnect with exponential backoff: 1s, 2s, 4s, 8s, 16s
-				if m.reconnect.at.IsZero() {
-					delay := time.Second << m.reconnect.attempts
-					m.reconnect.at = now.Add(delay)
-					m.reconnect.attempts++
-					m.err = fmt.Errorf("reconnecting in %s", delay)
-				}
+				m.scheduleReconnect(now)
 			} else {
 				m.err = err
 				m.reconnect.at = time.Time{}
@@ -282,16 +286,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Skip if already buffering a yt-dlp download to avoid advancing
 		// the playlist on every tick while waiting for the resolve.
 		if m.player.IsPlaying() && !m.player.IsPaused() && m.player.Drained() && !m.buffering && m.reconnect.at.IsZero() {
-			// Track drained to end — always ≥ 50%.
-			finishedTrack, _ := m.currentPlaybackTrack()
-			drainDur := time.Duration(finishedTrack.DurationSecs) * time.Second
-			m.maybeScrobble(finishedTrack, drainDur, drainDur)
+			finishedTrack, idx := m.currentPlaybackTrack()
+			if idx >= 0 && finishedTrack.IsLive() {
+				// A live stream has no natural end. A clean decoder EOF is a
+				// disconnect, so retry this station instead of advancing.
+				m.scheduleReconnect(now)
+			} else {
+				// Track drained to end — always ≥ 50%.
+				drainDur := time.Duration(finishedTrack.DurationSecs) * time.Second
+				m.maybeScrobble(finishedTrack, drainDur, drainDur)
 
-			// Stop the player before dispatching the async nextTrack command.
-			// This clears the gapless streamer so the finished track cannot
-			// replay while waiting for a yt-dlp pipe chain to spin up.
-			m.player.Stop()
-			cmds = append(cmds, m.nextTrack())
+				// Stop the player before dispatching the async nextTrack command.
+				// This clears the gapless streamer so the finished track cannot
+				// replay while waiting for a yt-dlp pipe chain to spin up.
+				m.player.Stop()
+				cmds = append(cmds, m.nextTrack())
+			}
 			m.notifyAll()
 		}
 		if m.player.IsPlaying() && !m.player.IsPaused() {

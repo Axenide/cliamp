@@ -13,6 +13,7 @@ import (
 type playbackFakeEngine struct {
 	playing           bool
 	gaplessAdvanced   bool
+	drained           bool
 	paused            bool
 	ytdlSeek          bool
 	position          time.Duration
@@ -46,7 +47,7 @@ func (f *playbackFakeEngine) SeekYTDL(d time.Duration) error {
 func (f *playbackFakeEngine) CancelSeekYTDL()    {}
 func (f *playbackFakeEngine) IsPlaying() bool    { return f.playing }
 func (f *playbackFakeEngine) IsPaused() bool     { return f.paused }
-func (f *playbackFakeEngine) Drained() bool      { return false }
+func (f *playbackFakeEngine) Drained() bool      { return f.drained }
 func (f *playbackFakeEngine) HasPreload() bool   { return false }
 func (f *playbackFakeEngine) Seekable() bool     { return false }
 func (f *playbackFakeEngine) IsStreamSeek() bool { return false }
@@ -344,6 +345,52 @@ func TestPreloadAfterProviderPlaylistLoadUsesFirstNewTrack(t *testing.T) {
 
 	if len(player.preloadCalls) != 1 || player.preloadCalls[0] != "new1.mp3" {
 		t.Fatalf("preloadCalls = %v, want first new track", player.preloadCalls)
+	}
+}
+
+func TestPreloadNextSkipsLiveStream(t *testing.T) {
+	player := &playbackFakeEngine{playing: true}
+	p := playlist.New()
+	p.Replace([]playlist.Track{
+		{Title: "Station 1", Path: "https://example.com/one", Stream: true, Realtime: true},
+		{Title: "Station 2", Path: "https://example.com/two", Stream: true, Realtime: true},
+	})
+	p.SetIndex(0)
+
+	m := Model{player: player, playlist: p}
+	if cmd := m.preloadNext(); cmd != nil {
+		t.Fatal("preloadNext() returned a command for a live stream, want nil")
+	}
+	if m.preloading {
+		t.Fatal("preloading = true for a live stream, want false")
+	}
+}
+
+func TestDrainedLiveStreamReconnectsCurrentStation(t *testing.T) {
+	player := &playbackFakeEngine{playing: true, drained: true}
+	p := playlist.New()
+	p.Replace([]playlist.Track{
+		{Title: "Station 1", Path: "https://example.com/one", Stream: true, Realtime: true},
+		{Title: "Station 2", Path: "https://example.com/two", Stream: true, Realtime: true},
+	})
+	p.SetIndex(0)
+
+	m := Model{
+		player:   player,
+		playlist: p,
+		vis:      ui.NewVisualizer(float64(player.SampleRate())),
+	}
+	m.SetVisualizer("none")
+
+	now := time.Now()
+	updated, _ := m.Update(tickMsg(now))
+	m = updated.(Model)
+
+	if got := m.playlist.Index(); got != 0 {
+		t.Fatalf("playlist index = %d, want 0 after live stream drained", got)
+	}
+	if m.reconnect.at.IsZero() || !m.reconnect.at.After(now) {
+		t.Fatalf("reconnect time = %v, want a future retry", m.reconnect.at)
 	}
 }
 
