@@ -884,6 +884,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case SetEQPresetMsg:
 		m.SetEQPreset(msg.Name, msg.Bands)
+		m.scheduleEQSave()
+		return m, nil
+
+	case SetEQBandMsg:
+		m.setCustomEQBand(msg.Band, msg.Gain)
 		return m, nil
 
 	case PluginQueueMsg:
@@ -1076,8 +1081,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ipc.EQMsg:
 		if msg.Band > 0 || (msg.Band == 0 && msg.Name == "") {
 			// Set a specific band (0-9).
-			m.player.SetEQBand(msg.Band, msg.Value)
-			m.scheduleEQSave()
+			m.setCustomEQBand(msg.Band, msg.Value)
 			if msg.Reply != nil {
 				msg.Reply <- ipc.Response{OK: true, EQPreset: m.EQPresetName()}
 			}

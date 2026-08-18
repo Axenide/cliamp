@@ -322,6 +322,7 @@ func run(overrides config.Overrides, positional []string, daemon bool) error {
 	}
 
 	m := model.New(p, pl, providers, defaultProvider, localProv, themes, luaMgr, config.SaveFunc{})
+	m.SetCustomEQBands(cfg.EQ)
 	m.SetVisVolumeLinked(cfg.VisVolumeLinked)
 
 	if luaMgr != nil {
@@ -442,7 +443,7 @@ func run(overrides config.Overrides, positional []string, daemon bool) error {
 		luaMgr.SetControlProvider(luaplugin.ControlProvider{
 			SetVolume:   func(db float64) { p.SetVolume(db) },
 			SetSpeed:    func(ratio float64) { p.SetSpeed(ratio) },
-			SetEQBand:   func(band int, db float64) { p.SetEQBand(band, db) },
+			SetEQBand:   func(band int, db float64) { prog.Send(model.SetEQBandMsg{Band: band, Gain: db}) },
 			ToggleMono:  func() { p.ToggleMono() },
 			TogglePause: func() { p.TogglePause() },
 			Stop:        func() { p.Stop() },

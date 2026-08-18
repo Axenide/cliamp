@@ -33,7 +33,13 @@ type deviceSwitchedMsg struct {
 // If Bands is non-nil, the bands are applied and the name becomes a custom label.
 type SetEQPresetMsg struct {
 	Name  string
-	Bands *[10]float64 // nil = use built-in preset bands or keep current
+	Bands *[10]float64 // nil = use built-in preset bands or keep current for a custom label
+}
+
+// SetEQBandMsg is sent by Lua plugins to adjust one band of the Custom curve.
+type SetEQBandMsg struct {
+	Band int
+	Gain float64
 }
 
 // ShowStatusMsg is sent by Lua plugins to display a message in the status bar.

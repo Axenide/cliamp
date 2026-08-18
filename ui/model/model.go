@@ -272,6 +272,7 @@ type Model struct {
 	provPillIdx   int             // selected pill index
 	eqPresetIdx   int             // -1 = custom, 0+ = index into eqPresets
 	eqCustomLabel string          // non-empty = plugin-defined preset label (shown instead of "Custom")
+	eqCustomBands [eqBandCount]float64
 
 	// Overlay / feature state (see state.go for struct definitions)
 	search         searchState

@@ -21,6 +21,7 @@ type playbackFakeEngine struct {
 	seekYTDLCalls     []time.Duration
 	preloadCalls      []string
 	clearPreloadCalls int
+	eqBands           [eqBandCount]float64
 }
 
 func (f *playbackFakeEngine) Play(path string, _ time.Duration) error {
@@ -72,8 +73,8 @@ func (f *playbackFakeEngine) SetSpeed(float64)                       {}
 func (f *playbackFakeEngine) Speed() float64                         { return 1 }
 func (f *playbackFakeEngine) ToggleMono()                            {}
 func (f *playbackFakeEngine) Mono() bool                             { return false }
-func (f *playbackFakeEngine) SetEQBand(int, float64)                 {}
-func (f *playbackFakeEngine) EQBands() [10]float64                   { return [10]float64{} }
+func (f *playbackFakeEngine) SetEQBand(band int, gain float64)       { f.eqBands[band] = gain }
+func (f *playbackFakeEngine) EQBands() [10]float64                   { return f.eqBands }
 func (f *playbackFakeEngine) StreamErr() error                       { return nil }
 func (f *playbackFakeEngine) StreamTitle() string                    { return "" }
 func (f *playbackFakeEngine) StreamBytes() (downloaded, total int64) { return 0, 0 }

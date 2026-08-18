@@ -58,7 +58,7 @@ fields support these editor keys:
 
 | Key | Action |
 |---|---|
-| `e` | Cycle EQ preset |
+| `e` | Cycle EQ preset, including the saved Custom curve |
 | `t` | Choose theme |
 | `v` | Cycle visualizer |
 | `Ctrl+V` | Pick visualizer from a list (live preview) |

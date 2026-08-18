@@ -565,10 +565,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	case "up", "k":
 		if m.focus == focusEQ {
 			bands := m.player.EQBands()
-			m.player.SetEQBand(m.eqCursor, bands[m.eqCursor]+1)
-			m.eqPresetIdx = -1 // manual tweak → custom
-			m.eqCustomLabel = ""
-			m.scheduleEQSave()
+			m.setCustomEQBand(m.eqCursor, bands[m.eqCursor]+1)
 		} else {
 			if m.plCursor > 0 {
 				m.plCursor--
@@ -582,10 +579,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	case "down", "j":
 		if m.focus == focusEQ {
 			bands := m.player.EQBands()
-			m.player.SetEQBand(m.eqCursor, bands[m.eqCursor]-1)
-			m.eqPresetIdx = -1 // manual tweak → custom
-			m.eqCustomLabel = ""
-			m.scheduleEQSave()
+			m.setCustomEQBand(m.eqCursor, bands[m.eqCursor]-1)
 		} else {
 			if m.plCursor < m.playlist.Len()-1 {
 				m.plCursor++
@@ -676,11 +670,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		if m.layout.tier == layoutMinimal {
 			break
 		}
-		m.eqPresetIdx++
-		if m.eqPresetIdx >= len(eqPresets) {
-			m.eqPresetIdx = 0
-		}
-		m.applyEQPreset()
+		m.cycleEQPreset()
 		m.scheduleEQSave()
 
 	case "a":
