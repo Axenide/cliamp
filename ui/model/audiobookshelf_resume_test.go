@@ -148,12 +148,15 @@ type progressProv struct {
 
 func (p *progressProv) CanReportPlayback(playlist.Track) bool { return true }
 
-func (p *progressProv) ReportNowPlaying(playlist.Track, time.Duration, bool) {}
+func (p *progressProv) ReportNowPlaying(playlist.Track, time.Duration, bool) error { return nil }
 
-func (p *progressProv) ReportScrobble(playlist.Track, time.Duration, time.Duration, bool) {}
+func (p *progressProv) ReportScrobble(playlist.Track, time.Duration, time.Duration, bool) error {
+	return nil
+}
 
-func (p *progressProv) ReportProgress(_ playlist.Track, position time.Duration) {
+func (p *progressProv) ReportProgress(_ playlist.Track, position time.Duration) error {
 	p.reports <- position
+	return nil
 }
 
 func TestTickProgressReportThrottles(t *testing.T) {

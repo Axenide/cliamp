@@ -44,8 +44,10 @@ type AlbumTrackLoader interface {
 // playback-completion reports for tracks they originated.
 type PlaybackReporter interface {
 	CanReportPlayback(track playlist.Track) bool
-	ReportNowPlaying(track playlist.Track, position time.Duration, canSeek bool)
-	ReportScrobble(track playlist.Track, elapsed, duration time.Duration, canSeek bool)
+	// ReportNowPlaying and ReportScrobble return the failure so the caller can
+	// record it; reporting is best-effort and never blocks playback.
+	ReportNowPlaying(track playlist.Track, position time.Duration, canSeek bool) error
+	ReportScrobble(track playlist.Track, elapsed, duration time.Duration, canSeek bool) error
 }
 
 // ProgressReporter is implemented by providers that track listening position
@@ -54,7 +56,7 @@ type PlaybackReporter interface {
 type ProgressReporter interface {
 	PlaybackReporter
 	// ReportProgress sends an interim position update for a playing track.
-	ReportProgress(track playlist.Track, position time.Duration)
+	ReportProgress(track playlist.Track, position time.Duration) error
 }
 
 // ResumeTarget is implemented by providers that track listening position

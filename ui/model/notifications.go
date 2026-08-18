@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bjarneo/cliamp/applog"
 	"github.com/bjarneo/cliamp/internal/playback"
 	"github.com/bjarneo/cliamp/luaplugin"
 	"github.com/bjarneo/cliamp/playlist"
@@ -115,7 +116,12 @@ func (m *Model) nowPlaying(track playlist.Track) {
 		return
 	}
 	canSeek := m.player.Seekable()
-	go reporter.ReportNowPlaying(track, m.player.Position(), canSeek)
+	position := m.player.Position()
+	go func() {
+		if err := reporter.ReportNowPlaying(track, position, canSeek); err != nil {
+			applog.Warn("now-playing report failed for %q: %v", track.Title, err)
+		}
+	}()
 }
 
 // maybeScrobble fires a playback-complete report for the given track if all
@@ -163,7 +169,11 @@ func (m *Model) maybeScrobble(track playlist.Track, elapsed, duration time.Durat
 		return // less than 50% played
 	}
 	canSeek := m.player.Seekable()
-	go reporter.ReportScrobble(track, elapsed, duration, canSeek)
+	go func() {
+		if err := reporter.ReportScrobble(track, elapsed, duration, canSeek); err != nil {
+			applog.Warn("scrobble failed for %q: %v", track.Title, err)
+		}
+	}()
 }
 
 // findPlaybackReporter returns the first registered provider that can report
@@ -213,5 +223,10 @@ func (m *Model) tickProgressReport(now time.Time) {
 		return
 	}
 	m.lastProgressReport = now
-	go reporter.ReportProgress(track, m.player.Position())
+	position := m.player.Position()
+	go func() {
+		if err := reporter.ReportProgress(track, position); err != nil {
+			applog.Warn("progress report failed for %q: %v", track.Title, err)
+		}
+	}()
 }

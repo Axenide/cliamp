@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bjarneo/cliamp/applog"
 	"github.com/bjarneo/cliamp/config"
 	"github.com/bjarneo/cliamp/playlist"
 	"github.com/bjarneo/cliamp/provider"
@@ -501,26 +500,26 @@ func (p *Provider) CanReportPlayback(track playlist.Track) bool {
 	return track.Meta(provider.MetaAudiobookshelfID) != ""
 }
 
-func (p *Provider) ReportNowPlaying(track playlist.Track, position time.Duration, _ bool) {
+func (p *Provider) ReportNowPlaying(track playlist.Track, position time.Duration, _ bool) error {
 	if position <= 0 {
-		return
+		return nil
 	}
-	p.report(track, position, false)
+	return p.report(track, position, false)
 }
 
-func (p *Provider) ReportScrobble(track playlist.Track, elapsed, _ time.Duration, _ bool) {
-	p.report(track, elapsed, true)
+func (p *Provider) ReportScrobble(track playlist.Track, elapsed, _ time.Duration, _ bool) error {
+	return p.report(track, elapsed, true)
 }
 
 // ReportProgress pushes an interim listening position.
-func (p *Provider) ReportProgress(track playlist.Track, position time.Duration) {
-	p.report(track, position, false)
+func (p *Provider) ReportProgress(track playlist.Track, position time.Duration) error {
+	return p.report(track, position, false)
 }
 
-func (p *Provider) report(track playlist.Track, position time.Duration, complete bool) {
+func (p *Provider) report(track playlist.Track, position time.Duration, complete bool) error {
 	itemID := track.Meta(provider.MetaAudiobookshelfID)
 	if itemID == "" {
-		return
+		return nil
 	}
 	offset := metaFloat(track, provider.MetaAudiobookshelfOffset)
 	total := metaFloat(track, provider.MetaAudiobookshelfTotal)
@@ -531,8 +530,9 @@ func (p *Provider) report(track playlist.Track, position time.Duration, complete
 	finished := complete && total > 0 && current >= total-finishSlack
 	episodeID := track.Meta(provider.MetaAudiobookshelfEpisode)
 	if err := p.client.UpdateProgress(itemID, episodeID, current, total, finished); err != nil {
-		applog.Warn("audiobookshelf: progress update failed for item %s episode %q: %v", itemID, episodeID, err)
+		return fmt.Errorf("audiobookshelf: update progress for item %s: %w", itemID, err)
 	}
+	return nil
 }
 
 // ResumeTarget returns where to continue an item: the track index and the

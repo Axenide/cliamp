@@ -827,3 +827,30 @@ func TestSearchTracksHonoursCancellation(t *testing.T) {
 		})
 	}
 }
+
+func TestReportProgressReturnsTheFailure(t *testing.T) {
+	p := mockProvider(func(req *http.Request) (*http.Response, error) {
+		return statusResponse(http.StatusNotFound, "404 Not Found"), nil
+	})
+
+	track := playlist.Track{
+		DurationSecs: 3600,
+		ProviderMeta: map[string]string{
+			provider.MetaAudiobookshelfID:    "book-1",
+			provider.MetaAudiobookshelfTotal: "7200",
+		},
+	}
+
+	err := p.ReportProgress(track, 120*time.Second)
+	if err == nil {
+		t.Fatal("ReportProgress() error = nil, want the rejected write surfaced to the caller")
+	}
+	if !strings.Contains(err.Error(), "book-1") || !strings.Contains(err.Error(), "404") {
+		t.Fatalf("error = %v, want the item id and the status", err)
+	}
+
+	// A track this provider does not own is not an error.
+	if err := p.ReportProgress(playlist.Track{}, 120*time.Second); err != nil {
+		t.Fatalf("ReportProgress() for a foreign track = %v, want nil", err)
+	}
+}
