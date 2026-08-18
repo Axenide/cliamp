@@ -164,27 +164,27 @@ func (c *Client) getOnce(p string, params url.Values, out any) (int, error) {
 	}
 	req, err := http.NewRequest(http.MethodGet, u, nil)
 	if err != nil {
-		return 0, fmt.Errorf("audiobookshelf: %s: %w", p, err)
+		return 0, fmt.Errorf("%s: %w", p, err)
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.authToken())
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return 0, fmt.Errorf("audiobookshelf: %s: %w", p, err)
+		return 0, fmt.Errorf("%s: %w", p, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return resp.StatusCode, fmt.Errorf("audiobookshelf: %s: http status %s", p, resp.Status)
+		return resp.StatusCode, fmt.Errorf("%s: http status %s", p, resp.Status)
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
 	if err != nil {
-		return resp.StatusCode, fmt.Errorf("audiobookshelf: %s: %w", p, err)
+		return resp.StatusCode, fmt.Errorf("%s: %w", p, err)
 	}
 	if err := json.Unmarshal(body, out); err != nil {
-		return resp.StatusCode, fmt.Errorf("audiobookshelf: %s: %w", p, err)
+		return resp.StatusCode, fmt.Errorf("%s: %w", p, err)
 	}
 	return resp.StatusCode, nil
 }
@@ -207,12 +207,12 @@ func (c *Client) sendJSONOnce(method, p string, payload any) (int, error) {
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return 0, fmt.Errorf("audiobookshelf: %s: %w", p, err)
+		return 0, fmt.Errorf("%s: %w", p, err)
 	}
 
 	req, err := http.NewRequest(method, c.baseURL+p, bytes.NewReader(body))
 	if err != nil {
-		return 0, fmt.Errorf("audiobookshelf: %s: %w", p, err)
+		return 0, fmt.Errorf("%s: %w", p, err)
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
@@ -220,12 +220,12 @@ func (c *Client) sendJSONOnce(method, p string, payload any) (int, error) {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return 0, fmt.Errorf("audiobookshelf: %s: %w", p, err)
+		return 0, fmt.Errorf("%s: %w", p, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return resp.StatusCode, fmt.Errorf("audiobookshelf: %s: http status %s", p, resp.Status)
+		return resp.StatusCode, fmt.Errorf("%s: http status %s", p, resp.Status)
 	}
 	io.Copy(io.Discard, io.LimitReader(resp.Body, maxResponseBody))
 	return resp.StatusCode, nil
@@ -345,46 +345,46 @@ func (c *Client) ensureAuth() error {
 		return nil
 	}
 	if c.user == "" || c.password == "" {
-		return fmt.Errorf("audiobookshelf: missing token or user/password")
+		return fmt.Errorf("missing token or user/password")
 	}
 
 	body, err := json.Marshal(map[string]string{"username": c.user, "password": c.password})
 	if err != nil {
-		return fmt.Errorf("audiobookshelf: login: %w", err)
+		return fmt.Errorf("login: %w", err)
 	}
 
 	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/login", bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("audiobookshelf: login: %w", err)
+		return fmt.Errorf("login: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("audiobookshelf: login: %w", err)
+		return fmt.Errorf("login: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("audiobookshelf: login: http status %s", resp.Status)
+		return fmt.Errorf("login: http status %s", resp.Status)
 	}
 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
 	if err != nil {
-		return fmt.Errorf("audiobookshelf: login: %w", err)
+		return fmt.Errorf("login: %w", err)
 	}
 
 	var out loginResponse
 	if err := json.Unmarshal(data, &out); err != nil {
-		return fmt.Errorf("audiobookshelf: login: %w", err)
+		return fmt.Errorf("login: %w", err)
 	}
 	token := out.User.Token
 	if token == "" {
 		token = out.AccessToken
 	}
 	if token == "" {
-		return fmt.Errorf("audiobookshelf: login: missing token")
+		return fmt.Errorf("login: missing token")
 	}
 
 	c.mu.Lock()

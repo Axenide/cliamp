@@ -159,8 +159,13 @@ func TestMissingCredentials(t *testing.T) {
 	})
 
 	err := c.Ping()
-	if err == nil || !strings.Contains(err.Error(), "audiobookshelf:") {
-		t.Fatalf("Ping() error = %v, want audiobookshelf-prefixed error", err)
+	if err == nil || !strings.Contains(err.Error(), "missing token or user/password") {
+		t.Fatalf("Ping() error = %v, want a missing-credentials error", err)
+	}
+	// The client no longer prefixes its own errors: the provider (or the setup
+	// wizard) adds the single "audiobookshelf:" tag when it wraps.
+	if strings.Contains(err.Error(), "audiobookshelf:") {
+		t.Fatalf("Ping() error = %v, want no provider prefix at the client layer", err)
 	}
 }
 
