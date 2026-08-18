@@ -138,7 +138,7 @@ CLI flags override config file values for the current session only. They are not
 
 ## Setup wizard
 
-Configure remote providers (Navidrome, Plex, Jellyfin, Emby, Spotify, Qobuz, NetEase, Audiobookshelf, YouTube Music) through a small TUI. Each provider page links to where to find the required credentials, validates the connection live, and writes the resulting `[provider]` block to `~/.config/cliamp/config.toml` without disturbing the rest of the file.
+Configure remote providers (Navidrome, Plex, Jellyfin, Emby, Spotify, Qobuz, Tidal, NetEase, Audiobookshelf, YouTube Music) through a small TUI. Each provider page links to where to find the required credentials, validates the connection live, and writes the resulting `[provider]` block to `~/.config/cliamp/config.toml` without disturbing the rest of the file.
 
 ```sh
 cliamp setup

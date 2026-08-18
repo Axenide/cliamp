@@ -279,6 +279,37 @@ func TestQobuzSetupBody(t *testing.T) {
 	}
 }
 
+func TestTidalSetupBody(t *testing.T) {
+	spec := providerSpec{}
+	for _, p := range providers() {
+		if p.section == "tidal" {
+			spec = p
+			break
+		}
+	}
+	if spec.section == "" {
+		t.Fatal("tidal spec missing")
+	}
+
+	// Explicit quality selection.
+	body := spec.body(map[string]string{keyTidalQuality: "hires"})
+	for _, want := range []string{"enabled = true", `quality = "hires"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %q: %q", want, body)
+		}
+	}
+
+	// Default quality when none picked.
+	if got := spec.body(map[string]string{}); !strings.Contains(got, `quality = "lossless"`) {
+		t.Fatalf("default quality not lossless: %q", got)
+	}
+
+	// No live probe (auth happens interactively in the TUI).
+	if spec.validate != nil {
+		t.Fatal("tidal spec should not define a validate probe")
+	}
+}
+
 func TestNetEasePickerSelectionFiltersFields(t *testing.T) {
 	base := newSetupModel()
 	neteaseIdx := -1

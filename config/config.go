@@ -122,6 +122,25 @@ func (q QobuzConfig) IsSet() bool {
 	return !q.Disabled && q.Enabled
 }
 
+// TidalConfig holds settings for the Tidal provider. Requires a paid Tidal
+// subscription (all paid plans include lossless FLAC). Sign-in is an OAuth
+// device flow (link.tidal.com). Built-in fallback client credentials are used
+// when none are configured; Tidal revokes leaked client IDs periodically, so
+// client_id/client_secret can be overridden without waiting for a release.
+type TidalConfig struct {
+	Disabled     bool   // true only when user explicitly sets enabled = false
+	Enabled      bool   // true when [tidal] section exists
+	ClientID     string // OAuth client ID (overrides built-in fallback)
+	ClientSecret string // OAuth client secret (overrides built-in fallback)
+	Quality      string // preferred quality: "low", "high", "lossless", "hires"
+}
+
+// IsSet reports whether the Tidal provider should be shown. Section presence
+// is enough — built-in fallback client credentials are used when none are set.
+func (t TidalConfig) IsSet() bool {
+	return !t.Disabled && t.Enabled
+}
+
 // YouTubeMusicConfig holds settings for the YouTube Music provider.
 // If no client_id/client_secret are set, built-in fallback credentials are
 // used automatically (same pattern as Spotify).
@@ -265,7 +284,7 @@ type Config struct {
 	Speed            float64                      // playback speed ratio: 0.25–2.0 (default 1.0)
 	AutoPlay         bool                         // start playback automatically on launch (radio streams, CLI tracks)
 	SeekStepLarge    int                          // seconds for Shift+Left/Right seek jumps
-	Provider         string                       // default provider: "radio", "navidrome", "spotify", "qobuz", "plex", "jellyfin", "emby", "audiobookshelf", "soundcloud", "netease", "ytmusic" (default "radio")
+	Provider         string                       // default provider: "radio", "navidrome", "spotify", "qobuz", "tidal", "plex", "jellyfin", "emby", "audiobookshelf", "soundcloud", "netease", "ytmusic" (default "radio")
 	Theme            string                       // theme name, or "" for ANSI default
 	Visualizer       string                       // visualizer mode name, or "" for default (Bars)
 	SampleRate       int                          // output sample rate: 22050, 44100, 48000, 96000, 192000
@@ -281,6 +300,7 @@ type Config struct {
 	Navidrome        NavidromeConfig              // optional Navidrome/Subsonic server credentials
 	Spotify          SpotifyConfig                // optional Spotify provider (requires Premium)
 	Qobuz            QobuzConfig                  // optional Qobuz provider (requires subscription)
+	Tidal            TidalConfig                  // optional Tidal provider (requires subscription)
 	YouTubeMusic     YouTubeMusicConfig           // optional YouTube Music provider
 	Plex             PlexConfig                   // optional Plex Media Server credentials
 	Jellyfin         JellyfinConfig               // optional Jellyfin server credentials
@@ -357,6 +377,8 @@ func Load() (Config, error) {
 				cfg.Spotify.Enabled = true
 			case "qobuz":
 				cfg.Qobuz.Enabled = true
+			case "tidal":
+				cfg.Tidal.Enabled = true
 			}
 			// Initialize plugin sub-maps for [plugins] and [plugins.*] sections.
 			if section == "plugins" || strings.HasPrefix(section, "plugins.") {
@@ -415,6 +437,17 @@ func Load() (Config, error) {
 				if v, err := strconv.Atoi(val); err == nil {
 					cfg.Qobuz.Quality = v
 				}
+			}
+		case "tidal":
+			switch key {
+			case "enabled":
+				cfg.Tidal.Disabled = strings.ToLower(val) == "false"
+			case "client_id":
+				cfg.Tidal.ClientID = parseString(val)
+			case "client_secret":
+				cfg.Tidal.ClientSecret = parseString(val)
+			case "quality":
+				cfg.Tidal.Quality = parseString(val)
 			}
 		case "ytmusic":
 			switch key {
