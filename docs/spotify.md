@@ -32,13 +32,13 @@ To register one:
 
 Run `cliamp`, select Spotify as a provider, and press Enter to sign in. When using your own `client_id`, the browser completes two authorization steps in the same tab: one for Web API access and one for playback. The built-in client path needs one step. Credentials are cached at `~/.config/cliamp/spotify_credentials.json`; subsequent launches refresh silently.
 
-### Newer apps and the search page size
+### Development Mode search page size
 
-Apps registered in Development Mode (the default for anything created on developer.spotify.com after Nov 27, 2024) work for your library, your playlists, save/follow actions, OAuth, and search. Playback uses its separate authorization.
+Spotify introduced its current Development Mode restrictions for new apps on February 11, 2026, then migrated existing Development Mode apps on March 9, 2026. Extended Quota Mode apps are unaffected. See Spotify's [February 2026 migration guide](https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide) for the full timeline.
 
-Search does come with one limit: `/v1/search` accepts at most **10 results per request** for a Development Mode app. Asking for more returns `400 "Invalid limit"`, which is exactly what it says and not a sign that search is blocked. Cliamp handles this for you by paging through results 10 at a time with `offset`, so <kbd>Ctrl+F</kbd> returns the full set either way.
+Search remains available in Development Mode, but `/v1/search` accepts at most **10 results per request**. Asking for more returns `400 "Invalid limit"`, which is not a sign that search is blocked. Cliamp handles this for you by paging through results 10 at a time with `offset`, so <kbd>Ctrl+F</kbd> returns the full set either way.
 
-Some other endpoints genuinely are restricted for these apps (`/v1/browse/new-releases` answers `403`, and followed playlists are affected as described in the [Nov 27, 2024 announcement](https://developer.spotify.com/blog/2024-11-27-changes-to-the-web-api)), but `/v1/search` is not among them and Extended Quota Mode is not needed for it.
+Other Development Mode changes remove endpoints such as `/v1/browse/new-releases` and restrict playlist items to playlists the user owns or collaborates on. `/v1/search` remains available and does not require Extended Quota Mode.
 
 ### Alternative: built-in shared client ID
 
@@ -49,7 +49,7 @@ If you would rather not register an app at all, drop the `client_id` line:
 bitrate = 320
 ```
 
-cliamp falls back to a built-in `client_id` (the same one [librespot](https://github.com/librespot-org/librespot) and [spotify-player](https://github.com/aome510/spotify-player) ship with) which predates the Nov 27, 2024 cutoff and retains catalog access.
+cliamp falls back to a built-in `client_id`, the same one [librespot](https://github.com/librespot-org/librespot) and [spotify-player](https://github.com/aome510/spotify-player) ship with.
 
 > **Heads-up — shared rate limit:** The built-in `client_id` is shared with every librespot-, spotify-player-, and cliamp user worldwide. Spotify's per-app quota is global, so when the pool is busy you may see `429 Too Many Requests` errors during search or playlist loading. Cliamp retries with backoff, but persistent 429s mean the pool is hot — your own `client_id` doesn't share that problem.
 

@@ -622,18 +622,15 @@ func (p *SpotifyProvider) searchPage(ctx context.Context, query string, limit, o
 }
 
 // searchPaged collects up to limit results in pages of devModeSearchLimit, for
-// apps that cannot ask for more in one go. A page that fails after the first
-// one keeps whatever was already collected rather than losing the whole search.
+// apps that cannot ask for more in one go. Any page failure aborts the search so
+// callers never mistake partial results for a complete response.
 func (p *SpotifyProvider) searchPaged(ctx context.Context, query string, limit int) (*spotifySearchPage, error) {
 	combined := &spotifySearchPage{}
 	for offset := 0; offset < limit; offset += devModeSearchLimit {
 		size := min(devModeSearchLimit, limit-offset)
 		page, err := p.searchPage(ctx, query, size, offset)
 		if err != nil {
-			if offset == 0 {
-				return nil, err
-			}
-			break
+			return nil, fmt.Errorf("page at offset %d: %w", offset, err)
 		}
 		combined.Tracks.Items = append(combined.Tracks.Items, page.Tracks.Items...)
 		combined.Episodes.Items = append(combined.Episodes.Items, page.Episodes.Items...)

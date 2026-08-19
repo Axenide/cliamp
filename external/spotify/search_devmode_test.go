@@ -5,9 +5,11 @@ package spotify
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -15,12 +17,17 @@ import (
 	"golang.org/x/oauth2"
 )
 
+type searchRequest struct {
+	limit  int
+	offset int
+}
+
 // devModeSpotify fakes an app in Development Mode: /v1/search rejects any limit
 // above devModeSearchLimit with the same 400 "Invalid limit" the real API
-// returns, and serves offset paging normally. It records every limit it saw.
-func devModeSpotify(t *testing.T, total int) (*SpotifyProvider, *[]int) {
+// returns, and serves offset paging normally. It records each page request.
+func devModeSpotify(t *testing.T, total, failOffset int) (*SpotifyProvider, *[]searchRequest) {
 	t.Helper()
-	var limits []int
+	var requests []searchRequest
 
 	originalTransport := http.DefaultTransport
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -30,7 +37,11 @@ func devModeSpotify(t *testing.T, total int) (*SpotifyProvider, *[]int) {
 		q := req.URL.Query()
 		limit, _ := strconv.Atoi(q.Get("limit"))
 		offset, _ := strconv.Atoi(q.Get("offset"))
-		limits = append(limits, limit)
+		requests = append(requests, searchRequest{limit: limit, offset: offset})
+
+		if offset == failOffset {
+			return nil, context.Canceled
+		}
 
 		if limit > devModeSearchLimit {
 			return &http.Response{
@@ -66,53 +77,83 @@ func devModeSpotify(t *testing.T, total int) (*SpotifyProvider, *[]int) {
 	t.Cleanup(func() { http.DefaultTransport = originalTransport })
 
 	sess := &Session{tokenSource: oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "token"})}
-	return New(sess, "client", 320), &limits
+	return New(sess, "client", 320), &requests
 }
 
-func TestSearchTracksPagesAroundDevModeLimit(t *testing.T) {
-	p, limits := devModeSpotify(t, 100)
+func TestSearchTracksDevModePagination(t *testing.T) {
+	tests := []struct {
+		name         string
+		total        int
+		limit        int
+		wantResults  int
+		wantRequests []searchRequest
+	}{
+		{
+			name:        "pages around Development Mode limit",
+			total:       100,
+			limit:       25,
+			wantResults: 25,
+			wantRequests: []searchRequest{
+				{limit: 25, offset: 0},
+				{limit: 10, offset: 0},
+				{limit: 10, offset: 10},
+				{limit: 5, offset: 20},
+			},
+		},
+		{
+			name:         "keeps single request when limit fits",
+			total:        100,
+			limit:        10,
+			wantResults:  10,
+			wantRequests: []searchRequest{{limit: 10, offset: 0}},
+		},
+		{
+			name:        "stops when results run out",
+			total:       12,
+			limit:       50,
+			wantResults: 12,
+			wantRequests: []searchRequest{
+				{limit: 50, offset: 0},
+				{limit: 10, offset: 0},
+				{limit: 10, offset: 10},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p, requests := devModeSpotify(t, tt.total, -1)
+
+			got, err := p.SearchTracks(context.Background(), "radiohead", tt.limit)
+			if err != nil {
+				t.Fatalf("SearchTracks() error = %v", err)
+			}
+			if len(got) != tt.wantResults {
+				t.Errorf("got %d tracks, want %d", len(got), tt.wantResults)
+			}
+			if !slices.Equal(*requests, tt.wantRequests) {
+				t.Errorf("requests = %v, want %v", *requests, tt.wantRequests)
+			}
+		})
+	}
+}
+
+func TestSearchTracksReturnsLaterPageError(t *testing.T) {
+	p, requests := devModeSpotify(t, 100, 10)
 
 	got, err := p.SearchTracks(context.Background(), "radiohead", 25)
-	if err != nil {
-		t.Fatalf("SearchTracks() failed instead of paging around the cap: %v", err)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("SearchTracks() error = %v, want context.Canceled", err)
 	}
-	if len(got) != 25 {
-		t.Errorf("got %d tracks, want 25", len(got))
+	if got != nil {
+		t.Errorf("SearchTracks() returned %d partial results, want none", len(got))
 	}
-	// One rejected attempt at 25, then pages of 10, 10 and 5.
-	want := []int{25, 10, 10, 5}
-	if fmt.Sprint(*limits) != fmt.Sprint(want) {
-		t.Errorf("requested limits = %v, want %v", *limits, want)
+	wantRequests := []searchRequest{
+		{limit: 25, offset: 0},
+		{limit: 10, offset: 0},
+		{limit: 10, offset: 10},
 	}
-}
-
-func TestSearchTracksKeepsSingleRequestWhenLimitFits(t *testing.T) {
-	p, limits := devModeSpotify(t, 100)
-
-	got, err := p.SearchTracks(context.Background(), "radiohead", 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) != 10 {
-		t.Errorf("got %d tracks, want 10", len(got))
-	}
-	if len(*limits) != 1 {
-		t.Errorf("made %d requests, want 1: %v", len(*limits), *limits)
-	}
-}
-
-func TestSearchTracksStopsWhenResultsRunOut(t *testing.T) {
-	p, limits := devModeSpotify(t, 12) // fewer results than asked for
-
-	got, err := p.SearchTracks(context.Background(), "radiohead", 50)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) != 12 {
-		t.Errorf("got %d tracks, want 12", len(got))
-	}
-	// 50 rejected, then 10 + 2; the short second page ends the loop.
-	if len(*limits) != 3 {
-		t.Errorf("made %d requests, want 3: %v", len(*limits), *limits)
+	if !slices.Equal(*requests, wantRequests) {
+		t.Errorf("requests = %v, want %v", *requests, wantRequests)
 	}
 }
