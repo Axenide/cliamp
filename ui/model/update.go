@@ -31,6 +31,7 @@ func (m *Model) scheduleReconnect(now time.Time) {
 // Update handles messages: key presses, ticks, and window resizes.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	wasScreen := m.activeScreen()
+	wasVisualizerVisible := m.visualizerVisible()
 	wasMode := ui.VisNone
 	if m.vis != nil {
 		wasMode = m.vis.Mode
@@ -42,7 +43,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		wasPaused = m.player.IsPaused()
 	}
 	defer func() {
-		m.maybeRequestVisualizerRefresh(msg, wasScreen, wasMode, wasPlaying, wasPaused)
+		m.maybeRequestVisualizerRefresh(msg, wasScreen, wasVisualizerVisible, wasMode, wasPlaying, wasPaused)
 		m.emitPluginEvents()
 	}()
 
@@ -253,6 +254,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.playbackDetached = false
 			} else {
 				newTrack, ok = m.playlist.Next()
+				m.normalizeQueueOverlay()
 			}
 			if !ok {
 				m.player.Stop()
@@ -371,7 +373,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.clearPlaybackTrack()
 		}
 		m.resetYTDLBatch()
-		m.playlist.Replace(msg.tracks)
+		m.replacePlaylist(msg.tracks)
 		m.setHeaderStateFromTracks(msg.tracks)
 		if msg.playlistExact && m.localProvider != nil && msg.providerName == m.localProvider.Name() && msg.playlistID != history.PlaylistName {
 			m.loadedPlaylist = msg.playlistID
@@ -521,7 +523,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status.Warning("No episodes found in feed.", statusTTLDefault)
 			return m, nil
 		}
-		m.playlist.Replace(msg.tracks)
+		m.replacePlaylist(msg.tracks)
 		m.loadedPlaylist = ""
 		m.setHeaderStateFromTracks(msg.tracks)
 		m.plCursor = 0
@@ -622,7 +624,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.player.Stop()
 			m.player.ClearPreload()
 			m.resetYTDLBatch()
-			m.playlist.Replace(msg.tracks)
+			m.replacePlaylist(msg.tracks)
 			m.loadedPlaylist = ""
 			m.setHeaderStateFromTracks(msg.tracks)
 			m.plCursor = 0
@@ -942,7 +944,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		m.playlist.Replace(tracks)
+		m.replacePlaylist(tracks)
 		m.setHeaderStateFromTracks(tracks)
 		if msg.Playlist != history.PlaylistName {
 			m.loadedPlaylist = msg.Playlist
