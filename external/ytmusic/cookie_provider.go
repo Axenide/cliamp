@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/bjarneo/cliamp/playlist"
 	"github.com/bjarneo/cliamp/provider"
@@ -29,21 +30,27 @@ const (
 )
 
 type cookieBase struct {
-	browser    string
-	fetchFn    func(browser string) ([]playlist.PlaylistInfo, error)
-	resolveFn  func(pageURL string, start, count int, browser ...string) ([]playlist.Track, int, error)
-	mu         sync.Mutex
-	playlists  []playlist.PlaylistInfo
-	trackCache map[string][]playlist.Track
+	browser     string
+	fetchFn     func(browser string) ([]playlist.PlaylistInfo, error)
+	resolveFn   func(ctx context.Context, pageURL string, start, count int, browser ...string) ([]playlist.Track, int, error)
+	mu          sync.Mutex
+	playlists   []playlist.PlaylistInfo
+	trackCache  map[string][]playlist.Track
+	nextLoad    uint64
+	loadCancels map[uint64]context.CancelFunc
 }
 
-const cookiePlaylistBatchSize = 100
+const (
+	cookiePlaylistBatchSize   = 100
+	cookiePlaylistLoadTimeout = 5 * time.Minute
+)
 
 func newCookieBase(browser string) *cookieBase {
 	return &cookieBase{
-		browser:    browser,
-		fetchFn:    resolve.FetchUserPlaylists,
-		trackCache: make(map[string][]playlist.Track),
+		browser:     browser,
+		fetchFn:     resolve.FetchUserPlaylists,
+		trackCache:  make(map[string][]playlist.Track),
+		loadCancels: make(map[uint64]context.CancelFunc),
 	}
 }
 
@@ -82,15 +89,28 @@ func (b *cookieBase) fetchTracks(target string) ([]playlist.Track, error) {
 		return cached, nil
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), cookiePlaylistLoadTimeout)
+	b.nextLoad++
+	loadID := b.nextLoad
+	if b.loadCancels == nil {
+		b.loadCancels = make(map[uint64]context.CancelFunc)
+	}
+	b.loadCancels[loadID] = cancel
 	b.mu.Unlock()
+	defer func() {
+		b.mu.Lock()
+		delete(b.loadCancels, loadID)
+		b.mu.Unlock()
+		cancel()
+	}()
 
 	resolveBatch := b.resolveFn
 	if resolveBatch == nil {
-		resolveBatch = resolve.ResolveYTDLBatchPage
+		resolveBatch = resolve.ResolveYTDLBatchPageContext
 	}
 	var tracks []playlist.Track
 	for start := 0; ; {
-		batch, entries, err := resolveBatch(target, start, cookiePlaylistBatchSize, b.browser)
+		batch, entries, err := resolveBatch(ctx, target, start, cookiePlaylistBatchSize, b.browser)
 		if err != nil {
 			return nil, fmt.Errorf("ytmusic: resolve playlist tracks: %w", err)
 		}
@@ -109,8 +129,21 @@ func (b *cookieBase) fetchTracks(target string) ([]playlist.Track, error) {
 
 func (b *cookieBase) refresh() {
 	b.mu.Lock()
+	for _, cancel := range b.loadCancels {
+		cancel()
+	}
+	clear(b.loadCancels)
 	b.playlists = nil
 	clear(b.trackCache)
+	b.mu.Unlock()
+}
+
+func (b *cookieBase) close() {
+	b.mu.Lock()
+	for _, cancel := range b.loadCancels {
+		cancel()
+	}
+	clear(b.loadCancels)
 	b.mu.Unlock()
 }
 
@@ -267,4 +300,4 @@ func (p *CookieProvider) Refresh() {
 }
 
 // Close releases any held resources.
-func (p *CookieProvider) Close() {}
+func (p *CookieProvider) Close() { p.base.close() }

@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bjarneo/cliamp/playlist"
 	"github.com/bjarneo/cliamp/provider"
@@ -255,7 +256,7 @@ func TestCookieProviderTracksLoadsInBatches(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	base := newCookieBase("firefox")
 	var starts []int
-	base.resolveFn = func(_ string, start, count int, browser ...string) ([]playlist.Track, int, error) {
+	base.resolveFn = func(_ context.Context, _ string, start, count int, browser ...string) ([]playlist.Track, int, error) {
 		starts = append(starts, start)
 		if count != cookiePlaylistBatchSize {
 			t.Fatalf("count = %d, want %d", count, cookiePlaylistBatchSize)
@@ -292,6 +293,45 @@ func TestCookieProviderTracksLoadsInBatches(t *testing.T) {
 	}
 	if _, err := os.Stat(ytCachePath()); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("cookie provider persisted account cache: %v", err)
+	}
+}
+
+func TestCookieProviderStopsTrackLoad(t *testing.T) {
+	tests := []struct {
+		name string
+		stop func(*CookieProvider)
+	}{
+		{name: "refresh", stop: func(p *CookieProvider) { p.Refresh() }},
+		{name: "close", stop: func(p *CookieProvider) { p.Close() }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			base := newCookieBase("firefox")
+			started := make(chan struct{})
+			base.resolveFn = func(ctx context.Context, _ string, _, _ int, _ ...string) ([]playlist.Track, int, error) {
+				close(started)
+				<-ctx.Done()
+				return nil, 0, ctx.Err()
+			}
+			prov := &CookieProvider{base: base, kind: KindMusic}
+			done := make(chan error, 1)
+			go func() {
+				_, err := prov.Tracks("PL123")
+				done <- err
+			}()
+
+			<-started
+			tt.stop(prov)
+			select {
+			case err := <-done:
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("Tracks() error = %v, want context.Canceled", err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("track load did not stop")
+			}
+		})
 	}
 }
 

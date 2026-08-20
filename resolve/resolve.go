@@ -621,6 +621,12 @@ func ResolveYTDLBatch(pageURL string, start, count int, browser ...string) ([]pl
 func ResolveYTDLBatchPage(pageURL string, start, count int, browser ...string) ([]playlist.Track, int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	return ResolveYTDLBatchPageContext(ctx, pageURL, start, count, browser...)
+}
+
+// ResolveYTDLBatchPageContext is ResolveYTDLBatchPage with caller-controlled
+// cancellation and timeout.
+func ResolveYTDLBatchPageContext(ctx context.Context, pageURL string, start, count int, browser ...string) ([]playlist.Track, int, error) {
 	end := 0
 	if count > 0 {
 		end = start + count
