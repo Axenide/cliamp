@@ -704,12 +704,16 @@ func (p *SpotifyProvider) SearchTracks(ctx context.Context, query string, limit 
 // they belong to, so the album's own name, artist and release year are fetched
 // once and filled in on every track for display.
 func (p *SpotifyProvider) AlbumTracks(albumID string) ([]playlist.Track, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return p.AlbumTracksContext(ctx, albumID)
+}
+
+// AlbumTracksContext returns every track of a Spotify album with caller-controlled cancellation.
+func (p *SpotifyProvider) AlbumTracksContext(ctx context.Context, albumID string) ([]playlist.Track, error) {
 	if err := p.ensureSession(); err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
 	album, err := p.album(ctx, albumID)
 	if err != nil {
 		return nil, err

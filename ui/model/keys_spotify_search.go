@@ -184,7 +184,8 @@ func (m *Model) expandSpotAlbum(album playlist.Track, action spotAlbumAction) te
 	}
 	m.spotSearch.albumLoading = true
 	m.spotSearch.err = ""
-	return fetchSpotAlbumTracksCmd(loader, album, action, nextRequest(&m.requests.spotAlbum))
+	ctx := m.newSpotRequestContext(30 * time.Second)
+	return fetchSpotAlbumTracksCmd(ctx, loader, album, action, nextRequest(&m.requests.spotAlbum))
 }
 
 func (m *Model) spotSearchPlaylistMaybeAdjustScroll(visible int) {

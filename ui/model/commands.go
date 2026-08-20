@@ -452,9 +452,17 @@ type spotAlbumTracksMsg struct {
 // fetchSpotAlbumTracksCmd expands an album placeholder from the search results
 // into its tracks. Album entries carry no streamable path of their own, so this
 // runs before the album can reach the player.
-func fetchSpotAlbumTracksCmd(loader provider.AlbumTrackLoader, album playlist.Track, action spotAlbumAction, gen uint64) tea.Cmd {
+func fetchSpotAlbumTracksCmd(ctx context.Context, loader provider.AlbumTrackLoader, album playlist.Track, action spotAlbumAction, gen uint64) tea.Cmd {
 	return func() tea.Msg {
-		tracks, err := loader.AlbumTracks(album.AlbumID())
+		var tracks []playlist.Track
+		var err error
+		if contextual, ok := loader.(interface {
+			AlbumTracksContext(context.Context, string) ([]playlist.Track, error)
+		}); ok {
+			tracks, err = contextual.AlbumTracksContext(ctx, album.AlbumID())
+		} else {
+			tracks, err = loader.AlbumTracks(album.AlbumID())
+		}
 		return spotAlbumTracksMsg{tracks: tracks, album: album, action: action, err: err, gen: gen}
 	}
 }

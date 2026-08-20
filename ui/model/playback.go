@@ -217,6 +217,7 @@ func (m *Model) closeSpotSearch() {
 }
 
 func (m *Model) invalidateSpotAlbumRequest() {
+	m.cancelSpotRequest()
 	nextRequest(&m.requests.spotAlbum)
 	m.spotSearch.albumLoading = false
 }

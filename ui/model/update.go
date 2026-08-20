@@ -737,6 +737,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.gen != m.requests.spotAlbum {
 			return m, nil
 		}
+		m.cancelSpotRequest()
 		m.spotSearch.albumLoading = false
 		if msg.err != nil {
 			m.setSpotSearchError(msg.err.Error())
