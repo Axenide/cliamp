@@ -261,13 +261,13 @@ const playlistPageSize = 1000
 func (c *Client) PlaylistTracks(playlistRatingKey string) ([]Track, error) {
 	type trackPage struct {
 		MediaContainer struct {
-			TotalSize int         `json:"totalSize"`
+			TotalSize *int        `json:"totalSize"`
 			Metadata  []trackJSON `json:"Metadata"`
 		} `json:"MediaContainer"`
 	}
 
 	var tracks []Track
-	for offset := 0; ; offset += playlistPageSize {
+	for offset := 0; ; {
 		params := url.Values{
 			"X-Plex-Container-Start": {fmt.Sprintf("%d", offset)},
 			"X-Plex-Container-Size":  {fmt.Sprintf("%d", playlistPageSize)},
@@ -279,7 +279,12 @@ func (c *Client) PlaylistTracks(playlistRatingKey string) ([]Track, error) {
 		for _, m := range page.MediaContainer.Metadata {
 			tracks = append(tracks, trackFromJSON(m))
 		}
-		if offset+playlistPageSize >= page.MediaContainer.TotalSize {
+		count := len(page.MediaContainer.Metadata)
+		if count == 0 {
+			break
+		}
+		offset += count
+		if page.MediaContainer.TotalSize != nil && offset >= *page.MediaContainer.TotalSize {
 			break
 		}
 	}
