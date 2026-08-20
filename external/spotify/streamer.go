@@ -131,9 +131,9 @@ func (s *spotifyStreamer) Seek(p int) error {
 	return s.source.SetPositionMs(ms)
 }
 
-// Close cancels stream I/O and releases cliamp's references. AudioSource does
-// not expose Close intentionally; calling the concrete C-backed decoder Close
-// methods during a track handoff can crash go-librespot.
+// Close cancels stream I/O and releases the decoder. AudioSource does not
+// expose Close, but each concrete decoder implements either Close() error or
+// Close(). The streamer mutex ensures no decoder call is active during cleanup.
 func (s *spotifyStreamer) Close() error {
 	if s.closing.CompareAndSwap(false, true) {
 		// A decoder read may be waiting on a chunk request while holding mu.
@@ -148,8 +148,15 @@ func (s *spotifyStreamer) Close() error {
 	}
 	s.closed = true
 
+	source := s.source
 	s.source = nil
 	s.buf = nil
+	switch source := source.(type) {
+	case interface{ Close() error }:
+		return source.Close()
+	case interface{ Close() }:
+		source.Close()
+	}
 	return nil
 }
 
