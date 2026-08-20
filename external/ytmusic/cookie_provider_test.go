@@ -215,15 +215,12 @@ func TestCookieProviderTracksCaching(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	base := newCookieBase("chrome")
 
-	// Pre-populate disk cache with tracks using resolved target URL
-	dc := base.ensureDiskCache()
 	mockTracks := []playlist.Track{
 		{Path: "https://music.youtube.com/watch?v=123", Title: "Song 1", Artist: "Artist 1", DurationSecs: 200},
 		{Path: "https://music.youtube.com/watch?v=456", Title: "Song 2", Artist: "Artist 2", DurationSecs: 180},
 	}
 	musicTarget := formatPlaylistURL("PL123", true)
-	dc.setTracks(musicTarget, mockTracks)
-	saveSnapshot(dc.snapshot())
+	base.trackCache[musicTarget] = mockTracks
 
 	prov := &CookieProvider{base: base, kind: KindMusic}
 	tracks, err := prov.Tracks("PL123")
@@ -242,8 +239,7 @@ func TestCookieProviderTracksCaching(t *testing.T) {
 	videoTracks := []playlist.Track{
 		{Path: "https://www.youtube.com/watch?v=789", Title: "Video 1", Artist: "Channel 1", DurationSecs: 300},
 	}
-	dc.setTracks(videoTarget, videoTracks)
-	saveSnapshot(dc.snapshot())
+	base.trackCache[videoTarget] = videoTracks
 
 	videoProv := &CookieProvider{base: base, kind: KindVideo}
 	vTracks, err := videoProv.Tracks("PL123")
@@ -287,6 +283,9 @@ func TestCookieProviderTracksLoadsInBatches(t *testing.T) {
 	}
 	if !slices.Equal(starts, []int{0, cookiePlaylistBatchSize}) {
 		t.Fatalf("batch starts = %v, want [0 %d]", starts, cookiePlaylistBatchSize)
+	}
+	if _, err := os.Stat(ytCachePath()); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("cookie provider persisted account cache: %v", err)
 	}
 }
 

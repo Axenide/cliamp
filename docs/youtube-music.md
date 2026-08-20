@@ -117,7 +117,7 @@ When using OAuth authentication, playlists are automatically split between the t
 
 For OAuth setups, classification is determined by sampling a video from each playlist and checking its YouTube category. Results are cached at `~/.config/cliamp/ytmusic_classification.json` (and `~/.config/cliamp/ytmusic_cache.json`). Delete these files or press `Ctrl+R` in the TUI to reclassify and refresh.
 
-For cookie-backed providers (`cookies_from`), all custom playlists are appended to both YouTube Music and YouTube results without category classification, and `ytmusic_classification.json` is not populated. Results and tracks are cached at `~/.config/cliamp/ytmusic_cache.json` (refresh with `Ctrl+R` or by deleting the cache file).
+For cookie-backed providers (`cookies_from`), all custom playlists are appended to both YouTube Music and YouTube results without category classification, and `ytmusic_classification.json` is not populated. Results and tracks are cached in memory for the current session; press `Ctrl+R` to refresh them.
 
 ## Troubleshooting
 

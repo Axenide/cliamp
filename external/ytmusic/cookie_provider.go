@@ -35,7 +35,6 @@ type cookieBase struct {
 	mu         sync.Mutex
 	playlists  []playlist.PlaylistInfo
 	trackCache map[string][]playlist.Track
-	disk       *ytCache
 }
 
 const cookiePlaylistBatchSize = 100
@@ -48,13 +47,6 @@ func newCookieBase(browser string) *cookieBase {
 	}
 }
 
-func (b *cookieBase) ensureDiskCache() *ytCache {
-	if b.disk == nil {
-		b.disk = loadYTCache("cookies:" + b.browser)
-	}
-	return b.disk
-}
-
 func (b *cookieBase) fetchPlaylists() ([]playlist.PlaylistInfo, error) {
 	b.mu.Lock()
 	if b.playlists != nil {
@@ -63,21 +55,6 @@ func (b *cookieBase) fetchPlaylists() ([]playlist.PlaylistInfo, error) {
 		return res, nil
 	}
 
-	// Try disk cache first
-	dc := b.ensureDiskCache()
-	if dc.playlistsFresh() {
-		var pls []playlist.PlaylistInfo
-		for _, p := range dc.Playlists {
-			pls = append(pls, playlist.PlaylistInfo{
-				ID:         p.ID,
-				Name:       p.Name,
-				TrackCount: p.TrackCount,
-			})
-		}
-		b.playlists = pls
-		b.mu.Unlock()
-		return pls, nil
-	}
 	b.mu.Unlock()
 
 	fn := b.fetchFn
@@ -94,20 +71,7 @@ func (b *cookieBase) fetchPlaylists() ([]playlist.PlaylistInfo, error) {
 
 	b.mu.Lock()
 	b.playlists = pls
-	dc = b.ensureDiskCache()
-	var entries []playlistEntry
-	for _, p := range pls {
-		entries = append(entries, playlistEntry{
-			ID:         p.ID,
-			Name:       p.Name,
-			TrackCount: p.TrackCount,
-		})
-	}
-	dc.setPlaylists(entries)
-	snap := dc.snapshot()
 	b.mu.Unlock()
-
-	saveSnapshot(snap)
 	return pls, nil
 }
 
@@ -118,12 +82,6 @@ func (b *cookieBase) fetchTracks(target string) ([]playlist.Track, error) {
 		return cached, nil
 	}
 
-	dc := b.ensureDiskCache()
-	if tracks, ok := dc.tracksFresh(target); ok {
-		b.trackCache[target] = tracks
-		b.mu.Unlock()
-		return tracks, nil
-	}
 	b.mu.Unlock()
 
 	resolveBatch := b.resolveFn
@@ -145,12 +103,7 @@ func (b *cookieBase) fetchTracks(target string) ([]playlist.Track, error) {
 
 	b.mu.Lock()
 	b.trackCache[target] = tracks
-	dc = b.ensureDiskCache()
-	dc.setTracks(target, tracks)
-	snap := dc.snapshot()
 	b.mu.Unlock()
-
-	saveSnapshot(snap)
 	return tracks, nil
 }
 
@@ -158,12 +111,7 @@ func (b *cookieBase) refresh() {
 	b.mu.Lock()
 	b.playlists = nil
 	clear(b.trackCache)
-	dc := b.ensureDiskCache()
-	dc.clear()
-	snap := dc.snapshot()
 	b.mu.Unlock()
-
-	saveSnapshot(snap)
 }
 
 // CookieProvider provides YouTube and YouTube Music playlist access using

@@ -50,7 +50,7 @@ func TestRefreshInvalidatesAllCaches(t *testing.T) {
 		t.Errorf("disk Tracks not cleared: %d entries", len(b.disk.Tracks))
 	}
 
-	reloaded := loadYTCache("oauth:client-id")
+	reloaded := loadYTCache(oauthCacheScope("client-id"))
 	if reloaded.playlistsFresh() {
 		t.Error("reloaded disk cache still fresh after refresh")
 	}

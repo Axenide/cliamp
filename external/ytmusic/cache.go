@@ -1,7 +1,9 @@
 package ytmusic
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -38,6 +40,15 @@ func ytCachePath() string {
 
 func newYTCache(scope string) *ytCache {
 	return &ytCache{Scope: scope, Tracks: make(map[string]cachedTrackList)}
+}
+
+func oauthCacheScope(clientID string) string {
+	identity := "unauthenticated"
+	if creds, err := loadCreds(); err == nil && creds.RefreshToken != "" {
+		identity = creds.RefreshToken
+	}
+	sum := sha256.Sum256([]byte(clientID + "\x00" + identity))
+	return fmt.Sprintf("oauth:%x", sum)
 }
 
 func loadYTCache(scope string) *ytCache {

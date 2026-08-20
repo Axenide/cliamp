@@ -52,7 +52,7 @@ func newBase(session *Session, clientID, clientSecret string, hasCookies bool) *
 // ensureDiskCache lazily loads the disk cache. Must be called under mu.
 func (b *baseProvider) ensureDiskCache() *ytCache {
 	if b.disk == nil {
-		b.disk = loadYTCache("oauth:" + strings.TrimSpace(b.clientID))
+		b.disk = loadYTCache(oauthCacheScope(strings.TrimSpace(b.clientID)))
 	}
 	return b.disk
 }
@@ -108,6 +108,8 @@ func (b *baseProvider) initSession(interactive bool) error {
 	b.mu.Lock()
 	if b.session == nil {
 		b.session = sess
+		// Authentication may have created or rotated the stored refresh token.
+		b.disk = nil
 	}
 	b.mu.Unlock()
 	return nil
