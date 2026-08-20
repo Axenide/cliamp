@@ -47,7 +47,7 @@ func newCookieBase(browser string) *cookieBase {
 
 func (b *cookieBase) ensureDiskCache() *ytCache {
 	if b.disk == nil {
-		b.disk = loadYTCache()
+		b.disk = loadYTCache("cookies:" + b.browser)
 	}
 	return b.disk
 }

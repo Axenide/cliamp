@@ -17,6 +17,7 @@ const cacheTTL = 24 * time.Hour
 // ytCache stores playlists and tracks on disk for fast startup.
 // Path: ~/.config/cliamp/ytmusic_cache.json
 type ytCache struct {
+	Scope       string                     `json:"scope"`
 	Playlists   []playlistEntry            `json:"playlists,omitempty"`
 	PlaylistsAt time.Time                  `json:"playlists_at"`
 	Tracks      map[string]cachedTrackList `json:"tracks,omitempty"`
@@ -35,18 +36,21 @@ func ytCachePath() string {
 	return filepath.Join(dir, "ytmusic_cache.json")
 }
 
-func newYTCache() *ytCache {
-	return &ytCache{Tracks: make(map[string]cachedTrackList)}
+func newYTCache(scope string) *ytCache {
+	return &ytCache{Scope: scope, Tracks: make(map[string]cachedTrackList)}
 }
 
-func loadYTCache() *ytCache {
+func loadYTCache(scope string) *ytCache {
 	data, err := os.ReadFile(ytCachePath())
 	if err != nil {
-		return newYTCache()
+		return newYTCache(scope)
 	}
 	var c ytCache
 	if err := json.Unmarshal(data, &c); err != nil {
-		return newYTCache()
+		return newYTCache(scope)
+	}
+	if c.Scope != scope {
+		return newYTCache(scope)
 	}
 	if c.Tracks == nil {
 		c.Tracks = make(map[string]cachedTrackList)

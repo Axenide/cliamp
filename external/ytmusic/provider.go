@@ -52,7 +52,7 @@ func newBase(session *Session, clientID, clientSecret string, hasCookies bool) *
 // ensureDiskCache lazily loads the disk cache. Must be called under mu.
 func (b *baseProvider) ensureDiskCache() *ytCache {
 	if b.disk == nil {
-		b.disk = loadYTCache()
+		b.disk = loadYTCache("oauth:" + strings.TrimSpace(b.clientID))
 	}
 	return b.disk
 }
