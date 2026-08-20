@@ -36,6 +36,7 @@ type cookieBase struct {
 	mu          sync.Mutex
 	playlists   []playlist.PlaylistInfo
 	trackCache  map[string][]playlist.Track
+	generation  uint64
 	nextLoad    uint64
 	loadCancels map[uint64]context.CancelFunc
 }
@@ -61,6 +62,7 @@ func (b *cookieBase) fetchPlaylists() ([]playlist.PlaylistInfo, error) {
 		b.mu.Unlock()
 		return res, nil
 	}
+	generation := b.generation
 
 	b.mu.Unlock()
 
@@ -77,7 +79,9 @@ func (b *cookieBase) fetchPlaylists() ([]playlist.PlaylistInfo, error) {
 	}
 
 	b.mu.Lock()
-	b.playlists = pls
+	if b.generation == generation {
+		b.playlists = pls
+	}
 	b.mu.Unlock()
 	return pls, nil
 }
@@ -88,6 +92,7 @@ func (b *cookieBase) fetchTracks(target string) ([]playlist.Track, error) {
 		b.mu.Unlock()
 		return cached, nil
 	}
+	generation := b.generation
 
 	ctx, cancel := context.WithTimeout(context.Background(), cookiePlaylistLoadTimeout)
 	b.nextLoad++
@@ -122,13 +127,16 @@ func (b *cookieBase) fetchTracks(target string) ([]playlist.Track, error) {
 	}
 
 	b.mu.Lock()
-	b.trackCache[target] = tracks
+	if b.generation == generation {
+		b.trackCache[target] = tracks
+	}
 	b.mu.Unlock()
 	return tracks, nil
 }
 
 func (b *cookieBase) refresh() {
 	b.mu.Lock()
+	b.generation++
 	for _, cancel := range b.loadCancels {
 		cancel()
 	}
@@ -140,6 +148,7 @@ func (b *cookieBase) refresh() {
 
 func (b *cookieBase) close() {
 	b.mu.Lock()
+	b.generation++
 	for _, cancel := range b.loadCancels {
 		cancel()
 	}

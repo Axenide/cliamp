@@ -335,6 +335,60 @@ func TestCookieProviderStopsTrackLoad(t *testing.T) {
 	}
 }
 
+func TestCookieProviderRefreshRejectsStaleResults(t *testing.T) {
+	t.Run("playlists", func(t *testing.T) {
+		base := newCookieBase("firefox")
+		started := make(chan struct{})
+		release := make(chan struct{})
+		base.fetchFn = func(string) ([]playlist.PlaylistInfo, error) {
+			close(started)
+			<-release
+			return []playlist.PlaylistInfo{{ID: "private"}}, nil
+		}
+		done := make(chan struct{})
+		go func() {
+			_, _ = base.fetchPlaylists()
+			close(done)
+		}()
+
+		<-started
+		base.refresh()
+		close(release)
+		<-done
+		base.mu.Lock()
+		defer base.mu.Unlock()
+		if base.playlists != nil {
+			t.Fatalf("stale playlists cached after refresh: %v", base.playlists)
+		}
+	})
+
+	t.Run("tracks", func(t *testing.T) {
+		base := newCookieBase("firefox")
+		started := make(chan struct{})
+		release := make(chan struct{})
+		base.resolveFn = func(context.Context, string, int, int, ...string) ([]playlist.Track, int, error) {
+			close(started)
+			<-release
+			return []playlist.Track{{Title: "Private"}}, 1, nil
+		}
+		done := make(chan struct{})
+		go func() {
+			_, _ = base.fetchTracks("private")
+			close(done)
+		}()
+
+		<-started
+		base.refresh()
+		close(release)
+		<-done
+		base.mu.Lock()
+		defer base.mu.Unlock()
+		if _, ok := base.trackCache["private"]; ok {
+			t.Fatal("stale tracks cached after refresh")
+		}
+	})
+}
+
 func TestCookieProviderSearchTracksHonorsCancellation(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping Unix shell script test on Windows")
