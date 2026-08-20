@@ -5,6 +5,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/bjarneo/cliamp/history"
 	"github.com/bjarneo/cliamp/ui"
 )
 
@@ -26,6 +27,7 @@ const (
 	commandModeNavSearch
 	commandModePlaylistManager
 	commandModePlaylistManagerInput
+	commandModePlaylistManagerDirs
 	commandModePlaylistPicker
 	commandModePlaylistPickerInput
 	commandModeQueue
@@ -167,6 +169,18 @@ var commandRegistry = []commandSpec{
 	{Mode: commandModeLyrics, Keys: []string{"r"}, KeyLabel: "r", Label: "Retry", ContextHelp: true, Primary: true, Enabled: func(m Model) bool { return !m.lyrics.loading && (m.lyrics.err != nil || len(m.lyrics.lines) == 0) }},
 	{Mode: commandModeLyrics, Keys: []string{"esc"}, KeyLabel: "Esc", Label: "Close", ContextHelp: true, Cancel: true},
 	{Mode: commandModeInfo, Keys: []string{"esc"}, KeyLabel: "Esc", Label: "Close", ContextHelp: true, Cancel: true},
+
+	{Mode: commandModePlaylistManager, Keys: []string{"D"}, KeyLabel: "D", Label: "Dir sources", ContextHelp: true, Enabled: func(m Model) bool {
+		return m.plManager.visible && m.plManager.screen == plMgrScreenTracks && m.plManager.selPlaylist != history.PlaylistName
+	}},
+	{Mode: commandModePlaylistManagerDirs, Keys: []string{"esc", "backspace", "h", "left"}, KeyLabel: "Esc", Label: "Back to tracks", ContextHelp: true, Cancel: true},
+	{Mode: commandModePlaylistManagerDirs, Keys: []string{"a"}, KeyLabel: "a", Label: "Add dir", ContextHelp: true, Primary: true},
+	{Mode: commandModePlaylistManagerDirs, Keys: []string{"d"}, KeyLabel: "d", Label: "Remove", Destructive: true, ContextHelp: true},
+	{Mode: commandModePlaylistManagerDirs, Keys: []string{"r"}, KeyLabel: "r", Label: "Toggle recursive", ContextHelp: true},
+	{Mode: commandModePlaylistManagerDirs, Keys: []string{"up", "down", "k", "j"}, KeyLabel: "Up Down", Label: "Navigate", ContextHelp: true},
+	{Mode: commandModeFileBrowser, Keys: []string{"D"}, KeyLabel: "D", Label: "Add as dir source", ContextHelp: true, Enabled: func(m Model) bool {
+		return m.fileBrowser.visible && m.fileBrowser.targetPlaylist != ""
+	}},
 }
 
 func (m Model) commandHelp(mode commandMode) string {

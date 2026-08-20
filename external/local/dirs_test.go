@@ -231,6 +231,158 @@ func TestAddDirSource(t *testing.T) {
 	}
 }
 
+func TestRemoveDirSource(t *testing.T) {
+	p := newTestProvider(t)
+	audio1 := t.TempDir()
+	audio2 := t.TempDir()
+	writeAudioFile(t, filepath.Join(audio1, "a.mp3"))
+	writeAudioFile(t, filepath.Join(audio2, "b.mp3"))
+	writeAudioFile(t, filepath.Join(audio2, "c.mp3"))
+
+	if _, err := p.AddDirSource("music", audio1); err != nil {
+		t.Fatalf("add audio1: %v", err)
+	}
+	if _, err := p.AddDirSource("music", audio2); err != nil {
+		t.Fatalf("add audio2: %v", err)
+	}
+	// A directory-sourced track list between the two dirs should now hold
+	// all three files.
+	if tracks, err := p.Tracks("music"); err != nil || len(tracks) != 3 {
+		t.Fatalf("tracks before remove = %d (err %v), want 3", len(tracks), err)
+	}
+
+	// Removing audio1 drops only its file; audio2's two remain.
+	if err := p.RemoveDirSource("music", audio1); err != nil {
+		t.Fatalf("RemoveDirSource: %v", err)
+	}
+	dirs, err := p.DirSources("music")
+	if err != nil || len(dirs) != 1 || dirs[0].Path != audio2 {
+		t.Fatalf("after remove dirs = %+v err %v, want only audio2", dirs, err)
+	}
+	tracks, err := p.Tracks("music")
+	if err != nil || len(tracks) != 2 {
+		t.Fatalf("tracks after remove = %d (err %v), want 2", len(tracks), err)
+	}
+
+	// Removing a dir that is not referenced is a no-op (not an error).
+	if err := p.RemoveDirSource("music", audio1); err != nil {
+		t.Fatalf("remove missing source should be no-op, got %v", err)
+	}
+	// Removing from a playlist that does not exist is a no-op.
+	if err := p.RemoveDirSource("nope", audio1); err != nil {
+		t.Fatalf("remove from missing playlist should be no-op, got %v", err)
+	}
+	// The history playlist is reserved.
+	if err := p.RemoveDirSource("Recently Played", audio1); err == nil {
+		t.Fatal("RemoveDirSource on history should error")
+	}
+}
+
+func TestSetDirRecursive(t *testing.T) {
+	p := newTestProvider(t)
+	audio := t.TempDir()
+	makeAudioTree(t, audio) // two top-level files + one nested
+
+	if _, err := p.AddDirSource("music", audio); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	dirs, _ := p.DirSources("music")
+	if !dirs[0].Recursive {
+		t.Fatalf("new dir should default to recursive, got %+v", dirs[0])
+	}
+	// Recursive scan sees all three files.
+	if tracks, _ := p.Tracks("music"); len(tracks) != 3 {
+		t.Fatalf("recursive tracks = %d, want 3", len(tracks))
+	}
+
+	// Flip to flat: only the two top-level files remain.
+	if err := p.SetDirRecursive("music", audio, false); err != nil {
+		t.Fatalf("SetDirRecursive(false): %v", err)
+	}
+	dirs, _ = p.DirSources("music")
+	if dirs[0].Recursive {
+		t.Fatalf("dir should now be flat, got %+v", dirs[0])
+	}
+	if tracks, _ := p.Tracks("music"); len(tracks) != 2 {
+		t.Fatalf("flat tracks = %d, want 2", len(tracks))
+	}
+
+	// Flip back to recursive.
+	if err := p.SetDirRecursive("music", audio, true); err != nil {
+		t.Fatalf("SetDirRecursive(true): %v", err)
+	}
+	if tracks, _ := p.Tracks("music"); len(tracks) != 3 {
+		t.Fatalf("re-enabled recursive tracks = %d, want 3", len(tracks))
+	}
+
+	// Setting the same value is a no-op (no error, no change).
+	if err := p.SetDirRecursive("music", audio, true); err != nil {
+		t.Fatalf("idempotent SetDirRecursive: %v", err)
+	}
+	// Missing source and missing playlist are no-ops.
+	if err := p.SetDirRecursive("music", t.TempDir(), false); err != nil {
+		t.Fatalf("missing source should be no-op, got %v", err)
+	}
+	if err := p.SetDirRecursive("nope", audio, false); err != nil {
+		t.Fatalf("missing playlist should be no-op, got %v", err)
+	}
+	// History is reserved.
+	if err := p.SetDirRecursive("Recently Played", audio, false); err == nil {
+		t.Fatal("SetDirRecursive on history should error")
+	}
+}
+
+func TestDirIndexByPathMatchesTildeAndAbsolute(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		t.Skip("no home directory")
+	}
+	audio := filepath.Join(home, "Music")
+	doc := parsePlaylistDoc([]byte("[[dir]]\npath = \"~/Music\"\n"))
+	if got := dirIndexByPath(doc, "~/Music"); got != 0 {
+		t.Fatalf("dirIndexByPath ~/Music = %d, want 0", got)
+	}
+	if got := dirIndexByPath(doc, audio); got != 0 {
+		t.Fatalf("dirIndexByPath absolute = %d, want 0 (tilde should match absolute)", got)
+	}
+	if got := dirIndexByPath(doc, "/elsewhere"); got != -1 {
+		t.Fatalf("dirIndexByPath miss = %d, want -1", got)
+	}
+}
+
+func TestPlaylistsDirSourceCount(t *testing.T) {
+	p := newTestProvider(t)
+	audio := t.TempDir()
+	writeAudioFile(t, filepath.Join(audio, "a.mp3"))
+	writeAudioFile(t, filepath.Join(audio, "b.flac"))
+
+	if _, err := p.AddDirSource("music", audio); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	// A second playlist with no dirs for contrast.
+	if _, err := p.CreatePlaylist(context.Background(), "plain"); err != nil {
+		t.Fatalf("create plain: %v", err)
+	}
+
+	lists, err := p.Playlists()
+	if err != nil {
+		t.Fatalf("Playlists: %v", err)
+	}
+	byName := map[string]playlist.PlaylistInfo{}
+	for _, l := range lists {
+		byName[l.Name] = l
+	}
+	if byName["music"].DirSourceCount != 1 {
+		t.Fatalf("music DirSourceCount = %d, want 1", byName["music"].DirSourceCount)
+	}
+	if byName["plain"].DirSourceCount != 0 {
+		t.Fatalf("plain DirSourceCount = %d, want 0", byName["plain"].DirSourceCount)
+	}
+	if byName["music"].TrackCount != 2 {
+		t.Fatalf("music TrackCount = %d, want 2", byName["music"].TrackCount)
+	}
+}
+
 func TestSavePlaylistPreservesDirsAndSkipsDirTracks(t *testing.T) {
 	p := newTestProvider(t)
 	audio := t.TempDir()
@@ -488,8 +640,8 @@ func TestAddTracksPersistsCrossPlaylistDirTrack(t *testing.T) {
 
 func TestWriteDirRoundTrip(t *testing.T) {
 	var b strings.Builder
-	writeDir(&b, DirSource{Path: "/music", Recursive: true})
-	writeDir(&b, DirSource{Path: "/other", Recursive: false})
+	writeDir(&b, playlist.DirSource{Path: "/music", Recursive: true})
+	writeDir(&b, playlist.DirSource{Path: "/other", Recursive: false})
 	doc := parsePlaylistDoc([]byte(b.String()))
 	if len(doc.dirs) != 2 {
 		t.Fatalf("round trip dirs = %d", len(doc.dirs))
@@ -693,11 +845,11 @@ func TestSavePlaylistMultiMaterializedKeepsDirPositions(t *testing.T) {
 
 func TestDirSuppliesFile(t *testing.T) {
 	dir := t.TempDir()
-	rec := DirSource{Path: dir, Recursive: true}
-	nonRec := DirSource{Path: dir, Recursive: false}
+	rec := playlist.DirSource{Path: dir, Recursive: true}
+	nonRec := playlist.DirSource{Path: dir, Recursive: false}
 	tests := []struct {
 		name string
-		src  DirSource
+		src  playlist.DirSource
 		file string
 		want bool
 	}{

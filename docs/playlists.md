@@ -363,7 +363,27 @@ title = "My Radio"
 | `s` | Sort tracks, cycling supported sort keys (tracks screen) |
 | `w` | Write marked/highlighted tracks, or the current queue from the list screen, to another playlist |
 | `o` | Add files to the open playlist (tracks screen) |
+| `D` | Open the directory-sources screen for the open playlist (tracks screen) |
 | `[` `]` | Move track up/down and save (tracks screen) |
 | `d` | Delete playlist (confirms) / Remove marked tracks, or highlighted track if none are marked |
 | `u` | Undo the last playlist-manager edit |
 | `←` / `Backspace` | Go back from tracks screen to list |
+
+The playlist list flags playlists that reference `[[dir]]` sources with a
+`· N dir(s)` indicator next to the track count.
+
+**Directory sources screen (tracks screen → `D`):**
+
+| Key | Action |
+|-----|--------|
+| `Up` `Down` / `j` `k` | Navigate directory sources |
+| `a` | Open the file browser to add a directory as a `[[dir]]` source |
+| `d` then `y` | Remove the highlighted source (confirm with `y`, cancel with anything else) |
+| `r` | Toggle `recursive` on the highlighted source (re-scans immediately) |
+| `←` / `Backspace` / `Esc` | Back to the tracks screen |
+
+From the file browser (opened with `a` above, or with `o` from the tracks
+screen), press `D` to add the highlighted/selected directory — or the
+directory you are currently browsing when nothing is selected — as a live
+`[[dir]]` source instead of expanding it into explicit tracks. Directories
+already referenced are skipped and reported.

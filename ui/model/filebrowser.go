@@ -463,6 +463,13 @@ func (m *Model) handleFileBrowserKey(msg tea.KeyPressMsg) tea.Cmd {
 				return m.fbConfirmToPlaylist()
 			}
 		}
+
+	case "D":
+		// Add the selected directory (or the current directory) as a [[dir]]
+		// source on the target playlist instead of expanding it into tracks.
+		if m.fileBrowser.targetPlaylist != "" {
+			m.fbAddDirSource()
+		}
 	}
 
 	// Change drive letter on Windows by pressing alt+[c..z]

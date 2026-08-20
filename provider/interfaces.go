@@ -119,6 +119,17 @@ type BookmarkSetter interface {
 	SetBookmarkByPath(playlistName string, path string) error
 }
 
+// PlaylistDirSourceManager is implemented by providers whose playlists can
+// reference directory sources that are re-scanned on each load. The local
+// TOML provider implements this for its [[dir]] sections; other providers
+// leave it unimplemented and the UI hides directory-source controls.
+type PlaylistDirSourceManager interface {
+	DirSources(name string) ([]playlist.DirSource, error)
+	AddDirSource(name, dir string) (bool, error)
+	RemoveDirSource(name, dir string) error
+	SetDirRecursive(name, dir string, recursive bool) error
+}
+
 // CustomStreamer is implemented by providers that need a custom audio
 // decode path for non-standard URI schemes (e.g. spotify:track:xxx).
 type CustomStreamer interface {

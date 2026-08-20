@@ -181,6 +181,7 @@ type plMgrScreenType int
 const (
 	plMgrScreenList plMgrScreenType = iota
 	plMgrScreenTracks
+	plMgrScreenDirs
 	plMgrScreenNewName
 	plMgrScreenRename
 )

@@ -5,7 +5,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/bjarneo/cliamp/history"
 	"github.com/bjarneo/cliamp/playlist"
+	"github.com/bjarneo/cliamp/provider"
 	"github.com/bjarneo/cliamp/theme"
 	"github.com/bjarneo/cliamp/ui"
 )
@@ -333,6 +335,18 @@ func (m *Model) plMgrTracksHelpLine() string {
 	return m.commandHelp(commandModePlaylistManager)
 }
 
+func (m *Model) plMgrDirsHelpLine() string {
+	return m.commandHelp(commandModePlaylistManagerDirs)
+}
+
+func (m *Model) plMgrDirsVisible() int {
+	return m.effectivePlaylistVisible()
+}
+
+func (m *Model) plMgrDirsMaybeAdjustScroll(visible int) {
+	clampScroll(&m.plManager.cursor, &m.plManager.scroll, len(m.plManager.dirs), visible)
+}
+
 func (m *Model) plMgrTracksVisible() int {
 	return m.effectivePlaylistVisible()
 }
@@ -425,6 +439,133 @@ func missingLocalTrack(track playlist.Track) bool {
 	return os.IsNotExist(err)
 }
 
+// plMgrOpenDirs loads the [[dir]] sources for the open playlist and switches
+// to the directory-sources screen. Playlists whose provider does not implement
+// provider.PlaylistDirSourceManager show a notice instead of switching.
+func (m *Model) plMgrOpenDirs() {
+	if m.plManager.selPlaylist == history.PlaylistName {
+		m.status.Showf(statusTTLDefault, "%q is a virtual playlist with no directory sources", m.plManager.selPlaylist)
+		return
+	}
+	dm, ok := m.localProvider.(provider.PlaylistDirSourceManager)
+	if !ok {
+		m.status.Showf(statusTTLDefault, "%q does not support directory sources", m.plManager.selPlaylist)
+		return
+	}
+	dirs, err := dm.DirSources(m.plManager.selPlaylist)
+	if err != nil {
+		m.status.Showf(statusTTLDefault, "Load dir sources: %s", err)
+		return
+	}
+	m.plManager.dirs = dirs
+	m.plManager.screen = plMgrScreenDirs
+	m.plManager.cursor = 0
+	m.plManager.scroll = 0
+	m.plManager.confirmDel = false
+	m.plMgrResetFilter()
+	m.plMgrDirsMaybeAdjustScroll(m.plMgrDirsVisible())
+}
+
+// plMgrReloadDirs re-reads the [[dir]] sources for the open playlist and
+// clamps the cursor so it stays valid after an add or remove.
+func (m *Model) plMgrReloadDirs() {
+	dm, ok := m.localProvider.(provider.PlaylistDirSourceManager)
+	if !ok {
+		return
+	}
+	dirs, err := dm.DirSources(m.plManager.selPlaylist)
+	if err != nil {
+		m.status.Showf(statusTTLDefault, "Reload dir sources: %s", err)
+		return
+	}
+	m.plManager.dirs = dirs
+	if m.plManager.cursor >= len(dirs) {
+		m.plManager.cursor = len(dirs) - 1
+	}
+	if m.plManager.cursor < 0 {
+		m.plManager.cursor = 0
+	}
+	m.plMgrDirsMaybeAdjustScroll(m.plMgrDirsVisible())
+}
+
+// plMgrRefreshTracksForSel reloads the tracks of the open playlist so changes
+// to its [[dir]] sources (add/remove/toggle-recursive) are reflected in the
+// tracks screen immediately.
+func (m *Model) plMgrRefreshTracksForSel() {
+	tracks, err := m.localProvider.Tracks(m.plManager.selPlaylist)
+	if err != nil {
+		return
+	}
+	m.plManager.tracks = tracks
+	m.setHeaderStateFromTracks(tracks)
+}
+
+// fbAddDirSource adds the file browser's selected directories (or the current
+// browsing directory when none are selected) as [[dir]] sources on the target
+// playlist, then closes the browser. Invoked by the file browser's D key when
+// a target playlist is set.
+func (m *Model) fbAddDirSource() {
+	target := m.fileBrowser.targetPlaylist
+	if target == "" || target == history.PlaylistName {
+		if target == history.PlaylistName {
+			m.status.Showf(statusTTLDefault, "%q is a virtual playlist with no directory sources", target)
+		}
+		return
+	}
+	dm, ok := m.localProvider.(provider.PlaylistDirSourceManager)
+	if !ok {
+		m.status.Showf(statusTTLDefault, "This provider does not support directory sources")
+		return
+	}
+	var dirs []string
+	for _, e := range m.fileBrowser.entries {
+		if m.fileBrowser.selected[e.path] && e.isDir && !e.isParent {
+			dirs = append(dirs, e.path)
+		}
+	}
+	if len(dirs) == 0 {
+		dirs = []string{m.fileBrowser.dir}
+	}
+	added, skipped := 0, 0
+	var firstErr error
+	for _, d := range dirs {
+		a, err := dm.AddDirSource(target, d)
+		if err != nil {
+			firstErr = err
+			break
+		}
+		if a {
+			added++
+		} else {
+			skipped++
+		}
+	}
+	m.fileBrowser.visible = false
+	if firstErr != nil {
+		m.status.Showf(statusTTLDefault, "Add dir source failed: %s", firstErr)
+		return
+	}
+	// Reflect the change in any open manager screen for this playlist.
+	if m.plManager.visible && m.plManager.selPlaylist == target {
+		switch m.plManager.screen {
+		case plMgrScreenDirs:
+			m.plMgrReloadDirs()
+			m.plMgrRefreshTracksForSel()
+		case plMgrScreenTracks:
+			m.plMgrRefreshTracksForSel()
+		}
+		m.plMgrRefreshList()
+	}
+	switch {
+	case added > 0 && skipped > 0:
+		m.status.Showf(statusTTLDefault, "Added %d dir source(s) to %q (%d already referenced)", added, target, skipped)
+	case added > 0:
+		m.status.Showf(statusTTLDefault, "Added %d dir source(s) to %q", added, target)
+	default:
+		m.status.Showf(statusTTLDefault, "%q already references that directory", target)
+	}
+}
+
 // plMgrResetFilter clears any active `/` filter on the playlist manager.
 func (m *Model) plMgrResetFilter() {
 	m.plManager.filtering = false
@@ -508,14 +649,19 @@ func (m *Model) plMgrRefreshList() {
 	if m.plManager.filter != "" {
 		m.plMgrRecomputeFilter()
 	}
-	total := m.plMgrListViewCount()
-	if m.plManager.cursor >= total {
-		m.plManager.cursor = total - 1
+	// Cursor/scroll clamping is list-screen-specific: the tracks and
+	// directory-sources screens own their own cursor and re-adjust after
+	// refreshing. Only the list screen re-clamps here.
+	if m.plManager.screen == plMgrScreenList {
+		total := m.plMgrListViewCount()
+		if m.plManager.cursor >= total {
+			m.plManager.cursor = total - 1
+		}
+		if m.plManager.cursor < 0 {
+			m.plManager.cursor = 0
+		}
+		m.plMgrListMaybeAdjustScroll(m.plMgrListVisible())
 	}
-	if m.plManager.cursor < 0 {
-		m.plManager.cursor = 0
-	}
-	m.plMgrListMaybeAdjustScroll(m.plMgrListVisible())
 }
 
 // plMgrListViewCount returns the visible row count on the list screen

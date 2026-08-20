@@ -120,13 +120,24 @@ active when the picker opened. While typing a filter, `Enter` finishes it and
 | `[` `]` | Tracks: move highlighted track and save the playlist |
 | `s` | Tracks: sort and save, cycling `track`, `title`, `artist`, `album`, `artist+album`, `path` |
 | `o` | Tracks: open file browser to add files to this playlist |
+| `D` | Tracks: open the directory-sources screen for this playlist |
 | `r` | List: rename the playlist |
 | `d` | List: delete playlist (confirms). Tracks: remove marked tracks, or highlighted track when none are marked |
 | `u` | Undo the last manager edit |
 | `←` `Backspace` `h` | Tracks screen: go back to the list |
 | `Esc` | Close the playlist manager or go back |
 
-Shift-letter keys are reserved for provider switching, so playlist-manager track actions use lowercase or punctuation keys.
+Shift-letter keys are reserved for provider switching, so playlist-manager track actions use lowercase or punctuation keys. `D` is the one exception: it opens the directory-sources screen.
+
+#### Directory sources screen (`D` from the tracks screen)
+
+| Key | Action |
+|---|---|
+| `↑` `↓` / `j` `k` | Navigate directory sources |
+| `a` | Open the file browser to add a directory as a `[[dir]]` source |
+| `d` then `y` | Remove the highlighted source (`y` confirms, anything else cancels) |
+| `r` | Toggle `recursive` on the highlighted source |
+| `←` `Backspace` `h` `Esc` | Back to the tracks screen |
 
 ## File browser
 
@@ -139,6 +150,7 @@ Shift-letter keys are reserved for provider switching, so playlist-manager track
 | `a` | Select/unselect all visible audio files |
 | `R` | Replace the current queue with selected files (confirm when it is non-empty) |
 | `w` | Write selected files to a local playlist |
+| `D` | Add the highlighted/selected directory (or the current directory) as a live `[[dir]]` source to the target playlist |
 | `~` `.` | Jump to home / current working directory |
 | `Esc` `o` | Close file browser |
 

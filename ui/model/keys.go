@@ -1577,6 +1577,8 @@ func (m *Model) handlePlaylistManagerKey(msg tea.KeyPressMsg) tea.Cmd {
 		return m.handlePlMgrListKey(msg)
 	case plMgrScreenTracks:
 		return m.handlePlMgrTracksKey(msg)
+	case plMgrScreenDirs:
+		return m.handlePlMgrDirsKey(msg)
 	case plMgrScreenNewName:
 		return m.handlePlMgrNewNameKey(msg)
 	case plMgrScreenRename:
@@ -1896,6 +1898,8 @@ func (m *Model) handlePlMgrTracksKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 	case "o":
 		m.openFileBrowserForPlaylist(m.plManager.selPlaylist)
+	case "D":
+		m.plMgrOpenDirs()
 	case "d":
 		m.plMgrRemoveSelectedTracks()
 	case "u":
@@ -1942,6 +1946,113 @@ func (m *Model) plMgrLoadAndPlay(startIdx int) tea.Cmd {
 	cmd := m.playCurrentTrack()
 	m.notifyPlayback()
 	return cmd
+}
+
+// handlePlMgrDirsKey handles keys on the directory-sources screen. The screen
+// lists [[dir]] sources and supports add (via the file browser), remove
+// (y/n confirm), and toggle-recursive. Navigation mirrors the other screens.
+func (m *Model) handlePlMgrDirsKey(msg tea.KeyPressMsg) tea.Cmd {
+	count := len(m.plManager.dirs)
+
+	// Remove-confirmation flow takes priority once armed.
+	if m.plManager.confirmDel {
+		switch msg.String() {
+		case "y", "Y":
+			i := m.plManager.cursor
+			if i >= 0 && i < count {
+				src := m.plManager.dirs[i]
+				if dm, ok := m.localProvider.(provider.PlaylistDirSourceManager); ok {
+					if err := dm.RemoveDirSource(m.plManager.selPlaylist, src.Path); err != nil {
+						m.status.Showf(statusTTLDefault, "Remove failed: %s", err)
+					} else {
+						m.plMgrReloadDirs()
+						m.plMgrRefreshTracksForSel()
+						m.plMgrRefreshList()
+						m.status.Showf(statusTTLDefault, "Removed %q from %q", src.Path, m.plManager.selPlaylist)
+					}
+				}
+			}
+			m.plManager.confirmDel = false
+			return nil
+		default:
+			m.plManager.confirmDel = false
+			return nil
+		}
+	}
+
+	switch msg.String() {
+	case "ctrl+c":
+		m.plManager.visible = false
+		return m.quit()
+	case "up", "k":
+		if m.plManager.cursor > 0 {
+			m.plManager.cursor--
+		} else if count > 0 {
+			m.plManager.cursor = count - 1
+		}
+		m.plMgrDirsMaybeAdjustScroll(m.plMgrDirsVisible())
+	case "down", "j":
+		if m.plManager.cursor < count-1 {
+			m.plManager.cursor++
+		} else if count > 0 {
+			m.plManager.cursor = 0
+		}
+		m.plMgrDirsMaybeAdjustScroll(m.plMgrDirsVisible())
+	case "pgup", "ctrl+u":
+		if m.plManager.cursor > 0 {
+			visible := m.plMgrDirsVisible()
+			m.plManager.cursor -= min(m.plManager.cursor, visible)
+			m.plMgrDirsMaybeAdjustScroll(visible)
+		}
+	case "pgdown", "ctrl+d":
+		if m.plManager.cursor < count-1 {
+			visible := m.plMgrDirsVisible()
+			m.plManager.cursor = min(count-1, m.plManager.cursor+visible)
+			m.plMgrDirsMaybeAdjustScroll(visible)
+		}
+	case "home", "g":
+		m.plManager.cursor = 0
+		m.plMgrDirsMaybeAdjustScroll(m.plMgrDirsVisible())
+	case "end", "G":
+		if count > 0 {
+			m.plManager.cursor = count - 1
+		}
+		m.plMgrDirsMaybeAdjustScroll(m.plMgrDirsVisible())
+	case "a":
+		// Open the file browser to pick a directory; the browser's D action
+		// adds the picked directory as a [[dir]] source to this playlist.
+		m.openFileBrowserForPlaylist(m.plManager.selPlaylist)
+		return nil
+	case "d":
+		if count == 0 {
+			return nil
+		}
+		m.plManager.confirmDel = true
+	case "r":
+		if count == 0 {
+			return nil
+		}
+		src := m.plManager.dirs[m.plManager.cursor]
+		if dm, ok := m.localProvider.(provider.PlaylistDirSourceManager); ok {
+			next := !src.Recursive
+			if err := dm.SetDirRecursive(m.plManager.selPlaylist, src.Path, next); err != nil {
+				m.status.Showf(statusTTLDefault, "Toggle recursive: %s", err)
+			} else {
+				mode := "recursive"
+				if !next {
+					mode = "flat"
+				}
+				m.plMgrReloadDirs()
+				m.plMgrRefreshTracksForSel()
+				m.plMgrRefreshList()
+				m.status.Showf(statusTTLDefault, "Set %q %s", src.Path, mode)
+			}
+		}
+	case "esc", "backspace", "h", "left":
+		// Back to the tracks screen; reload tracks so dir changes are shown.
+		m.plMgrEnterTrackList(m.plManager.selPlaylist)
+	}
+	return nil
 }
 
 // handlePlMgrNewNameKey handles keys on screen 2 (new playlist name input).

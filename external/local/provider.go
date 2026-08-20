@@ -24,14 +24,15 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ provider.PlaylistWriter      = (*Provider)(nil)
-	_ provider.PlaylistBatchWriter = (*Provider)(nil)
-	_ provider.PlaylistCreator     = (*Provider)(nil)
-	_ provider.PlaylistSaver       = (*Provider)(nil)
-	_ provider.PlaylistDeleter     = (*Provider)(nil)
-	_ provider.PlaylistRenamer     = (*Provider)(nil)
-	_ provider.BookmarkSetter      = (*Provider)(nil)
-	_ provider.Searcher            = (*Provider)(nil)
+	_ provider.PlaylistWriter           = (*Provider)(nil)
+	_ provider.PlaylistBatchWriter      = (*Provider)(nil)
+	_ provider.PlaylistCreator          = (*Provider)(nil)
+	_ provider.PlaylistSaver            = (*Provider)(nil)
+	_ provider.PlaylistDeleter          = (*Provider)(nil)
+	_ provider.PlaylistRenamer          = (*Provider)(nil)
+	_ provider.BookmarkSetter           = (*Provider)(nil)
+	_ provider.Searcher                 = (*Provider)(nil)
+	_ provider.PlaylistDirSourceManager = (*Provider)(nil)
 )
 
 // Provider reads and writes TOML-based playlists stored on disk.
@@ -111,10 +112,11 @@ func (p *Provider) Playlists() ([]playlist.PlaylistInfo, error) {
 		// files they supply.
 		tracks := doc.expand(false)
 		lists = append(lists, playlist.PlaylistInfo{
-			ID:           name,
-			Name:         name,
-			TrackCount:   len(tracks),
-			DurationSecs: playlist.TotalDurationSecs(tracks),
+			ID:             name,
+			Name:           name,
+			TrackCount:     len(tracks),
+			DurationSecs:   playlist.TotalDurationSecs(tracks),
+			DirSourceCount: len(doc.dirs),
 		})
 	}
 	return lists, nil
@@ -300,7 +302,7 @@ func (p *Provider) CreateDirPlaylist(name string, dirs []string) error {
 		if i > 0 {
 			b.WriteByte('\n')
 		}
-		writeDir(&b, DirSource{Path: dir, Recursive: true})
+		writeDir(&b, playlist.DirSource{Path: dir, Recursive: true})
 	}
 
 	tmp := path + ".tmp"
@@ -362,7 +364,7 @@ func (p *Provider) AddDirSources(name string, dirs []string) ([]string, error) {
 		}
 		known[target] = struct{}{}
 		added = append(added, dir)
-		doc.dirs = append(doc.dirs, DirSource{Path: dir, Recursive: true})
+		doc.dirs = append(doc.dirs, playlist.DirSource{Path: dir, Recursive: true})
 		doc.order = append(doc.order, itemDir)
 	}
 	if len(added) == 0 {
@@ -383,7 +385,7 @@ func (p *Provider) AddDirSource(name, dir string) (bool, error) {
 }
 
 // DirSources returns the directory sources referenced by a playlist.
-func (p *Provider) DirSources(name string) ([]DirSource, error) {
+func (p *Provider) DirSources(name string) ([]playlist.DirSource, error) {
 	if isHistoryName(name) {
 		return nil, errReservedHistoryName
 	}
@@ -392,6 +394,90 @@ func (p *Provider) DirSources(name string) ([]DirSource, error) {
 		return nil, err
 	}
 	return doc.dirs, nil
+}
+
+// dirIndexByPath returns the index in doc.dirs of the source whose expanded
+// path matches dir (also expanded), or -1 when none matches. Comparison uses
+// cleaned filesystem paths so "~/Music" and "/home/user/Music" align. It is a
+// pure path check, so it never re-walks the filesystem the load already did.
+func dirIndexByPath(doc *playlistDoc, dir string) int {
+	target := filepath.Clean(ExpandPath(dir))
+	for i, src := range doc.dirs {
+		if filepath.Clean(ExpandPath(src.Path)) == target {
+			return i
+		}
+	}
+	return -1
+}
+
+// RemoveDirSource removes the [[dir]] section whose path matches dir from the
+// named playlist. Explicit [[track]] sections keep their slots and order. A
+// missing source (or a missing playlist) is a no-op rather than an error, so
+// callers can remove without first checking existence.
+func (p *Provider) RemoveDirSource(name, dir string) error {
+	if isHistoryName(name) {
+		return errReservedHistoryName
+	}
+	path, err := p.safePath(name)
+	if err != nil {
+		return fmt.Errorf("resolving playlist path: %w", err)
+	}
+	doc, err := p.loadDoc(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("loading playlist %q: %w", name, err)
+	}
+	di := dirIndexByPath(doc, dir)
+	if di < 0 {
+		return nil
+	}
+	// Drop the dir and its corresponding itemDir slot from doc.order so the
+	// ti/di counters used by saveDoc stay aligned with the remaining sections.
+	doc.dirs = append(doc.dirs[:di], doc.dirs[di+1:]...)
+	seen := 0
+	for i, kind := range doc.order {
+		if kind != itemDir {
+			continue
+		}
+		if seen == di {
+			doc.order = append(doc.order[:i], doc.order[i+1:]...)
+			break
+		}
+		seen++
+	}
+	return p.saveDoc(name, doc)
+}
+
+// SetDirRecursive sets the recursive flag on the [[dir]] section whose path
+// matches dir in the named playlist. It is a no-op (not an error) when the
+// source is missing, the playlist is missing, or the flag is already the
+// requested value, so callers can toggle without first checking state.
+func (p *Provider) SetDirRecursive(name, dir string, recursive bool) error {
+	if isHistoryName(name) {
+		return errReservedHistoryName
+	}
+	path, err := p.safePath(name)
+	if err != nil {
+		return fmt.Errorf("resolving playlist path: %w", err)
+	}
+	doc, err := p.loadDoc(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("loading playlist %q: %w", name, err)
+	}
+	di := dirIndexByPath(doc, dir)
+	if di < 0 {
+		return nil
+	}
+	if doc.dirs[di].Recursive == recursive {
+		return nil
+	}
+	doc.dirs[di].Recursive = recursive
+	return p.saveDoc(name, doc)
 }
 
 // saveDoc writes a parsed document back to disk, preserving section order.
