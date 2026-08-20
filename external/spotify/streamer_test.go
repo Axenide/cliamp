@@ -45,27 +45,27 @@ func (*noCloseSource) Read([]float32) (int, error) { return 0, nil }
 func (*noCloseSource) SetPositionMs(int64) error   { return nil }
 func (*noCloseSource) PositionMs() int64           { return 0 }
 
-func TestSpotifyStreamerCloseReleasesDecoder(t *testing.T) {
+func TestSpotifyStreamerCloseReleasesReferencesWithoutClosingDecoder(t *testing.T) {
 	source := &closeErrorSource{err: errors.New("close source")}
 	stream := &librespotPlayer.Stream{Source: source}
 	s := newSpotifyStreamer(stream, nil)
 	s.buf = make([]float32, 16)
 
-	if err := s.Close(); !errors.Is(err, source.err) {
-		t.Fatalf("Close() error = %v, want %v", err, source.err)
+	if err := s.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
 	}
 	if err := s.Close(); err != nil {
 		t.Fatalf("second Close() error = %v", err)
 	}
-	if source.closeCalls != 1 {
-		t.Fatalf("source Close calls = %d, want 1", source.closeCalls)
+	if source.closeCalls != 0 {
+		t.Fatalf("source Close calls = %d, want 0", source.closeCalls)
 	}
 	if s.source != nil || s.buf != nil {
 		t.Fatalf("Close() retained resources: source=%v buf=%v", s.source, s.buf)
 	}
 }
 
-func TestSpotifyStreamerCloseSupportsVoidClose(t *testing.T) {
+func TestSpotifyStreamerCloseWithoutCloseMethod(t *testing.T) {
 	source := &closeSource{}
 	stream := &librespotPlayer.Stream{Source: source}
 	s := newSpotifyStreamer(stream, nil)
@@ -77,8 +77,8 @@ func TestSpotifyStreamerCloseSupportsVoidClose(t *testing.T) {
 	if err := s.Close(); err != nil {
 		t.Fatalf("second Close() error = %v", err)
 	}
-	if source.closeCalls != 1 {
-		t.Fatalf("source Close calls = %d, want 1", source.closeCalls)
+	if source.closeCalls != 0 {
+		t.Fatalf("source Close calls = %d, want 0", source.closeCalls)
 	}
 	if s.source != nil || s.buf != nil {
 		t.Fatalf("Close() retained resources: source=%v buf=%v", s.source, s.buf)
@@ -114,19 +114,13 @@ func TestSpotifyStreamerCloseConcurrent(t *testing.T) {
 	wg.Wait()
 	close(errs)
 
-	closeErrors := 0
 	for err := range errs {
-		if errors.Is(err, source.err) {
-			closeErrors++
-		} else if err != nil {
-			t.Errorf("Close() error = %v, want nil or %v", err, source.err)
+		if err != nil {
+			t.Errorf("Close() error = %v, want nil", err)
 		}
 	}
-	if closeErrors != 1 {
-		t.Fatalf("decoder close errors = %d, want 1", closeErrors)
-	}
-	if source.closeCalls != 1 {
-		t.Fatalf("source Close calls = %d, want 1", source.closeCalls)
+	if source.closeCalls != 0 {
+		t.Fatalf("source Close calls = %d, want 0", source.closeCalls)
 	}
 }
 
@@ -264,8 +258,8 @@ func TestSpotifyStreamerCloseConcurrentOperations(t *testing.T) {
 	if err := s.Close(); err != nil {
 		t.Errorf("second Close() error = %v", err)
 	}
-	if source.closeCalls != 1 {
-		t.Errorf("source Close calls = %d, want 1", source.closeCalls)
+	if source.closeCalls != 0 {
+		t.Errorf("source Close calls = %d, want 0", source.closeCalls)
 	}
 }
 
