@@ -139,7 +139,7 @@ func run(overrides config.Overrides, positional []string, daemon bool) error {
 		providers = append(providers, model.ProviderEntry{Key: "netease", Name: "NetEase", Provider: neProv})
 	}
 
-	var ytProviders ytmusic.Providers
+	var closeYouTube func()
 	ytWanted := cfg.YouTubeMusic.IsSetOrFallback(ytmusic.FallbackCredentials)
 	if !ytWanted {
 		switch cfg.Provider {
@@ -176,14 +176,17 @@ func run(overrides config.Overrides, positional []string, daemon bool) error {
 			if player.YTDLPAvailable() {
 				var all, video, music playlist.Provider
 				if explicitOAuth {
-					ytProviders = ytmusic.New(nil, ytClientID, ytClientSecret, hasCookies)
-					all, video, music = ytProviders.All, ytProviders.Video, ytProviders.Music
+					oauthProviders := ytmusic.New(nil, ytClientID, ytClientSecret, hasCookies)
+					all, video, music = oauthProviders.All, oauthProviders.Video, oauthProviders.Music
+					closeYouTube = oauthProviders.Music.Close
 				} else if hasCookies {
 					cookieProviders := ytmusic.NewCookieProviders(cfg.YouTubeMusic.CookiesFrom)
 					all, video, music = cookieProviders.All, cookieProviders.Video, cookieProviders.Music
+					closeYouTube = cookieProviders.Music.Close
 				} else if hasFallbackOAuth {
-					ytProviders = ytmusic.New(nil, ytClientID, ytClientSecret, false)
-					all, video, music = ytProviders.All, ytProviders.Video, ytProviders.Music
+					oauthProviders := ytmusic.New(nil, ytClientID, ytClientSecret, false)
+					all, video, music = oauthProviders.All, oauthProviders.Video, oauthProviders.Music
+					closeYouTube = oauthProviders.Music.Close
 				}
 				if all != nil {
 					providers = append(providers,
@@ -202,8 +205,8 @@ func run(overrides config.Overrides, positional []string, daemon bool) error {
 	if qobuzProv != nil {
 		defer qobuzProv.Close()
 	}
-	if ytProviders.Music != nil {
-		defer ytProviders.Music.Close()
+	if closeYouTube != nil {
+		defer closeYouTube()
 	}
 
 	if len(positional) > 0 && (positional[0] == "search" || positional[0] == "search-sc") {
