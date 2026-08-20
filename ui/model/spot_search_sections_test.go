@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -51,6 +52,35 @@ func TestSpotSearchErrorFitsBodyBudget(t *testing.T) {
 	}
 	if got, want := len(strings.Split(body, "\n")), m.effectivePlaylistVisible(); got != want {
 		t.Fatalf("body rows = %d, want %d", got, want)
+	}
+}
+
+func TestSpotSearchErrorKeepsCursorVisible(t *testing.T) {
+	m := newLayoutTestModel(80, 18)
+	m.spotSearch.visible = true
+	m.spotSearch.screen = spotSearchResults
+	m.recomputeLayout()
+	visible := m.effectivePlaylistVisible()
+	if visible < 3 {
+		t.Fatalf("body rows = %d, want at least 3", visible)
+	}
+	for i := range visible - 1 {
+		m.spotSearch.results = append(m.spotSearch.results, trackResult(fmt.Sprintf("Track %d", i)))
+	}
+	m.spotSearch.cursor = len(m.spotSearch.results) - 1
+
+	m.setSpotSearchError("Search failed")
+
+	resultRows := m.spotSearchResultsVisible()
+	if resultRows != visible-1 {
+		t.Fatalf("result rows = %d, want %d", resultRows, visible-1)
+	}
+	if rows := spotSearchRowsToCursor(m.spotSearch.results, m.spotSearch.scroll, m.spotSearch.cursor); rows > resultRows {
+		t.Fatalf("cursor sits %d rows below scroll %d, result window is %d", rows, m.spotSearch.scroll, resultRows)
+	}
+	selected := m.spotSearch.results[m.spotSearch.cursor].Title
+	if body := stripAnsi(m.renderSpotSearchBody()); !strings.Contains(body, selected) {
+		t.Fatalf("body = %q, want selected result %q", body, selected)
 	}
 }
 

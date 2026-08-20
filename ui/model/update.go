@@ -723,7 +723,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spotSearch.cursor = 0
 		m.spotSearch.scroll = 0
 		if msg.err != nil {
-			m.spotSearch.err = msg.err.Error()
+			m.setSpotSearchError(msg.err.Error())
 			return m, nil
 		}
 		m.spotSearch.results = msg.tracks
@@ -739,11 +739,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.spotSearch.albumLoading = false
 		if msg.err != nil {
-			m.spotSearch.err = msg.err.Error()
+			m.setSpotSearchError(msg.err.Error())
 			return m, nil
 		}
 		if len(msg.tracks) == 0 {
-			m.spotSearch.err = "That album has no tracks available here."
+			m.setSpotSearchError("That album has no tracks available here.")
 			return m, nil
 		}
 		album := msg.album
@@ -766,7 +766,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spotSearch.cursor = 0
 		m.spotSearch.scroll = 0
 		if msg.err != nil {
-			m.spotSearch.err = msg.err.Error()
+			m.setSpotSearchError(msg.err.Error())
 			return m, nil
 		}
 		m.spotSearch.playlists = msg.playlists
@@ -783,7 +783,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.cancelSpotRequest()
 		m.spotSearch.loading = false
 		if msg.err != nil {
-			m.spotSearch.err = "Add failed: " + msg.err.Error()
+			m.setSpotSearchError("Add failed: " + msg.err.Error())
 			return m, nil
 		}
 		m.status.Showf(statusTTLDefault, "Added to %q", msg.name)
@@ -797,7 +797,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.cancelSpotRequest()
 		m.spotSearch.loading = false
 		if msg.err != nil {
-			m.spotSearch.err = "Create failed: " + msg.err.Error()
+			m.setSpotSearchError("Create failed: " + msg.err.Error())
 			return m, nil
 		}
 		m.status.Showf(statusTTLDefault, "Created %q & added track", msg.name)
