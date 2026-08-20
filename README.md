@@ -45,18 +45,18 @@ Linux builds need ALSA development headers installed first. See [Building from s
 
 Download from [GitHub Releases](https://github.com/bjarneo/cliamp/releases/latest).
 
-> **macOS:** the pre-built binaries dynamically link against FLAC, Vorbis, and Ogg
+> **macOS:** the pre-built binaries dynamically link against FLAC, Vorbis, Ogg, and mpg123
 > from Homebrew. If you download directly from Releases (or use the `install.sh`
 > script) you must install them first, otherwise you will see errors like
 > `Library not loaded: /opt/homebrew/opt/libvorbis/lib/libvorbisenc.2.dylib`:
 >
 > ```sh
-> brew install flac libvorbis libogg
+> brew install flac libvorbis libogg mpg123
 > ```
 >
 > Installing via `brew install bjarneo/cliamp/cliamp` does this for you.
 >
-> **Linux:** the pre-built binaries statically link FLAC, Vorbis, and Ogg, so no
+> **Linux:** the pre-built binaries statically link FLAC, Vorbis, Ogg, and mpg123, so no
 > extra codec packages are required. You may still need an ALSA bridge for your
 > sound server — see [Troubleshooting](#troubleshooting).
 >
@@ -114,22 +114,22 @@ Want to host your own radio? Check out [cliamp-server](https://github.com/bjarne
 **Linux (Debian/Ubuntu):**
 
 ```sh
-sudo apt install libasound2-dev
+sudo apt install libasound2-dev libflac-dev libvorbis-dev libogg-dev libmpg123-dev
 ```
 
 **Linux (Fedora):**
 
 ```sh
-sudo dnf install alsa-lib-devel libvorbis-devel flac-devel
+sudo dnf install alsa-lib-devel flac-devel libvorbis-devel libogg-devel mpg123-devel
 ```
 
 **Linux (Arch):**
 
 ```sh
-sudo pacman -S alsa-lib
+sudo pacman -S alsa-lib flac libvorbis libogg mpg123
 ```
 
-**macOS:** No extra dependencies — CoreAudio is used.
+**macOS:** `brew install flac libvorbis libogg mpg123 pkg-config`
 
 **Windows:** No extra SDKs required for the core player — it uses pure-Go audio decoding. `ffmpeg.exe` and `yt-dlp.exe` remain optional runtime dependencies for the same formats/providers as on other platforms.
 
