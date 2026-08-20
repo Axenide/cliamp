@@ -311,3 +311,22 @@ func TestResolveYTDLBatchCookieSelection(t *testing.T) {
 		t.Errorf("did not expect fallback cookies 'firefox' in args, got: %s", string(logged))
 	}
 }
+
+func TestParseYTDLTracksCountsMalformedEntries(t *testing.T) {
+	input := strings.Join([]string{
+		`{"webpage_url":"https://example.com/one","title":"One"}`,
+		`{malformed}`,
+		`{"title":"Missing URL"}`,
+	}, "\n")
+
+	tracks, entries, err := parseYTDLTracks(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("parseYTDLTracks() error: %v", err)
+	}
+	if entries != 3 {
+		t.Fatalf("source entries = %d, want 3", entries)
+	}
+	if len(tracks) != 1 || tracks[0].Title != "One" {
+		t.Fatalf("tracks = %+v, want one valid track", tracks)
+	}
+}

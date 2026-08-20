@@ -616,6 +616,18 @@ func ResolveYTDLBatch(pageURL string, start, count int, browser ...string) ([]pl
 	return ResolveYTDLBatchContext(ctx, pageURL, start, count, browser...)
 }
 
+// ResolveYTDLBatchPage returns the valid tracks and number of source entries
+// emitted by yt-dlp for a playlist range.
+func ResolveYTDLBatchPage(pageURL string, start, count int, browser ...string) ([]playlist.Track, int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	end := 0
+	if count > 0 {
+		end = start + count
+	}
+	return resolveYTDLRangePageContext(ctx, pageURL, start, end, browser...)
+}
+
 // ResolveYTDLBatchContext is ResolveYTDLBatch with caller-controlled
 // cancellation and timeout.
 func ResolveYTDLBatchContext(ctx context.Context, pageURL string, start, count int, browser ...string) ([]playlist.Track, error) {
@@ -644,8 +656,13 @@ func resolveYTDLRange(pageURL string, start, end int, browser ...string) ([]play
 }
 
 func resolveYTDLRangeContext(ctx context.Context, pageURL string, start, end int, browser ...string) ([]playlist.Track, error) {
+	tracks, _, err := resolveYTDLRangePageContext(ctx, pageURL, start, end, browser...)
+	return tracks, err
+}
+
+func resolveYTDLRangePageContext(ctx context.Context, pageURL string, start, end int, browser ...string) ([]playlist.Track, int, error) {
 	if _, err := exec.LookPath("yt-dlp"); err != nil {
-		return nil, fmt.Errorf("yt-dlp not found in PATH — see https://github.com/yt-dlp/yt-dlp#installation")
+		return nil, 0, fmt.Errorf("yt-dlp not found in PATH — see https://github.com/yt-dlp/yt-dlp#installation")
 	}
 
 	args := []string{"--flat-playlist", "-j", "--socket-timeout", "15"}
@@ -673,17 +690,21 @@ func resolveYTDLRangeContext(ctx context.Context, pageURL string, start, end int
 	stdout, err := cmd.Output()
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, fmt.Errorf("yt-dlp: resolve %s: %w", pageURL, ctxErr)
+			return nil, 0, fmt.Errorf("yt-dlp: resolve %s: %w", pageURL, ctxErr)
 		}
 		msg := strings.TrimSpace(stderr.String())
 		if msg != "" {
-			return nil, fmt.Errorf("yt-dlp: %s", msg)
+			return nil, 0, fmt.Errorf("yt-dlp: %s", msg)
 		}
-		return nil, fmt.Errorf("yt-dlp: %w", err)
+		return nil, 0, fmt.Errorf("yt-dlp: %w", err)
 	}
+	return parseYTDLTracks(bytes.NewReader(stdout))
+}
 
+func parseYTDLTracks(r io.Reader) ([]playlist.Track, int, error) {
 	var tracks []playlist.Track
-	scanner := bufio.NewScanner(bytes.NewReader(stdout))
+	entries := 0
+	scanner := bufio.NewScanner(r)
 	// yt-dlp JSON can exceed bufio.Scanner's default 64KB token limit
 	// (e.g. videos with very long descriptions).
 	scanner.Buffer(make([]byte, 0, scannerInitBufSize), scannerMaxLineSize)
@@ -692,6 +713,7 @@ func resolveYTDLRangeContext(ctx context.Context, pageURL string, start, end int
 		if line == "" {
 			continue
 		}
+		entries++
 		var e ytdlFlatEntry
 		if err := json.Unmarshal([]byte(line), &e); err != nil {
 			continue
@@ -722,7 +744,7 @@ func resolveYTDLRangeContext(ctx context.Context, pageURL string, start, end int
 			DurationSecs: int(e.Duration),
 		})
 	}
-	return tracks, scanner.Err()
+	return tracks, entries, scanner.Err()
 }
 
 // DownloadYTDL downloads a single track via yt-dlp to the given directory

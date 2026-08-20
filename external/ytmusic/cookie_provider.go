@@ -31,7 +31,7 @@ const (
 type cookieBase struct {
 	browser    string
 	fetchFn    func(browser string) ([]playlist.PlaylistInfo, error)
-	resolveFn  func(pageURL string, start, count int, browser ...string) ([]playlist.Track, error)
+	resolveFn  func(pageURL string, start, count int, browser ...string) ([]playlist.Track, int, error)
 	mu         sync.Mutex
 	playlists  []playlist.PlaylistInfo
 	trackCache map[string][]playlist.Track
@@ -86,19 +86,19 @@ func (b *cookieBase) fetchTracks(target string) ([]playlist.Track, error) {
 
 	resolveBatch := b.resolveFn
 	if resolveBatch == nil {
-		resolveBatch = resolve.ResolveYTDLBatch
+		resolveBatch = resolve.ResolveYTDLBatchPage
 	}
 	var tracks []playlist.Track
 	for start := 0; ; {
-		batch, err := resolveBatch(target, start, cookiePlaylistBatchSize, b.browser)
+		batch, entries, err := resolveBatch(target, start, cookiePlaylistBatchSize, b.browser)
 		if err != nil {
 			return nil, fmt.Errorf("ytmusic: resolve playlist tracks: %w", err)
 		}
 		tracks = append(tracks, batch...)
-		if len(batch) < cookiePlaylistBatchSize {
+		if entries < cookiePlaylistBatchSize {
 			break
 		}
-		start += len(batch)
+		start += cookiePlaylistBatchSize
 	}
 
 	b.mu.Lock()

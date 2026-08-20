@@ -255,7 +255,7 @@ func TestCookieProviderTracksLoadsInBatches(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	base := newCookieBase("firefox")
 	var starts []int
-	base.resolveFn = func(_ string, start, count int, browser ...string) ([]playlist.Track, error) {
+	base.resolveFn = func(_ string, start, count int, browser ...string) ([]playlist.Track, int, error) {
 		starts = append(starts, start)
 		if count != cookiePlaylistBatchSize {
 			t.Fatalf("count = %d, want %d", count, cookiePlaylistBatchSize)
@@ -266,20 +266,26 @@ func TestCookieProviderTracksLoadsInBatches(t *testing.T) {
 		n := cookiePlaylistBatchSize
 		if start > 0 {
 			n = 20
+		} else {
+			n-- // One malformed source entry was omitted from the parsed tracks.
 		}
 		tracks := make([]playlist.Track, n)
 		for i := range tracks {
 			tracks[i].Title = fmt.Sprintf("Track %d", start+i)
 		}
-		return tracks, nil
+		entries := n
+		if start == 0 {
+			entries = cookiePlaylistBatchSize
+		}
+		return tracks, entries, nil
 	}
 
 	tracks, err := (&CookieProvider{base: base, kind: KindMusic}).Tracks("PL123")
 	if err != nil {
 		t.Fatalf("Tracks() error: %v", err)
 	}
-	if len(tracks) != 120 {
-		t.Fatalf("tracks = %d, want 120", len(tracks))
+	if len(tracks) != 119 {
+		t.Fatalf("tracks = %d, want 119", len(tracks))
 	}
 	if !slices.Equal(starts, []int{0, cookiePlaylistBatchSize}) {
 		t.Fatalf("batch starts = %v, want [0 %d]", starts, cookiePlaylistBatchSize)
