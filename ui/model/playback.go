@@ -210,9 +210,15 @@ func (m *Model) closeNetSearch() {
 func (m *Model) closeSpotSearch() {
 	m.cancelSpotRequest()
 	nextRequest(&m.requests.spotSearch)
+	m.invalidateSpotAlbumRequest()
 	nextRequest(&m.requests.spotLists)
 	nextRequest(&m.requests.spotMutation)
 	m.spotSearch = spotSearchState{}
+}
+
+func (m *Model) invalidateSpotAlbumRequest() {
+	nextRequest(&m.requests.spotAlbum)
+	m.spotSearch.albumLoading = false
 }
 
 func (m *Model) newSpotRequestContext(timeout time.Duration) context.Context {
