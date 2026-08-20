@@ -42,10 +42,17 @@ func newYTCache(scope string) *ytCache {
 	return &ytCache{Scope: scope, Tracks: make(map[string]cachedTrackList)}
 }
 
-func oauthCacheScope(clientID string) string {
-	identity := "unauthenticated"
+func storedOAuthCacheScope(clientID string) string {
+	identity := ""
 	if creds, err := loadCreds(); err == nil && creds.RefreshToken != "" {
 		identity = creds.RefreshToken
+	}
+	return oauthCacheScope(clientID, identity)
+}
+
+func oauthCacheScope(clientID, identity string) string {
+	if identity == "" {
+		identity = "unauthenticated"
 	}
 	sum := sha256.Sum256([]byte(clientID + "\x00" + identity))
 	return fmt.Sprintf("oauth:%x", sum)

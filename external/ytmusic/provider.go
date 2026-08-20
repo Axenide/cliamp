@@ -36,23 +36,29 @@ type baseProvider struct {
 	allPlaylists []playlistEntry             // cached raw playlist list
 	classified   map[string]bool             // playlist ID -> is music (from classify.go)
 	disk         *ytCache                    // lazy-loaded disk cache
+	cacheScope   string                      // immutable identity of the active OAuth account
 	authCancel   context.CancelFunc          // cancels any in-progress OAuth flow
 }
 
 func newBase(session *Session, clientID, clientSecret string, hasCookies bool) *baseProvider {
+	cacheScope := storedOAuthCacheScope(strings.TrimSpace(clientID))
+	if session != nil && session.cacheScope != "" {
+		cacheScope = session.cacheScope
+	}
 	return &baseProvider{
 		session:      session,
 		clientID:     clientID,
 		clientSecret: clientSecret,
 		hasCookies:   hasCookies,
 		trackCache:   make(map[string][]playlist.Track),
+		cacheScope:   cacheScope,
 	}
 }
 
 // ensureDiskCache lazily loads the disk cache. Must be called under mu.
 func (b *baseProvider) ensureDiskCache() *ytCache {
 	if b.disk == nil {
-		b.disk = loadYTCache(oauthCacheScope(strings.TrimSpace(b.clientID)))
+		b.disk = loadYTCache(b.cacheScope)
 	}
 	return b.disk
 }
@@ -107,8 +113,13 @@ func (b *baseProvider) initSession(interactive bool) error {
 
 	b.mu.Lock()
 	if b.session == nil {
+		if b.cacheScope != sess.cacheScope {
+			b.allPlaylists = nil
+			b.classified = nil
+			clear(b.trackCache)
+		}
 		b.session = sess
-		// Authentication may have created or rotated the stored refresh token.
+		b.cacheScope = sess.cacheScope
 		b.disk = nil
 	}
 	b.mu.Unlock()
