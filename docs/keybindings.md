@@ -150,7 +150,7 @@ Shift-letter keys are reserved for provider switching, so playlist-manager track
 | `a` | Select/unselect all visible audio files |
 | `R` | Replace the current queue with selected files (confirm when it is non-empty) |
 | `w` | Write selected files to a local playlist |
-| `D` | Add the highlighted/selected directory (or the current directory) as a live `[[dir]]` source to the target playlist |
+| `D` | Add the selected directory (or the current directory when none is selected) as a live `[[dir]]` source to the target playlist |
 | `~` `.` | Jump to home / current working directory |
 | `Esc` `o` | Close file browser |
 

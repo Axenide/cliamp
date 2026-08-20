@@ -496,7 +496,10 @@ func (m *Model) plMgrRefreshTracksForSel() {
 	if err != nil {
 		return
 	}
-	m.plManager.tracks = tracks
+	// plMgrLoadTracks keeps the missingLocal cache in sync with the new
+	// track slice; assigning tracks directly would leave stale per-track
+	// missing-file indicators mapped onto the wrong entries.
+	m.plMgrLoadTracks(tracks)
 	m.setHeaderStateFromTracks(tracks)
 }
 
@@ -541,12 +544,10 @@ func (m *Model) fbAddDirSource() {
 		}
 	}
 	m.fileBrowser.visible = false
-	if firstErr != nil {
-		m.status.Showf(statusTTLDefault, "Add dir source failed: %s", firstErr)
-		return
-	}
-	// Reflect the change in any open manager screen for this playlist.
-	if m.plManager.visible && m.plManager.selPlaylist == target {
+	// Reflect any successful additions in an open manager screen for this
+	// playlist before reporting a partial failure, so the open screen never
+	// shows stale sources or counts after an AddDirSource error mid-loop.
+	if added > 0 && m.plManager.visible && m.plManager.selPlaylist == target {
 		switch m.plManager.screen {
 		case plMgrScreenDirs:
 			m.plMgrReloadDirs()
@@ -555,6 +556,14 @@ func (m *Model) fbAddDirSource() {
 			m.plMgrRefreshTracksForSel()
 		}
 		m.plMgrRefreshList()
+	}
+	if firstErr != nil {
+		if added > 0 {
+			m.status.Showf(statusTTLDefault, "Added %d dir source(s) to %q; then failed: %s", added, target, firstErr)
+		} else {
+			m.status.Showf(statusTTLDefault, "Add dir source failed: %s", firstErr)
+		}
+		return
 	}
 	switch {
 	case added > 0 && skipped > 0:

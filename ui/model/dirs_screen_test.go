@@ -1,6 +1,8 @@
 package model
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -18,6 +20,7 @@ type dirSourceTestProvider struct {
 	removed []string
 	setRec  []dirSetRecCall
 	added   []string
+	failOn  map[string]error // dirs that AddDirSource should fail on
 }
 
 type dirSetRecCall struct {
@@ -29,6 +32,11 @@ func (p *dirSourceTestProvider) DirSources(string) ([]playlist.DirSource, error)
 	return p.dirs, nil
 }
 func (p *dirSourceTestProvider) AddDirSource(_, dir string) (bool, error) {
+	if p.failOn != nil {
+		if err, ok := p.failOn[dir]; ok {
+			return false, err
+		}
+	}
 	for _, d := range p.dirs {
 		if d.Path == dir {
 			return false, nil
@@ -198,5 +206,37 @@ func TestFileBrowserDAddsDirSource(t *testing.T) {
 	}
 	if len(m.plManager.dirs) != 1 {
 		t.Fatalf("manager dirs after add = %+v, want refreshed to 1", m.plManager.dirs)
+	}
+}
+
+func TestFileBrowserDPartialFailureStillRefreshes(t *testing.T) {
+	prov := &dirSourceTestProvider{
+		commandsTestProvider: commandsTestProvider{name: "Local"},
+		failOn:               map[string]error{"/d2": errors.New("boom")},
+	}
+	m := newDirsScreenTestModel(prov)
+	m.plManager.screen = plMgrScreenDirs
+	m.plManager.selPlaylist = "music"
+	m.fileBrowser.visible = true
+	m.fileBrowser.targetPlaylist = "music"
+	// Two selected directories; the second fails partway through the loop.
+	m.fileBrowser.entries = []fbEntry{
+		{name: "d1", path: "/d1", isDir: true},
+		{name: "d2", path: "/d2", isDir: true},
+	}
+	m.fileBrowser.selected = map[string]bool{"/d1": true, "/d2": true}
+
+	m.handleFileBrowserKey(tea.KeyPressMsg{Text: "D"})
+
+	// The first dir was added even though the second failed.
+	if len(prov.added) != 1 || prov.added[0] != "/d1" {
+		t.Fatalf("added = %v, want only /d1 (partial success)", prov.added)
+	}
+	// The open manager must reflect the partial addition, not the pre-add state.
+	if len(m.plManager.dirs) != 1 || m.plManager.dirs[0].Path != "/d1" {
+		t.Fatalf("manager dirs after partial failure = %+v, want [/d1]", m.plManager.dirs)
+	}
+	if !strings.Contains(m.status.text, "then failed") {
+		t.Fatalf("status = %q, want a partial-failure message", m.status.text)
 	}
 }

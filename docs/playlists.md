@@ -383,7 +383,7 @@ The playlist list flags playlists that reference `[[dir]]` sources with a
 | `←` / `Backspace` / `Esc` | Back to the tracks screen |
 
 From the file browser (opened with `a` above, or with `o` from the tracks
-screen), press `D` to add the highlighted/selected directory — or the
-directory you are currently browsing when nothing is selected — as a live
-`[[dir]]` source instead of expanding it into explicit tracks. Directories
-already referenced are skipped and reported.
+screen), press `D` to add the selected directory — or the directory you are
+currently browsing when nothing is selected — as a live `[[dir]]` source
+instead of expanding it into explicit tracks. Directories already referenced
+are skipped and reported.
