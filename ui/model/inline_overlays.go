@@ -93,6 +93,9 @@ func (m Model) renderSpotSearchResults(budget int) string {
 			break
 		}
 		if row.Index < 0 {
+			if budget == 1 {
+				continue
+			}
 			lines = append(lines, dimStyle.Render(labeledSeparator("", row.Section)))
 			continue
 		}
@@ -512,16 +515,21 @@ func (m Model) spotSearchHelpLine() string {
 
 func (m Model) renderSpotSearchBody() string {
 	budget := m.effectivePlaylistVisible()
+	showError := m.spotSearch.err != "" && m.spotSearch.screen != spotSearchPlaylist
+	bodyBudget := budget
+	if showError {
+		bodyBudget = max(0, bodyBudget-1)
+	}
 	var body string
 	switch m.spotSearch.screen {
 	case spotSearchResults:
 		switch {
 		case m.spotSearch.albumLoading:
-			body = bodyLines([]string{loadingLine("Loading album…")}, budget)
+			body = bodyLines([]string{loadingLine("Loading album…")}, bodyBudget)
 		case len(m.spotSearch.results) == 0:
-			body = bodyMessage("No results", budget)
+			body = bodyMessage("No results", bodyBudget)
 		default:
-			body = m.renderSpotSearchResults(budget)
+			body = m.renderSpotSearchResults(bodyBudget)
 		}
 	case spotSearchPlaylist:
 		if m.spotSearch.loading {
@@ -542,7 +550,7 @@ func (m Model) renderSpotSearchBody() string {
 		list := windowList(items, m.spotSearch.cursor, m.spotSearch.scroll, max(0, budget-1))
 		body = strings.Join([]string{head, list}, "\n")
 	case spotSearchNewName:
-		body = bodyMessage("Enter a name for the new playlist above.", budget)
+		body = bodyMessage("Enter a name for the new playlist above.", bodyBudget)
 	default:
 		var lines []string
 		if m.spotSearch.loading {
@@ -550,10 +558,14 @@ func (m Model) renderSpotSearchBody() string {
 		} else {
 			lines = append(lines, dimStyle.Render("  Type a query and press Enter to search."))
 		}
-		body = bodyLines(lines, budget)
+		body = bodyLines(lines, bodyBudget)
 	}
-	if m.spotSearch.err != "" && m.spotSearch.screen != spotSearchPlaylist {
-		return strings.Join([]string{body, errorStyle.Render("  " + m.spotSearch.err)}, "\n")
+	if showError {
+		errLine := errorStyle.Render("  " + m.spotSearch.err)
+		if body == "" {
+			return errLine
+		}
+		return strings.Join([]string{body, errLine}, "\n")
 	}
 	return body
 }
