@@ -172,7 +172,7 @@ jobs:
           VERSION="${GITHUB_REF#refs/tags/}"
           go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o "$BINARY" .
           mkdir "$PACKAGE"
-          mv "$BINARY" "$PACKAGE/cliamp.exe"
+          cp "$BINARY" "$PACKAGE/cliamp.exe"
           ldd "$PACKAGE/cliamp.exe" | while read -r _ _ path _; do
             case "$path" in
               /mingw64/bin/*.dll) cp "$path" "$PACKAGE/" ;;
