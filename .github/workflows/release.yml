@@ -42,7 +42,7 @@ jobs:
         if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev libflac-dev libvorbis-dev libogg-dev libmpg123-dev
+          sudo apt-get install -y libasound2-dev libflac-dev libvorbis-dev libogg-dev
 
       - name: Install deps (Linux arm64 cross)
         if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
@@ -62,7 +62,7 @@ jobs:
           deb [arch=arm64] http://ports.ubuntu.com/ ${CODENAME}-security main restricted universe multiverse
           EOF
           sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu libasound2-dev:arm64 libflac-dev:arm64 libvorbis-dev:arm64 libogg-dev:arm64 libmpg123-dev:arm64
+          sudo apt-get install -y gcc-aarch64-linux-gnu libasound2-dev:arm64 libflac-dev:arm64 libvorbis-dev:arm64 libogg-dev:arm64
 
       - name: Install deps (macOS arm64)
         if: matrix.goos == 'darwin' && matrix.goarch == 'arm64'
@@ -108,7 +108,32 @@ jobs:
           sudo rm -f ${LIB_DIR}/libvorbis.so
           sudo rm -f ${LIB_DIR}/libvorbisenc.so
           sudo rm -f ${LIB_DIR}/libogg.so
-          sudo rm -f ${LIB_DIR}/libmpg123.so
+
+      - name: Build static mpg123 (Linux)
+        if: matrix.goos == 'linux'
+        env:
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          VERSION=1.32.6
+          ARCHIVE="mpg123-${VERSION}.tar.bz2"
+          PREFIX="${RUNNER_TEMP}/mpg123-${GOARCH}"
+          curl -fsSL "https://www.mpg123.de/download/${ARCHIVE}" -o "${RUNNER_TEMP}/${ARCHIVE}"
+          echo "ccdd1d0abc31d73d8b435fc658c79049d0a905b30669b6a42a03ad169dc609e6  ${RUNNER_TEMP}/${ARCHIVE}" | sha256sum -c -
+          tar -xjf "${RUNNER_TEMP}/${ARCHIVE}" -C "${RUNNER_TEMP}"
+          cd "${RUNNER_TEMP}/mpg123-${VERSION}"
+          if [ "$GOARCH" = "arm64" ]; then
+            export CC=aarch64-linux-gnu-gcc
+            HOST_ARGS="--host=aarch64-linux-gnu"
+            CPU=aarch64
+          else
+            HOST_ARGS=""
+            CPU=x86-64
+          fi
+          ./configure $HOST_ARGS --with-cpu="$CPU" --disable-shared --enable-static \
+            --disable-components --enable-libmpg123 --disable-network --prefix="$PREFIX"
+          make -j2
+          make install
+          echo "MPG123_PREFIX=$PREFIX" >> "$GITHUB_ENV"
 
       - name: Build (Linux)
         if: matrix.goos == 'linux'
@@ -119,13 +144,19 @@ jobs:
         run: |
           if [ "$GOARCH" = "arm64" ]; then
             export CC=aarch64-linux-gnu-gcc
-            export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
+            export PKG_CONFIG_PATH="${MPG123_PREFIX}/lib/pkgconfig:/usr/lib/aarch64-linux-gnu/pkgconfig"
+          else
+            export PKG_CONFIG_PATH="${MPG123_PREFIX}/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig"
           fi
           BINARY="cliamp-${GOOS}-${GOARCH}"
           VERSION="${GITHUB_REF#refs/tags/}"
-          go build -trimpath \
+          go build -a -trimpath \
             -ldflags="-s -w -X main.version=${VERSION} -extldflags '-lvorbisenc -lvorbis -lFLAC -logg -lmpg123 -lm'" \
             -o "$BINARY" .
+          if readelf -d "$BINARY" | grep -E 'Shared library:.*(FLAC|vorbis|ogg|mpg123)'; then
+            echo "codec libraries must be statically linked" >&2
+            exit 1
+          fi
 
       - name: Build (Windows)
         if: matrix.goos == 'windows'
