@@ -717,7 +717,7 @@ func TestMaybeScrobbleReloadsOpenHistoryTracks(t *testing.T) {
 	}
 }
 
-func TestFKeyTogglesFavorite(t *testing.T) {
+func TestNKeyTogglesFavorite(t *testing.T) {
 	prov := &dirSourceTestProvider{
 		commandsTestProvider: commandsTestProvider{name: "Local"},
 	}
@@ -731,9 +731,9 @@ func TestFKeyTogglesFavorite(t *testing.T) {
 	m.favSet = nil
 
 	// Toggle on.
-	m.handleKey(tea.KeyPressMsg{Text: "F"})
+	m.handleKey(tea.KeyPressMsg{Text: "n"})
 	if !prov.IsFavorited("/song.mp3") {
-		t.Fatal("track should be favorited after F")
+		t.Fatal("track should be favorited after n")
 	}
 	if m.favSet == nil {
 		t.Fatal("favSet should be populated after toggle")
@@ -746,9 +746,9 @@ func TestFKeyTogglesFavorite(t *testing.T) {
 	}
 
 	// Toggle off.
-	m.handleKey(tea.KeyPressMsg{Text: "F"})
+	m.handleKey(tea.KeyPressMsg{Text: "n"})
 	if prov.IsFavorited("/song.mp3") {
-		t.Fatal("track should be unfavorited after second F")
+		t.Fatal("track should be unfavorited after second n")
 	}
 	if m.favSet != nil {
 		if _, ok := m.favSet["/song.mp3"]; ok {
@@ -760,7 +760,7 @@ func TestFKeyTogglesFavorite(t *testing.T) {
 	}
 }
 
-func TestFKeyNoopWithoutFavMgr(t *testing.T) {
+func TestNKeyNoopWithoutFavMgr(t *testing.T) {
 	plain := commandsTestProvider{name: "Local"}
 	m := newDirsScreenTestModel(&dirSourceTestProvider{})
 	m.localProvider = plain
@@ -772,7 +772,7 @@ func TestFKeyNoopWithoutFavMgr(t *testing.T) {
 	m.playlist.Add(playlist.Track{Path: "/song.mp3", Title: "Song"})
 	m.plCursor = 0
 
-	m.handleKey(tea.KeyPressMsg{Text: "F"})
+	m.handleKey(tea.KeyPressMsg{Text: "n"})
 
 	// No crash, no status change.
 	if m.status.text != "" {
