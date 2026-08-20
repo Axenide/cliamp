@@ -60,8 +60,9 @@ Download from [GitHub Releases](https://github.com/bjarneo/cliamp/releases/lates
 > extra codec packages are required. You may still need an ALSA bridge for your
 > sound server — see [Troubleshooting](#troubleshooting).
 >
-> **Windows:** download `cliamp-windows-amd64.exe` from Releases. If `HOME` is not
-> set, cliamp stores its config under `%APPDATA%\cliamp`.
+> **Windows:** download and extract `cliamp-windows-amd64.zip` from Releases. It
+> includes the codec DLLs required by Spotify. If `HOME` is not set, cliamp stores
+> its config under `%APPDATA%\cliamp`.
 
 **Optional runtime dependencies** (all platforms, all install methods):
 
@@ -150,7 +151,7 @@ Spotify support uses `go-librespot`, which needs CGO and a MinGW toolchain:
    ```sh
    CGO_LDFLAGS="-Wl,-Bstatic -logg -Wl,-Bdynamic" CGO_ENABLED=1 go build -o cliamp.exe .
    ```
-4. `cliamp.exe` dynamically links `libvorbis`, `libvorbisenc`, `libvorbisfile`, `libFLAC`, and `libmpg123` from MSYS2. Either keep `C:\msys64\mingw64\bin` on `PATH` at runtime, or copy `libvorbis-0.dll`, `libvorbisenc-2.dll`, `libvorbisfile-3.dll`, `libFLAC.dll`, and `libmpg123-0.dll` next to `cliamp.exe`.
+4. `cliamp.exe` dynamically links codec and MinGW runtime DLLs. Either keep `C:\msys64\mingw64\bin` on `PATH` at runtime, or copy every `/mingw64/bin/*.dll` shown by `ldd cliamp.exe` next to `cliamp.exe`.
 
 **Clone and build:**
 

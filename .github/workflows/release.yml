@@ -83,6 +83,7 @@ jobs:
           msystem: MINGW64
           update: true
           install: >-
+            zip
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-pkg-config
             mingw-w64-x86_64-libogg
@@ -136,8 +137,20 @@ jobs:
         shell: msys2 {0}
         run: |
           BINARY="cliamp-windows-${GOARCH}.exe"
+          PACKAGE="cliamp-windows-${GOARCH}"
           VERSION="${GITHUB_REF#refs/tags/}"
           go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o "$BINARY" .
+          mkdir "$PACKAGE"
+          mv "$BINARY" "$PACKAGE/cliamp.exe"
+          ldd "$PACKAGE/cliamp.exe" | while read -r _ _ path _; do
+            case "$path" in
+              /mingw64/bin/*.dll) cp "$path" "$PACKAGE/" ;;
+            esac
+          done
+          set -- "$PACKAGE"/*.dll
+          test -e "$1"
+          zip -r "$PACKAGE.zip" "$PACKAGE"
+          rm -rf "$PACKAGE"
 
       - name: Build (macOS)
         if: matrix.goos == 'darwin'
