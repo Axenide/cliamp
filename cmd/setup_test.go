@@ -320,6 +320,42 @@ func TestNetEasePickerSelectionFiltersFields(t *testing.T) {
 	}
 }
 
+func TestYTMusicCustomModeIncludesOptionalCookies(t *testing.T) {
+	var spec providerSpec
+	for _, p := range providers() {
+		if p.section == "ytmusic" {
+			spec = p
+			break
+		}
+	}
+	if spec.section == "" {
+		t.Fatal("ytmusic spec missing")
+	}
+
+	values := map[string]string{
+		keyYTMusicMode:  "custom",
+		"client_id":     "client",
+		"client_secret": "secret",
+		"cookies_from":  "firefox",
+	}
+	visible := make(map[string]bool)
+	for _, field := range spec.fields {
+		if field.onlyIf == nil || field.onlyIf(values) {
+			visible[field.key] = true
+		}
+	}
+	for _, key := range []string{"client_id", "client_secret", "cookies_from"} {
+		if !visible[key] {
+			t.Fatalf("custom mode hides %q", key)
+		}
+	}
+
+	body := spec.body(values)
+	if !strings.Contains(body, `cookies_from  = "firefox"`) {
+		t.Fatalf("custom mode body omits cookies: %q", body)
+	}
+}
+
 // TestSaveSection covers the three write paths: new file, append, replace.
 func TestSaveSection(t *testing.T) {
 	dir := t.TempDir()

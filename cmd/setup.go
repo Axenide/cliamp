@@ -440,8 +440,8 @@ func providers() []providerSpec {
 				},
 			},
 			fields: []fieldSpec{
-				{key: "cookies_from", label: "Browser for cookies", help: "e.g. chrome, firefox, brave, chromium; blank for chrome",
-					onlyIf: func(v map[string]string) bool { return v[keyYTMusicMode] == "cookies" || v[keyYTMusicMode] == "" }},
+				{key: "cookies_from", label: "Browser for cookies (optional with OAuth)", help: "e.g. chrome, firefox, brave, chromium; blank uses Chrome in cookie mode",
+					onlyIf: func(v map[string]string) bool { return v[keyYTMusicMode] != "off" }},
 				{key: "client_id", label: "OAuth Client ID", required: true,
 					onlyIf: func(v map[string]string) bool { return v[keyYTMusicMode] == "custom" }},
 				{key: "client_secret", label: "OAuth Client Secret", secret: true, required: true,
