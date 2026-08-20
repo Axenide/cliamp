@@ -91,3 +91,44 @@ func TestFetchSpotAlbumTracksCmdUsesContextLoader(t *testing.T) {
 		t.Fatalf("album load error = %v, want context.Canceled", msg.err)
 	}
 }
+
+func TestLeavingSpotResultsCancelsPlaylistLookup(t *testing.T) {
+	canceled := make(chan struct{})
+	m := Model{
+		spotSearch: spotSearchState{
+			visible: true,
+			screen:  spotSearchResults,
+			loading: true,
+			prov:    commandsTestProvider{name: "Spotify"},
+			cancel:  func() { close(canceled) },
+		},
+	}
+	const gen = 7
+	m.requests.spotLists = gen
+
+	m.handleSpotSearchResultsKey(tea.KeyPressMsg{Code: tea.KeyEscape})
+	select {
+	case <-canceled:
+	default:
+		t.Fatal("playlist lookup context was not canceled")
+	}
+	if m.requests.spotLists == gen {
+		t.Fatal("playlist request generation was not invalidated")
+	}
+	if m.spotSearch.loading {
+		t.Fatal("playlist lookup remained loading")
+	}
+
+	updated, cmd := m.Update(spotPlaylistsMsg{
+		gen:          gen,
+		providerName: "Spotify",
+		playlists:    []playlist.PlaylistInfo{{ID: "late", Name: "Late"}},
+	})
+	m = updated.(Model)
+	if cmd != nil {
+		t.Fatal("stale playlist response returned a command")
+	}
+	if m.spotSearch.screen != spotSearchInput || m.spotSearch.playlists != nil {
+		t.Fatalf("stale playlist response changed search state: %+v", m.spotSearch)
+	}
+}

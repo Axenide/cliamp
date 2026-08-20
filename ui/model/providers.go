@@ -108,7 +108,9 @@ func (m Model) isCurrentSpotRequest(gen uint64, providerName string) bool {
 }
 
 func (m Model) isCurrentSpotListRequest(gen uint64, providerName string) bool {
-	return m.isCurrentSpotProvider(providerName) && gen == m.requests.spotLists
+	return m.spotSearch.screen == spotSearchResults &&
+		m.isCurrentSpotProvider(providerName) &&
+		gen == m.requests.spotLists
 }
 
 func (m Model) isCurrentSpotMutation(gen uint64, providerName string) bool {

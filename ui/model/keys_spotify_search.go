@@ -133,6 +133,8 @@ func (m *Model) handleSpotSearchResultsKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 	case "esc", "backspace":
 		m.invalidateSpotAlbumRequest()
+		nextRequest(&m.requests.spotLists)
+		m.spotSearch.loading = false
 		m.spotSearch.screen = spotSearchInput
 		m.spotSearch.err = ""
 	case "ctrl+u":
