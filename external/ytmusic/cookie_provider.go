@@ -31,11 +31,14 @@ const (
 type cookieBase struct {
 	browser    string
 	fetchFn    func(browser string) ([]playlist.PlaylistInfo, error)
+	resolveFn  func(pageURL string, start, count int, browser ...string) ([]playlist.Track, error)
 	mu         sync.Mutex
 	playlists  []playlist.PlaylistInfo
 	trackCache map[string][]playlist.Track
 	disk       *ytCache
 }
+
+const cookiePlaylistBatchSize = 100
 
 func newCookieBase(browser string) *cookieBase {
 	return &cookieBase{
@@ -123,9 +126,21 @@ func (b *cookieBase) fetchTracks(target string) ([]playlist.Track, error) {
 	}
 	b.mu.Unlock()
 
-	tracks, err := resolve.ResolveYTDLBatch(target, 0, 0, b.browser)
-	if err != nil {
-		return nil, fmt.Errorf("ytmusic: resolve playlist tracks: %w", err)
+	resolveBatch := b.resolveFn
+	if resolveBatch == nil {
+		resolveBatch = resolve.ResolveYTDLBatch
+	}
+	var tracks []playlist.Track
+	for start := 0; ; {
+		batch, err := resolveBatch(target, start, cookiePlaylistBatchSize, b.browser)
+		if err != nil {
+			return nil, fmt.Errorf("ytmusic: resolve playlist tracks: %w", err)
+		}
+		tracks = append(tracks, batch...)
+		if len(batch) < cookiePlaylistBatchSize {
+			break
+		}
+		start += len(batch)
 	}
 
 	b.mu.Lock()
@@ -283,7 +298,7 @@ func (p *CookieProvider) Tracks(playlistID string) ([]playlist.Track, error) {
 }
 
 // SearchTracks performs a search query using yt-dlp's ytsearch: protocol.
-func (p *CookieProvider) SearchTracks(_ context.Context, query string, limit int) ([]playlist.Track, error) {
+func (p *CookieProvider) SearchTracks(ctx context.Context, query string, limit int) ([]playlist.Track, error) {
 	q := strings.TrimSpace(query)
 	if q == "" {
 		return nil, nil
@@ -291,7 +306,7 @@ func (p *CookieProvider) SearchTracks(_ context.Context, query string, limit int
 	if limit <= 0 {
 		limit = 10
 	}
-	tracks, err := resolve.ResolveYTDLBatch(fmt.Sprintf("ytsearch%d:%s", limit, q), 0, 0, p.base.browser)
+	tracks, err := resolve.ResolveYTDLBatchContext(ctx, fmt.Sprintf("ytsearch%d:%s", limit, q), 0, 0, p.base.browser)
 	if err != nil {
 		return nil, fmt.Errorf("ytmusic: search tracks: %w", err)
 	}

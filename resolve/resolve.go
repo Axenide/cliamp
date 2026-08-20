@@ -611,11 +611,19 @@ func resolveYouTube(pageURL string) ([]playlist.Track, error) {
 // If an optional browser is provided, cookies from that browser are used;
 // otherwise, the globally configured yt-dlp cookies browser is used.
 func ResolveYTDLBatch(pageURL string, start, count int, browser ...string) ([]playlist.Track, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return ResolveYTDLBatchContext(ctx, pageURL, start, count, browser...)
+}
+
+// ResolveYTDLBatchContext is ResolveYTDLBatch with caller-controlled
+// cancellation and timeout.
+func ResolveYTDLBatchContext(ctx context.Context, pageURL string, start, count int, browser ...string) ([]playlist.Track, error) {
 	end := 0
 	if count > 0 {
 		end = start + count
 	}
-	return resolveYTDLRange(pageURL, start, end, browser...)
+	return resolveYTDLRangeContext(ctx, pageURL, start, end, browser...)
 }
 
 // resolveYTDL uses yt-dlp --flat-playlist to quickly enumerate tracks.
@@ -630,12 +638,15 @@ func resolveYTDL(pageURL string, maxItems ...int) ([]playlist.Track, error) {
 }
 
 func resolveYTDLRange(pageURL string, start, end int, browser ...string) ([]playlist.Track, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return resolveYTDLRangeContext(ctx, pageURL, start, end, browser...)
+}
+
+func resolveYTDLRangeContext(ctx context.Context, pageURL string, start, end int, browser ...string) ([]playlist.Track, error) {
 	if _, err := exec.LookPath("yt-dlp"); err != nil {
 		return nil, fmt.Errorf("yt-dlp not found in PATH — see https://github.com/yt-dlp/yt-dlp#installation")
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 
 	args := []string{"--flat-playlist", "-j", "--socket-timeout", "15"}
 	b := ""
@@ -656,12 +667,13 @@ func resolveYTDLRange(pageURL string, start, end int, browser ...string) ([]play
 	}
 	args = append(args, pageURL)
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
+	cmd.WaitDelay = 3 * time.Second
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	stdout, err := cmd.Output()
 	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return nil, fmt.Errorf("yt-dlp: timed out resolving %s (30s)", pageURL)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, fmt.Errorf("yt-dlp: resolve %s: %w", pageURL, ctxErr)
 		}
 		msg := strings.TrimSpace(stderr.String())
 		if msg != "" {
