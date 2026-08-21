@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/bjarneo/cliamp/favorites"
 	"github.com/bjarneo/cliamp/playlist"
 	"github.com/bjarneo/cliamp/provider"
 	"github.com/bjarneo/cliamp/theme"
@@ -94,11 +95,13 @@ func (m Model) isProviderRowActive(p playlist.PlaylistInfo) bool {
 }
 
 // playlistLabel formats a playlist entry, omitting fields the provider didn't
-// supply. Track count and total duration are appended when available.
+// supply. Track count and total duration are appended when available. The
+// Favorites virtual playlist always shows its count — it stays listed even
+// when empty, and a bare name would look broken.
 func playlistLabel(prefix string, p playlist.PlaylistInfo) string {
 	out := prefix + p.Name
 	var parts []string
-	if p.TrackCount > 0 {
+	if p.TrackCount > 0 || p.Name == favorites.PlaylistName {
 		parts = append(parts, fmt.Sprintf("%d tracks", p.TrackCount))
 	}
 	if len(parts) > 0 {

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bjarneo/cliamp/favorites"
 	"github.com/bjarneo/cliamp/playlist"
 )
 
@@ -84,6 +85,18 @@ func TestPlaylistLabel(t *testing.T) {
 			"  ",
 			playlist.PlaylistInfo{Name: "Mix", TrackCount: 12, DurationSecs: 2700},
 			"  Mix · 12 tracks",
+		},
+		{
+			"favorites shows zero count",
+			"  ",
+			playlist.PlaylistInfo{Name: favorites.PlaylistName},
+			"  Favorites · 0 tracks",
+		},
+		{
+			"favorites with tracks",
+			"  ",
+			playlist.PlaylistInfo{Name: favorites.PlaylistName, TrackCount: 3},
+			"  Favorites · 3 tracks",
 		},
 	}
 	for _, tt := range tests {
