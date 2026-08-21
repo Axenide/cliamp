@@ -115,6 +115,14 @@ func (p *dirSourceTestProvider) FavoritesCount() int {
 	return len(p.favPaths)
 }
 
+func (p *dirSourceTestProvider) Playlists() ([]playlist.PlaylistInfo, error) {
+	favs := playlist.PlaylistInfo{ID: favorites.PlaylistName, Name: favorites.PlaylistName, Section: "Favorites"}
+	if p.favPaths != nil {
+		favs.TrackCount = len(p.favPaths)
+	}
+	return []playlist.PlaylistInfo{favs, {ID: "music", Name: "music"}}, nil
+}
+
 func newDirsScreenTestModel(prov playlist.Provider) Model {
 	var favMgr provider.FavoritesManager
 	if fm, ok := prov.(provider.FavoritesManager); ok {
@@ -357,7 +365,7 @@ func TestPlMgrNKeyRemovesRowFromFavoritesScreen(t *testing.T) {
 	m.plManager.selPlaylist = favorites.PlaylistName
 	m.plMgrLoadTracks([]playlist.Track{{Path: "/a.mp3"}, {Path: "/b.mp3"}})
 
-	m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "n"})
+	cmd := m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "n"})
 
 	if prov.IsFavorited("/a.mp3") {
 		t.Fatal("n should unfavorite the highlighted track")
@@ -367,6 +375,51 @@ func TestPlMgrNKeyRemovesRowFromFavoritesScreen(t *testing.T) {
 	}
 	if !strings.Contains(m.status.text, "♡") {
 		t.Fatalf("status = %q, want ♡ indicator", m.status.text)
+	}
+	if cmd == nil {
+		t.Fatal("expected a provider-playlist refresh command")
+	}
+	// The manager list must already show the updated Favorites count.
+	m.plMgrRefreshList()
+	found := false
+	for _, pl := range m.plManager.playlists {
+		if pl.Name == favorites.PlaylistName && pl.TrackCount == 1 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("playlists = %+v, want Favorites · 1 tracks after unfavorite", m.plManager.playlists)
+	}
+}
+
+func TestNKeyFromQueueRefreshesFavoritesCount(t *testing.T) {
+	prov := &dirSourceTestProvider{commandsTestProvider: commandsTestProvider{name: "Local"}}
+	m := newDirsScreenTestModel(prov)
+	m.focus = focusPlaylist
+	m.loadedPlaylist = "music"
+	m.playlist = playlist.New()
+	m.playlist.Add(playlist.Track{Path: "/song.mp3", Title: "Song"})
+	m.plCursor = 0
+	m.plManager.visible = false
+	m.plManager.screen = plMgrScreenList
+	m.plManager.playlists = nil
+
+	if cmd := m.handleKey(tea.KeyPressMsg{Text: "n"}); cmd == nil {
+		t.Fatal("expected a provider-playlist refresh command")
+	}
+	if !prov.IsFavorited("/song.mp3") {
+		t.Fatal("track should be favorited after n")
+	}
+	// Opening the manager must show the updated Favorites count.
+	m.openPlaylistManager()
+	found := false
+	for _, pl := range m.plManager.playlists {
+		if pl.Name == favorites.PlaylistName && pl.TrackCount == 1 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("playlists = %+v, want Favorites · 1 tracks after favorite", m.plManager.playlists)
 	}
 }
 

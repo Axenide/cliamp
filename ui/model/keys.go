@@ -588,6 +588,10 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 			} else {
 				m.status.Showf(statusTTLDefault, "♡ %s", track.DisplayName())
 			}
+			// The provider pane renders Favorites counts from Playlists();
+			// re-pull so it reflects the toggle. The manager list refreshes
+			// itself on open.
+			return m.fetchProviderPlaylists()
 		}
 
 	case "shift+up":
@@ -2008,6 +2012,10 @@ func (m *Model) handlePlMgrTracksKey(msg tea.KeyPressMsg) tea.Cmd {
 				if m.plManager.selPlaylist == favorites.PlaylistName && !added {
 					m.plMgrDropTrackRow(realIdx)
 				}
+				if m.plManager.visible {
+					m.plMgrRefreshList()
+				}
+				return m.fetchProviderPlaylists()
 			}
 		}
 	case "d":
