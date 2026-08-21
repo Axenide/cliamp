@@ -243,7 +243,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// For gapless, the track played fully (100% ≥ 50%), so elapsed = duration.
 			finishedTrack, _ := m.currentPlaybackTrack()
 			fullDur := time.Duration(finishedTrack.DurationSecs) * time.Second
-			m.maybeScrobble(finishedTrack, fullDur, fullDur)
+			if refresh := m.maybeScrobble(finishedTrack, fullDur, fullDur); refresh != nil {
+				cmds = append(cmds, refresh)
+			}
 
 			var newTrack playlist.Track
 			var ok bool
@@ -296,7 +298,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				// Track drained to end — always ≥ 50%.
 				drainDur := time.Duration(finishedTrack.DurationSecs) * time.Second
-				m.maybeScrobble(finishedTrack, drainDur, drainDur)
+				if refresh := m.maybeScrobble(finishedTrack, drainDur, drainDur); refresh != nil {
+					cmds = append(cmds, refresh)
+				}
 
 				// Stop the player before dispatching the async nextTrack command.
 				// This clears the gapless streamer so the finished track cannot
@@ -874,16 +878,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case playback.NextMsg:
-		m.scrobbleCurrent()
+		refresh := m.scrobbleCurrent()
 		cmd := m.nextTrack()
 		m.notifyAll()
-		return m, cmd
+		return m, tea.Batch(refresh, cmd)
 
 	case playback.PrevMsg:
-		m.scrobbleCurrent()
+		refresh := m.scrobbleCurrent()
 		cmd := m.prevTrack()
 		m.notifyAll()
-		return m, cmd
+		return m, tea.Batch(refresh, cmd)
 
 	case playback.SeekMsg:
 		return m, m.seekRelative(msg.Offset, 0)

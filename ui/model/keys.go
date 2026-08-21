@@ -42,11 +42,14 @@ func (m *Model) quit() tea.Cmd {
 	return tea.Quit
 }
 
-// scrobbleCurrent fires a scrobble for the currently playing track if applicable.
-func (m *Model) scrobbleCurrent() {
+// scrobbleCurrent fires a scrobble for the currently playing track if
+// applicable. Returns the Recently Played refresh command when one was
+// recorded.
+func (m *Model) scrobbleCurrent() tea.Cmd {
 	if track, idx := m.currentPlaybackTrack(); idx >= 0 {
-		m.maybeScrobble(track, m.player.Position(), m.player.Duration())
+		return m.maybeScrobble(track, m.player.Position(), m.player.Duration())
 	}
+	return nil
 }
 
 func (m *Model) handleSpeedKey(msg tea.KeyPressMsg) tea.Cmd {
@@ -641,11 +644,11 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 			if m.buffering && m.plCursor == m.playlist.Index() {
 				break
 			}
-			m.scrobbleCurrent()
+			refresh := m.scrobbleCurrent()
 			m.playlist.SetIndex(m.plCursor)
 			cmd := m.playCurrentTrack()
 			m.notifyPlayback()
-			return cmd
+			return tea.Batch(refresh, cmd)
 		}
 
 	case "+", "=":
@@ -866,15 +869,15 @@ func (m *Model) handleFullVisualizerKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.notifyPlayback()
 		return cmd
 	case ">", ".":
-		m.scrobbleCurrent()
+		refresh := m.scrobbleCurrent()
 		cmd := m.nextTrack()
 		m.notifyPlayback()
-		return cmd
+		return tea.Batch(refresh, cmd)
 	case "<", ",":
-		m.scrobbleCurrent()
+		refresh := m.scrobbleCurrent()
 		cmd := m.prevTrack()
 		m.notifyPlayback()
-		return cmd
+		return tea.Batch(refresh, cmd)
 	case "left":
 		return m.doSeek(-5 * time.Second)
 	case "shift+left":

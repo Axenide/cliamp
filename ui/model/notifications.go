@@ -4,6 +4,8 @@ import (
 	"strings"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/bjarneo/cliamp/applog"
 	"github.com/bjarneo/cliamp/internal/playback"
 	"github.com/bjarneo/cliamp/luaplugin"
@@ -134,7 +136,10 @@ func (m *Model) nowPlaying(track playlist.Track) {
 // The call is dispatched in a goroutine so it never blocks the UI. The same
 // 50% threshold gates a local history entry so skipped tracks never land in
 // "Recently Played".
-func (m *Model) maybeScrobble(track playlist.Track, elapsed, duration time.Duration) {
+//
+// When a history entry lands, the returned command re-pulls the provider
+// playlist list so Recently Played counts update without reopening anything.
+func (m *Model) maybeScrobble(track playlist.Track, elapsed, duration time.Duration) tea.Cmd {
 	dur := duration
 	if dur <= 0 {
 		dur = time.Duration(track.DurationSecs) * time.Second
@@ -152,23 +157,31 @@ func (m *Model) maybeScrobble(track playlist.Track, elapsed, duration time.Durat
 	// duration are filtered by pastThreshold. The write is synchronous so
 	// successive scrobbles preserve their ordering on disk; the file is small
 	// (~30 KB at the 200-entry cap) so the latency is sub-millisecond.
+	var refresh tea.Cmd
 	if pastThreshold && m.historyStore != nil {
-		_ = m.historyStore.Record(track, time.Now())
+		if err := m.historyStore.Record(track, time.Now()); err == nil {
+			// Recently Played rows in the manager list and provider pane
+			// render from Playlists(); re-pull so they track listens.
+			if m.plManager.visible {
+				m.plMgrRefreshList()
+			}
+			refresh = m.fetchProviderPlaylists()
+		}
 	}
 
 	reporter := m.findPlaybackReporter(track)
 	if reporter == nil {
-		return
+		return refresh
 	}
 	if duration <= 0 {
 		// Unknown duration: use DurationSecs metadata as fallback.
 		duration = time.Duration(track.DurationSecs) * time.Second
 	}
 	if duration <= 0 {
-		return // still unknown — skip
+		return refresh // still unknown — skip
 	}
 	if elapsed < duration/2 {
-		return // less than 50% played
+		return refresh // less than 50% played
 	}
 	canSeek := m.player.Seekable()
 	go func() {
@@ -176,6 +189,7 @@ func (m *Model) maybeScrobble(track playlist.Track, elapsed, duration time.Durat
 			applog.Warn("scrobble failed for %q: %v", track.Title, err)
 		}
 	}()
+	return refresh
 }
 
 // findPlaybackReporter returns the first registered provider that can report

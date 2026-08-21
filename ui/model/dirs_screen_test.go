@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -487,5 +489,35 @@ func TestFileBrowserEscDoneCommitsSelection(t *testing.T) {
 	}
 	if len(prov.added) != 1 || prov.added[0] != "/home/me/Music/Metal" {
 		t.Fatalf("added = %v, want the pending selection committed on Esc", prov.added)
+	}
+}
+
+func TestMaybeScrobbleRefreshesRecentlyPlayed(t *testing.T) {
+	prov := &dirSourceTestProvider{commandsTestProvider: commandsTestProvider{
+		name:  "Local",
+		lists: []playlist.PlaylistInfo{{ID: "music", Name: "music"}},
+	}}
+	m := newDirsScreenTestModel(prov)
+	m.historyStore = history.NewAt(filepath.Join(t.TempDir(), "history.toml"))
+	m.plManager.screen = plMgrScreenList
+	m.plManager.playlists = nil
+
+	// Fully played 120s track: past the 50% threshold, so history records
+	// and both surfaces refresh.
+	cmd := m.maybeScrobble(playlist.Track{Path: "/song.mp3", Title: "Song", DurationSecs: 120}, 120*time.Second, 120*time.Second)
+	if cmd == nil {
+		t.Fatal("expected a provider-playlist refresh command after scrobble")
+	}
+	if len(m.plManager.playlists) == 0 {
+		t.Fatal("manager list should be re-pulled after a scrobble")
+	}
+
+	// Below threshold: nothing recorded, nothing refreshed.
+	m.plManager.playlists = nil
+	if cmd := m.maybeScrobble(playlist.Track{Path: "/song.mp3", DurationSecs: 120}, 10*time.Second, 120*time.Second); cmd != nil {
+		t.Fatal("below-threshold scrobble must not schedule a refresh")
+	}
+	if len(m.plManager.playlists) != 0 {
+		t.Fatal("below-threshold scrobble must not re-pull the manager list")
 	}
 }
