@@ -537,7 +537,7 @@ func TestGaplessAdvanceRecordsHistoryFromPlayerDuration(t *testing.T) {
 	}
 }
 
-func TestGaplessAdvanceSkipsHistoryWhenNoDurationKnown(t *testing.T) {
+func TestGaplessAdvanceRecordsHistoryEvenWithoutDuration(t *testing.T) {
 	player := &playbackFakeEngine{playing: true, gaplessAdvanced: true}
 	p := playlist.New()
 	p.Replace([]playlist.Track{
@@ -561,7 +561,10 @@ func TestGaplessAdvanceSkipsHistoryWhenNoDurationKnown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 0 {
-		t.Fatalf("history = %+v, want no entries without any duration source", entries)
+	if len(entries) != 1 || entries[0].Track.Path != "/tmp/old.mp3" {
+		t.Fatalf("history = %+v, want the finished track recorded even with unknown duration", entries)
+	}
+	if m.playlist.Index() != 1 {
+		t.Fatalf("playlist index = %d, want 1 after gapless advance", m.playlist.Index())
 	}
 }

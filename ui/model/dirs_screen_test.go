@@ -510,8 +510,7 @@ func TestMaybeScrobbleRefreshesRecentlyPlayed(t *testing.T) {
 	m.plManager.screen = plMgrScreenList
 	m.plManager.playlists = nil
 
-	// Fully played 120s track: past the 50% threshold, so history records
-	// and both surfaces refresh.
+	// Fully played 120s track: history records and both surfaces refresh.
 	cmd := m.maybeScrobble(playlist.Track{Path: "/song.mp3", Title: "Song", DurationSecs: 120}, 120*time.Second, 120*time.Second)
 	if cmd == nil {
 		t.Fatal("expected a provider-playlist refresh command after scrobble")
@@ -520,13 +519,22 @@ func TestMaybeScrobbleRefreshesRecentlyPlayed(t *testing.T) {
 		t.Fatal("manager list should be re-pulled after a scrobble")
 	}
 
-	// Below threshold: nothing recorded, nothing refreshed.
+	// Skipped early: still counts as played — Recently Played mirrors
+	// everything the user listened to, not just completed tracks.
 	m.plManager.playlists = nil
-	if cmd := m.maybeScrobble(playlist.Track{Path: "/song.mp3", DurationSecs: 120}, 10*time.Second, 120*time.Second); cmd != nil {
-		t.Fatal("below-threshold scrobble must not schedule a refresh")
+	if cmd := m.maybeScrobble(playlist.Track{Path: "/other.mp3", DurationSecs: 120}, 10*time.Second, 120*time.Second); cmd == nil {
+		t.Fatal("early skip must still record history and schedule a refresh")
 	}
-	if len(m.plManager.playlists) != 0 {
-		t.Fatal("below-threshold scrobble must not re-pull the manager list")
+	if len(m.plManager.playlists) == 0 {
+		t.Fatal("skip scrobble must re-pull the manager list")
+	}
+
+	entries, err := m.historyStore.Recent(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("history entries = %d, want both the finished and skipped plays", len(entries))
 	}
 }
 
