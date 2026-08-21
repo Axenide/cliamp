@@ -1,27 +1,31 @@
 package model
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/bjarneo/cliamp/history"
 	"github.com/bjarneo/cliamp/playlist"
 	"github.com/bjarneo/cliamp/ui"
 )
 
 type playbackFakeEngine struct {
-	playing           bool
-	gaplessAdvanced   bool
-	drained           bool
-	paused            bool
-	ytdlSeek          bool
-	position          time.Duration
-	playCalls         []string
-	seekYTDLCalls     []time.Duration
-	preloadCalls      []string
-	clearPreloadCalls int
-	eqBands           [eqBandCount]float64
+	playing            bool
+	gaplessAdvanced    bool
+	drained            bool
+	paused             bool
+	ytdlSeek           bool
+	position           time.Duration
+	reportedDuration   time.Duration
+	lastPlayedDuration time.Duration
+	playCalls          []string
+	seekYTDLCalls      []time.Duration
+	preloadCalls       []string
+	clearPreloadCalls  int
+	eqBands            [eqBandCount]float64
 }
 
 func (f *playbackFakeEngine) Play(path string, _ time.Duration) error {
@@ -60,8 +64,9 @@ func (f *playbackFakeEngine) GaplessAdvanced() bool {
 	f.gaplessAdvanced = false
 	return true
 }
-func (f *playbackFakeEngine) Position() time.Duration { return f.position }
-func (f *playbackFakeEngine) Duration() time.Duration { return 0 }
+func (f *playbackFakeEngine) LastPlayedDuration() time.Duration { return f.lastPlayedDuration }
+func (f *playbackFakeEngine) Position() time.Duration           { return f.position }
+func (f *playbackFakeEngine) Duration() time.Duration           { return f.reportedDuration }
 func (f *playbackFakeEngine) PositionAndDuration() (time.Duration, time.Duration) {
 	return 0, 0
 }
@@ -464,5 +469,99 @@ func TestGaplessAdvanceRefreshesLyricsAndArtwork(t *testing.T) {
 	}
 	if !m2.lyrics.loading {
 		t.Fatal("lyrics.loading = false, want true for new track fetch")
+	}
+}
+
+func TestDrainedTrackRecordsHistoryWithoutMetadataDuration(t *testing.T) {
+	player := &playbackFakeEngine{playing: true, drained: true, reportedDuration: 120 * time.Second}
+	p := playlist.New()
+	p.Replace([]playlist.Track{
+		{Title: "First", Path: "/tmp/first.mp3"},
+		{Title: "Second", Path: "/tmp/second.mp3"},
+	})
+	p.SetIndex(0)
+
+	store := history.NewAt(filepath.Join(t.TempDir(), "history.toml"))
+	m := Model{
+		player:       player,
+		playlist:     p,
+		historyStore: store,
+		vis:          ui.NewVisualizer(float64(player.SampleRate())),
+	}
+	m.SetVisualizer("none")
+
+	m.Update(tickMsg(time.Now()))
+
+	entries, err := store.Recent(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Track.Path != "/tmp/first.mp3" {
+		t.Fatalf("history = %+v, want the drained track recorded", entries)
+	}
+}
+
+func TestGaplessAdvanceRecordsHistoryFromPlayerDuration(t *testing.T) {
+	player := &playbackFakeEngine{
+		playing:            true,
+		gaplessAdvanced:    true,
+		lastPlayedDuration: 90 * time.Second,
+	}
+	p := playlist.New()
+	p.Replace([]playlist.Track{
+		{Title: "Old", Path: "/tmp/old.mp3"},
+		{Title: "New", Path: "/tmp/new.mp3"},
+	})
+	p.SetIndex(0)
+
+	store := history.NewAt(filepath.Join(t.TempDir(), "history.toml"))
+	m := Model{
+		player:       player,
+		playlist:     p,
+		historyStore: store,
+		vis:          ui.NewVisualizer(float64(player.SampleRate())),
+	}
+	m.SetVisualizer("none")
+
+	m.Update(tickMsg(time.Now()))
+
+	entries, err := store.Recent(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Track.Path != "/tmp/old.mp3" {
+		t.Fatalf("history = %+v, want the finished track recorded", entries)
+	}
+	if m.playlist.Index() != 1 {
+		t.Fatalf("playlist index = %d, want 1 after gapless advance", m.playlist.Index())
+	}
+}
+
+func TestGaplessAdvanceSkipsHistoryWhenNoDurationKnown(t *testing.T) {
+	player := &playbackFakeEngine{playing: true, gaplessAdvanced: true}
+	p := playlist.New()
+	p.Replace([]playlist.Track{
+		{Title: "Old", Path: "/tmp/old.mp3"},
+		{Title: "New", Path: "/tmp/new.mp3"},
+	})
+	p.SetIndex(0)
+
+	store := history.NewAt(filepath.Join(t.TempDir(), "history.toml"))
+	m := Model{
+		player:       player,
+		playlist:     p,
+		historyStore: store,
+		vis:          ui.NewVisualizer(float64(player.SampleRate())),
+	}
+	m.SetVisualizer("none")
+
+	m.Update(tickMsg(time.Now()))
+
+	entries, err := store.Recent(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("history = %+v, want no entries without any duration source", entries)
 	}
 }

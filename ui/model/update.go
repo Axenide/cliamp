@@ -241,8 +241,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.player.GaplessAdvanced() {
 			// Capture the track that just finished before advancing the playlist.
 			// For gapless, the track played fully (100% ≥ 50%), so elapsed = duration.
+			// The player stashed the finished pipeline's real duration at swap
+			// time; metadata is only a fallback for tracks without it.
 			finishedTrack, _ := m.currentPlaybackTrack()
-			fullDur := time.Duration(finishedTrack.DurationSecs) * time.Second
+			fullDur := m.player.LastPlayedDuration()
+			if fullDur <= 0 {
+				fullDur = time.Duration(finishedTrack.DurationSecs) * time.Second
+			}
 			if refresh := m.maybeScrobble(finishedTrack, fullDur, fullDur); refresh != nil {
 				cmds = append(cmds, refresh)
 			}
@@ -296,8 +301,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// disconnect, so retry this station instead of advancing.
 				m.scheduleReconnect(now)
 			} else {
-				// Track drained to end — always ≥ 50%.
-				drainDur := time.Duration(finishedTrack.DurationSecs) * time.Second
+				// Track drained to end — always ≥ 50%. The player is still on
+				// the finished track here, so its live duration is authoritative
+				// even when playlist metadata (DurationSecs) is unknown.
+				drainDur := m.player.Duration()
+				if drainDur <= 0 {
+					drainDur = time.Duration(finishedTrack.DurationSecs) * time.Second
+				}
 				if refresh := m.maybeScrobble(finishedTrack, drainDur, drainDur); refresh != nil {
 					cmds = append(cmds, refresh)
 				}
