@@ -5,7 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/bjarneo/cliamp/history"
 	"github.com/bjarneo/cliamp/playlist"
 	"github.com/bjarneo/cliamp/provider"
 	"github.com/bjarneo/cliamp/theme"
@@ -404,8 +403,8 @@ func (m *Model) plMgrEnterTrackList(name string) {
 
 // plMgrReloadTracks re-reads the open track list in place so store changes
 // (fresh history entries, favorite toggles) appear without leaving the
-// screen. The cursor is clamped rather than reset, and any active filter is
-// re-applied.
+// screen. The cursor is clamped rather than reset, stale row marks are
+// dropped, and any active filter is re-applied.
 func (m *Model) plMgrReloadTracks(name string) {
 	tracks, err := m.localProvider.Tracks(name)
 	if err != nil {
@@ -413,6 +412,7 @@ func (m *Model) plMgrReloadTracks(name string) {
 	}
 	m.plMgrLoadTracks(tracks)
 	m.setHeaderStateFromTracks(tracks)
+	m.plManager.marked = make(map[int]bool)
 	if m.plManager.filter != "" {
 		m.plMgrRecomputeFilter()
 	}
