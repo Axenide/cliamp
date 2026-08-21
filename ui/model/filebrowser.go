@@ -349,7 +349,7 @@ func (m *Model) handleFileBrowserKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 
 	case "right", "l":
-		m.fbDescend()
+		return m.fbDescend()
 
 	case "enter":
 		if len(m.fileBrowser.selected) > 0 {
@@ -360,7 +360,7 @@ func (m *Model) handleFileBrowserKey(msg tea.KeyPressMsg) tea.Cmd {
 			}
 			return m.fbConfirm(false)
 		}
-		m.fbDescend()
+		return m.fbDescend()
 
 	case "backspace", "left", "h":
 		cd = m.fileBrowser.dir
@@ -490,10 +490,11 @@ func (m *Model) fbCommitAndRefresh() tea.Cmd {
 }
 
 // fbDescend opens the directory under the cursor (or plays a highlighted
-// audio file immediately). Shared by l/→ and Enter.
-func (m *Model) fbDescend() {
+// audio file immediately). Shared by l/→ and Enter. Returns the async
+// track-resolution command when the descend confirmed a selection.
+func (m *Model) fbDescend() tea.Cmd {
 	if m.fileBrowser.cursor >= m.fbCount() {
-		return
+		return nil
 	}
 	e := m.fbEntry(m.fileBrowser.cursor)
 	if e.isDir {
@@ -512,8 +513,9 @@ func (m *Model) fbDescend() {
 		}
 	} else if e.isAudio {
 		m.fileBrowser.selected[e.path] = true
-		_ = m.fbConfirm(false)
+		return m.fbConfirm(false)
 	}
+	return nil
 }
 
 // fbConfirm collects selected paths, closes the overlay, and returns an async

@@ -1989,7 +1989,7 @@ func (m *Model) handlePlMgrDirsKey(msg tea.KeyPressMsg) tea.Cmd {
 				src := m.plManager.dirs[i]
 				if dm, ok := m.localProvider.(provider.PlaylistDirSourceManager); ok {
 					if err := dm.RemoveDirSource(m.plManager.selPlaylist, src.Path); err != nil {
-						m.status.Showf(statusTTLDefault, "Remove failed: %s", err)
+						m.status.Errorf(statusTTLDefault, "Remove failed: %s", err)
 					} else {
 						m.plMgrReloadDirs()
 						m.plMgrRefreshTracksForSel()
@@ -2062,7 +2062,7 @@ func (m *Model) handlePlMgrDirsKey(msg tea.KeyPressMsg) tea.Cmd {
 		if dm, ok := m.localProvider.(provider.PlaylistDirSourceManager); ok {
 			next := !src.Recursive
 			if err := dm.SetDirRecursive(m.plManager.selPlaylist, src.Path, next); err != nil {
-				m.status.Showf(statusTTLDefault, "Toggle recursive: %s", err)
+				m.status.Errorf(statusTTLDefault, "Toggle recursive: %s", err)
 			} else {
 				mode := "recursive"
 				if !next {

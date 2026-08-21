@@ -454,7 +454,7 @@ func (m *Model) plMgrOpenDirs() {
 	}
 	dirs, err := dm.DirSources(m.plManager.selPlaylist)
 	if err != nil {
-		m.status.Showf(statusTTLDefault, "Load dir sources: %s", err)
+		m.status.Errorf(statusTTLDefault, "Load dir sources: %s", err)
 		return
 	}
 	m.plManager.dirs = dirs
@@ -475,7 +475,7 @@ func (m *Model) plMgrReloadDirs() {
 	}
 	dirs, err := dm.DirSources(m.plManager.selPlaylist)
 	if err != nil {
-		m.status.Showf(statusTTLDefault, "Reload dir sources: %s", err)
+		m.status.Errorf(statusTTLDefault, "Reload dir sources: %s", err)
 		return
 	}
 	m.plManager.dirs = dirs
@@ -574,7 +574,7 @@ func (m *Model) plMgrAddDirSources(target string, dirs []string) (added, skipped
 	case firstErr != nil && added > 0:
 		m.status.Showf(statusTTLDefault, "Added %d dir source(s) to %q; then failed: %s", added, target, firstErr)
 	case firstErr != nil:
-		m.status.Showf(statusTTLDefault, "Add dir source failed: %s", firstErr)
+		m.status.Errorf(statusTTLDefault, "Add dir source failed: %s", firstErr)
 	case added > 0 && skipped > 0:
 		m.status.Showf(statusTTLDefault, "Added %d dir source(s) to %q (%d already referenced)", added, target, skipped)
 	case added > 0:
