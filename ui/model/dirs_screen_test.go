@@ -345,6 +345,34 @@ func TestPlMgrDeleteGuardsRecentlyPlayed(t *testing.T) {
 	}
 }
 
+func TestPlMgrDeleteGuardsFavorites(t *testing.T) {
+	prov := &paneManageProvider{commandsTestProvider: commandsTestProvider{name: "Local"}}
+	m := newDirsScreenTestModel(prov)
+	m.plManager.screen = plMgrScreenList
+	m.plManager.playlists = []playlist.PlaylistInfo{
+		{ID: favorites.PlaylistName, Name: favorites.PlaylistName},
+	}
+	m.plManager.cursor = 0
+
+	m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "d"})
+	if m.plManager.confirmDel {
+		t.Fatal("d on Favorites must not ask for confirmation")
+	}
+	if !strings.Contains(m.status.text, "cannot be deleted") {
+		t.Fatalf("status = %q, want a protection notice", m.status.text)
+	}
+
+	m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "r"})
+	if m.plManager.screen == plMgrScreenRename {
+		t.Fatal("r on Favorites must not open the rename input")
+	}
+
+	m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "D"})
+	if m.fileBrowser.visible {
+		t.Fatal("D on Favorites must not open the directory browser")
+	}
+}
+
 func TestPlMgrDirsToggleRecursive(t *testing.T) {
 	prov := &dirSourceTestProvider{
 		dirs: []playlist.DirSource{{Path: "/Music", Recursive: true}},

@@ -12,6 +12,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/bjarneo/cliamp/favorites"
 	"github.com/bjarneo/cliamp/history"
 	"github.com/bjarneo/cliamp/internal/fileutil"
 	"github.com/bjarneo/cliamp/playlist"
@@ -1617,6 +1618,18 @@ func (m *Model) handlePlaylistManagerKey(msg tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
+// plMgrVirtualPlaylistName reports the provider-synthesized playlist name
+// (Favorites, Recently Played) when name refers to one; regular playlists
+// return "". Virtual playlists cannot be renamed, deleted, or given
+// directory sources.
+func plMgrVirtualPlaylistName(name string) string {
+	switch name {
+	case favorites.PlaylistName, history.PlaylistName:
+		return name
+	}
+	return ""
+}
+
 // handlePlMgrListKey handles keys on screen 0 (playlist list).
 func (m *Model) handlePlMgrListKey(msg tea.KeyPressMsg) tea.Cmd {
 	// Filter input mode swallows most keys.
@@ -1630,7 +1643,7 @@ func (m *Model) handlePlMgrListKey(msg tea.KeyPressMsg) tea.Cmd {
 		case "y", "Y":
 			var refresh tea.Cmd
 			realIdx := m.plMgrPlaylistRealIndex(m.plManager.cursor)
-			if realIdx >= 0 && m.plManager.playlists[realIdx].Name == history.PlaylistName {
+			if realIdx >= 0 && plMgrVirtualPlaylistName(m.plManager.playlists[realIdx].Name) != "" {
 				m.plManager.confirmDel = false
 				return nil
 			}
@@ -1735,7 +1748,7 @@ func (m *Model) handlePlMgrListKey(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		name := m.plManager.playlists[realIdx].Name
-		if name == history.PlaylistName {
+		if plMgrVirtualPlaylistName(name) != "" {
 			m.status.Showf(statusTTLDefault, "%q is a virtual playlist with no directory sources", name)
 			return nil
 		}
@@ -1753,8 +1766,8 @@ func (m *Model) handlePlMgrListKey(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		name := m.plManager.playlists[realIdx].Name
-		if name == history.PlaylistName {
-			m.status.Warning("Recently Played cannot be renamed", statusTTLDefault)
+		if plMgrVirtualPlaylistName(name) != "" {
+			m.status.Warningf(statusTTLDefault, "%s cannot be renamed", name)
 			return nil
 		}
 		m.plManager.renameOldName = name
@@ -1766,8 +1779,8 @@ func (m *Model) handlePlMgrListKey(msg tea.KeyPressMsg) tea.Cmd {
 		if idx < 0 {
 			break
 		}
-		if m.plManager.playlists[idx].Name == history.PlaylistName {
-			m.status.Warning("Recently Played cannot be deleted", statusTTLDefault)
+		if name := m.plManager.playlists[idx].Name; plMgrVirtualPlaylistName(name) != "" {
+			m.status.Warningf(statusTTLDefault, "%s cannot be deleted", name)
 			return nil
 		}
 		m.plManager.confirmDel = true
@@ -2380,6 +2393,14 @@ func (m *Model) plMgrSaveTracks(status string) bool {
 func (m *Model) plMgrRemoveSelectedTracks() {
 	indices := m.plMgrSelectedTrackIndices()
 	if len(indices) == 0 {
+		return
+	}
+	if m.plManager.selPlaylist == favorites.PlaylistName {
+		m.status.Warning("Use n to remove tracks from Favorites", statusTTLDefault)
+		return
+	}
+	if m.plManager.selPlaylist == history.PlaylistName {
+		m.status.Warning("Recently Played tracks cannot be removed", statusTTLDefault)
 		return
 	}
 	for _, i := range indices {
