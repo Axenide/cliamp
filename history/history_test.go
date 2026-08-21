@@ -56,34 +56,32 @@ func TestRecordOrdering(t *testing.T) {
 	}
 }
 
-func TestDedupConsecutiveReplay(t *testing.T) {
-	track := playlist.Track{Path: "/a.mp3", Title: "A"}
-	first := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+func TestReplayMovesEntryToTop(t *testing.T) {
+	a := playlist.Track{Path: "/a.mp3", Title: "A"}
+	b := playlist.Track{Path: "/b.mp3", Title: "B"}
+	base := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 
-	tests := []struct {
-		name     string
-		gap      time.Duration
-		wantLen  int
-		wantTime time.Time // only checked when wantLen == 1
-	}{
-		{"inside window updates timestamp", 2 * time.Minute, 1, first.Add(2 * time.Minute)},
-		{"outside window is a new play", 10 * time.Minute, 2, time.Time{}},
+	s := newTestStore(t)
+	mustRecord(t, s, a, base)
+	mustRecord(t, s, b, base.Add(time.Minute))
+
+	// Re-listen to the older track: no duplicate, entry moves to top with a
+	// fresh timestamp.
+	replay := base.Add(2 * time.Minute)
+	mustRecord(t, s, a, replay)
+
+	got, err := s.Recent(0)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := newTestStore(t)
-			mustRecord(t, s, track, first)
-			mustRecord(t, s, track, first.Add(tt.gap))
-
-			got, _ := s.Recent(0)
-			if len(got) != tt.wantLen {
-				t.Fatalf("got %d entries, want %d", len(got), tt.wantLen)
-			}
-			if tt.wantLen == 1 && !got[0].PlayedAt.Equal(tt.wantTime) {
-				t.Fatalf("PlayedAt = %v, want %v", got[0].PlayedAt, tt.wantTime)
-			}
-		})
+	if len(got) != 2 {
+		t.Fatalf("got %d entries, want 2 (no duplicate for the replay)", len(got))
+	}
+	if got[0].Track.Path != "/a.mp3" || !got[0].PlayedAt.Equal(replay) {
+		t.Fatalf("top = %q at %v, want /a.mp3 at %v", got[0].Track.Path, got[0].PlayedAt, replay)
+	}
+	if got[1].Track.Path != "/b.mp3" {
+		t.Fatalf("second = %q, want /b.mp3", got[1].Track.Path)
 	}
 }
 
