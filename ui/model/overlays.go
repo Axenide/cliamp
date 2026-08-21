@@ -507,7 +507,7 @@ func (m *Model) plMgrRefreshTracksForSel() {
 // the selected folders when any are selected, otherwise the folder under the
 // cursor, otherwise the directory being browsed. The browser stays open so
 // several folders can be added in a row (Esc leaves). Invoked by the file
-// browser's D key and Enter-on-folder when a target playlist is set.
+// browser's D key when a target playlist is set.
 func (m *Model) fbAddDirSource() {
 	target := m.fileBrowser.targetPlaylist
 	if target == "" || target == history.PlaylistName {

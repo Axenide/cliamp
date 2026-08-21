@@ -120,7 +120,7 @@ active when the picker opened. While typing a filter, `Enter` finishes it and
 | `s` | Tracks: sort and save, cycling `track`, `title`, `artist`, `album`, `artist+album`, `path` |
 | `o` | Tracks: open file browser to add files to this playlist |
 | `D` | List: open the file browser to add `[[dir]]` sources to the highlighted playlist. Tracks: open the directory-sources screen |
-| `a` | List: new playlist — after naming, the file browser opens so you can add folders as sources. Tracks: mark/unmark all visible tracks. |
+| `a` | List: new playlist — after naming, the file browser opens at `~`: descend with `Enter`, select folders and/or files with `Space`, confirm with `Enter`, or finish with `Esc`. Tracks: mark/unmark all visible tracks. |
 | `r` | List: rename the playlist |
 | `d` | List: delete playlist (confirms). Tracks: remove marked tracks, or highlighted track when none are marked |
 | `u` | Undo the last manager edit |
@@ -156,12 +156,10 @@ Shift-letter keys are reserved for provider switching, so playlist-manager track
 
 When the browser is adding to a playlist (opened with `D` from the manager's
 list screen, `o` from its tracks screen, or automatically after creating a
-playlist from the provider pane or the manager), selected folders become
-`[[dir]]` sources and selected audio files are written as explicit tracks.
+playlist with `a`), selected folders become `[[dir]]` sources and selected
+audio files are written as explicit tracks.
 In this mode `Esc` acts as "done": any pending selection is committed before
 the browser closes.
-Confirming a selection with `Enter` adds selected folders as sources and
-writes selected audio files as explicit tracks.
 
 ## Provider browser (`N` key)
 

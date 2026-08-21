@@ -296,11 +296,7 @@ func (m *Model) handleFileBrowserKey(msg tea.KeyPressMsg) tea.Cmd {
 		if m.fileBrowser.targetPlaylist != "" {
 			// Esc acts as "done": commit anything still selected, then
 			// refresh the provider pane so track/dir counts update.
-			cmd := m.fbConfirm(false)
-			if cmd == nil {
-				return m.fetchProviderPlaylists()
-			}
-			return tea.Batch(cmd, m.fetchProviderPlaylists())
+			return m.fbCommitAndRefresh()
 		}
 
 	case "ctrl+x":
@@ -357,16 +353,12 @@ func (m *Model) handleFileBrowserKey(msg tea.KeyPressMsg) tea.Cmd {
 
 	case "enter":
 		if len(m.fileBrowser.selected) > 0 {
-			cmd := m.fbConfirm(false)
 			if m.fileBrowser.targetPlaylist != "" {
 				// Adding to a playlist: refresh the list so track/dir
 				// counts update right away.
-				if cmd == nil {
-					return m.fetchProviderPlaylists()
-				}
-				return tea.Batch(cmd, m.fetchProviderPlaylists())
+				return m.fbCommitAndRefresh()
 			}
-			return cmd
+			return m.fbConfirm(false)
 		}
 		m.fbDescend()
 
@@ -486,9 +478,19 @@ func (m *Model) handleFileBrowserKey(msg tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
+// fbCommitAndRefresh confirms the pending selection and re-pulls the provider
+// playlist list so dirs/tracks/duration counts reflect the write. Used when
+// the browser is targeted at a playlist (Enter confirm or Esc-as-done).
+func (m *Model) fbCommitAndRefresh() tea.Cmd {
+	cmd := m.fbConfirm(false)
+	if cmd == nil {
+		return m.fetchProviderPlaylists()
+	}
+	return tea.Batch(cmd, m.fetchProviderPlaylists())
+}
+
 // fbDescend opens the directory under the cursor (or plays a highlighted
-// audio file immediately). Shared by l/→ and Enter outside add-to-playlist
-// folder grabs.
+// audio file immediately). Shared by l/→ and Enter.
 func (m *Model) fbDescend() {
 	if m.fileBrowser.cursor >= m.fbCount() {
 		return

@@ -263,16 +263,17 @@ Press `p` from any view to open the playlist manager:
 1. **Browse**: see all playlists with track counts
 2. **Filter**: press `/` to incrementally filter the list (works on both the playlists screen and the track screen). `Esc` clears the filter.
 3. **Open**: press `Enter` or `→` to view tracks inside a playlist
-4. **Add now-playing**: press `a` to add the currently playing track (the footer shows the track name so you know what gets added)
-5. **Delete playlist**: press `d` then `y` to confirm deletion
-6. **Mark tracks**: open a playlist, press `Space` to mark a track and advance, or `a` to mark or unmark all visible tracks
-7. **Move tracks**: press `[` or `]`; the saved playlist is updated immediately
-8. **Sort tracks**: press `s` to cycle `track`, `title`, `artist`, `album`, `artist+album`, and `path` sorting
-9. **Remove tracks**: press `d` to remove the marked tracks, or the highlighted track when nothing is marked
-10. **Undo manager edits**: press `u` after delete, remove, move, or sort
-11. **Write tracks elsewhere**: press `w` to copy the marked or highlighted tracks to another playlist; duplicate paths are skipped
-12. **Add files**: press `o` from inside a playlist to browse files and add them to that playlist
-13. **Play this**: press `Enter` on the track list to start playback at the highlighted track. The rest of the playlist follows.
+4. **Create playlist**: press `a`, type a name, press `Enter` — the file browser opens at `~` targeted at the new playlist: select folders and/or files with `Space` (folders become live `[[dir]]` sources), confirm with `Enter`, or finish with `Esc`
+5. **Rename playlist**: press `r` on the list screen
+6. **Delete playlist**: press `d` then `y` to confirm deletion
+7. **Mark tracks**: open a playlist, press `Space` to mark a track and advance, or `a` to mark or unmark all visible tracks
+8. **Move tracks**: press `[` or `]`; the saved playlist is updated immediately
+9. **Sort tracks**: press `s` to cycle `track`, `title`, `artist`, `album`, `artist+album`, and `path` sorting
+10. **Remove tracks**: press `d` to remove the marked tracks, or the highlighted track when nothing is marked
+11. **Undo manager edits**: press `u` after delete, remove, move, or sort
+12. **Write tracks elsewhere**: press `w` to copy the marked or highlighted tracks to another playlist; duplicate paths are skipped
+13. **Add files**: press `o` from inside a playlist to browse files and add them to that playlist
+14. **Play this**: press `Enter` on the track list to start playback at the highlighted track. The rest of the playlist follows.
 14. **Play all**: press `p` to start from the top, regardless of cursor position
 15. **New playlist**: select "+ New Playlist...", type a name, and press Enter. If you create a playlist while a `/` filter is active, the filter text is pre-filled as the new playlist name.
 
@@ -358,7 +359,8 @@ title = "My Radio"
 | `/` | Filter playlists or tracks; `Esc` clears |
 | `Enter` / `→` | Open playlist (list screen) / Play **highlighted** track (tracks screen) |
 | `p` | Play all tracks from the top (tracks screen) |
-| `a` | List: add currently playing track. Tracks: mark/unmark all visible tracks |
+| `a` | List: new playlist — after naming, the file browser opens at `~` so you can pick folders and/or files (`Space` selects, `Esc` finishes). Tracks: mark/unmark all visible tracks |
+| `r` | Rename the highlighted playlist (list screen) |
 | `Space` | Mark/unmark track and advance (tracks screen) |
 | `s` | Sort tracks, cycling supported sort keys (tracks screen) |
 | `w` | Write marked/highlighted tracks, or the current queue from the list screen, to another playlist |

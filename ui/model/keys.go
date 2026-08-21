@@ -1731,10 +1731,11 @@ func (m *Model) handlePlMgrListKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.plManager.inputErr = ""
 		m.plManager.screen = plMgrScreenRename
 	case "d":
-		if m.plMgrPlaylistRealIndex(m.plManager.cursor) < 0 {
+		idx := m.plMgrPlaylistRealIndex(m.plManager.cursor)
+		if idx < 0 {
 			break
 		}
-		if idx := m.plMgrPlaylistRealIndex(m.plManager.cursor); idx >= 0 && m.plManager.playlists[idx].Name == history.PlaylistName {
+		if m.plManager.playlists[idx].Name == history.PlaylistName {
 			m.status.Warning("Recently Played cannot be deleted", statusTTLDefault)
 			return nil
 		}
