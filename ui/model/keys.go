@@ -2003,6 +2003,11 @@ func (m *Model) handlePlMgrTracksKey(msg tea.KeyPressMsg) tea.Cmd {
 				} else {
 					m.status.Showf(statusTTLDefault, "♡ %s", track.DisplayName())
 				}
+				// Inside the Favorites screen an unfavorite removes the row,
+				// mirroring how the list reflects the store.
+				if m.plManager.selPlaylist == favorites.PlaylistName && !added {
+					m.plMgrDropTrackRow(realIdx)
+				}
 			}
 		}
 	case "d":
@@ -2388,6 +2393,25 @@ func (m *Model) plMgrSaveTracks(status string) bool {
 		m.status.Show(status, statusTTLDefault)
 	}
 	return true
+}
+
+// plMgrDropTrackRow removes the row at idx from the manager's tracks view and
+// clamps cursor/scroll. Used when a virtual playlist must reflect an external
+// change, e.g. unfavoriting a track from inside the Favorites screen.
+func (m *Model) plMgrDropTrackRow(idx int) {
+	m.plManager.tracks = append(m.plManager.tracks[:idx], m.plManager.tracks[idx+1:]...)
+	m.plManager.missingLocal = append(m.plManager.missingLocal[:idx], m.plManager.missingLocal[idx+1:]...)
+	if m.plManager.filter != "" {
+		m.plMgrRecomputeFilter()
+	}
+	newCount := m.plMgrTracksViewCount()
+	if m.plManager.cursor >= newCount {
+		m.plManager.cursor = newCount - 1
+	}
+	if m.plManager.cursor < 0 {
+		m.plManager.cursor = 0
+	}
+	m.plMgrTracksMaybeAdjustScroll(m.plMgrTracksVisible())
 }
 
 func (m *Model) plMgrRemoveSelectedTracks() {

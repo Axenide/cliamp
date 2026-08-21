@@ -345,6 +345,31 @@ func TestPlMgrDeleteGuardsRecentlyPlayed(t *testing.T) {
 	}
 }
 
+func TestPlMgrNKeyRemovesRowFromFavoritesScreen(t *testing.T) {
+	prov := &dirSourceTestProvider{commandsTestProvider: commandsTestProvider{name: "Local"}}
+	if _, err := prov.ToggleFavorite(playlist.Track{Path: "/a.mp3", Title: "A"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := prov.ToggleFavorite(playlist.Track{Path: "/b.mp3", Title: "B"}); err != nil {
+		t.Fatal(err)
+	}
+	m := newDirsScreenTestModel(prov)
+	m.plManager.selPlaylist = favorites.PlaylistName
+	m.plMgrLoadTracks([]playlist.Track{{Path: "/a.mp3"}, {Path: "/b.mp3"}})
+
+	m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "n"})
+
+	if prov.IsFavorited("/a.mp3") {
+		t.Fatal("n should unfavorite the highlighted track")
+	}
+	if len(m.plManager.tracks) != 1 || m.plManager.tracks[0].Path != "/b.mp3" {
+		t.Fatalf("tracks = %+v, want only /b.mp3", m.plManager.tracks)
+	}
+	if !strings.Contains(m.status.text, "♡") {
+		t.Fatalf("status = %q, want ♡ indicator", m.status.text)
+	}
+}
+
 func TestPlMgrDeleteGuardsFavorites(t *testing.T) {
 	prov := &paneManageProvider{commandsTestProvider: commandsTestProvider{name: "Local"}}
 	m := newDirsScreenTestModel(prov)
