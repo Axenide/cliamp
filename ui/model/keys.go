@@ -335,6 +335,10 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m.quit()
+		case "p":
+			if m.localProvider != nil {
+				m.openPlaylistManager()
+			}
 		case "up", "k":
 			m.providerMoveUp()
 		case "space":
@@ -1599,6 +1603,10 @@ func (m *Model) handlePlMgrListKey(msg tea.KeyPressMsg) tea.Cmd {
 		switch msg.String() {
 		case "y", "Y":
 			realIdx := m.plMgrPlaylistRealIndex(m.plManager.cursor)
+			if realIdx >= 0 && m.plManager.playlists[realIdx].Name == history.PlaylistName {
+				m.plManager.confirmDel = false
+				return nil
+			}
 			if realIdx >= 0 {
 				name := m.plManager.playlists[realIdx].Name
 				if tracks, err := m.localProvider.Tracks(name); err == nil {
@@ -1683,12 +1691,24 @@ func (m *Model) handlePlMgrListKey(msg tea.KeyPressMsg) tea.Cmd {
 			m.plManager.inputErr = ""
 		}
 	case "a":
-		// Quick-add current track to the highlighted playlist.
+		// New playlist: open the name input. After naming, the file browser
+		// opens targeted at it so folders can be added as [[dir]] sources.
+		m.plManager.screen = plMgrScreenNewName
+		m.plManager.newName = ""
+		m.plManager.inputErr = ""
+	case "D":
+		// Choose directories for the highlighted playlist: the file browser
+		// opens targeted at it, where D/Enter adds folders as [[dir]] sources.
 		realIdx := m.plMgrPlaylistRealIndex(m.plManager.cursor)
-		if realIdx >= 0 {
-			m.addToPlaylist(m.plManager.playlists[realIdx].Name)
-			m.plMgrRefreshList()
+		if realIdx < 0 {
+			return nil
 		}
+		name := m.plManager.playlists[realIdx].Name
+		if name == history.PlaylistName {
+			m.status.Showf(statusTTLDefault, "%q is a virtual playlist with no directory sources", name)
+			return nil
+		}
+		m.openFileBrowserForPlaylist(name)
 	case "w":
 		tracks := m.playlist.Tracks()
 		if len(tracks) == 0 {
@@ -1711,9 +1731,14 @@ func (m *Model) handlePlMgrListKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.plManager.inputErr = ""
 		m.plManager.screen = plMgrScreenRename
 	case "d":
-		if m.plMgrPlaylistRealIndex(m.plManager.cursor) >= 0 {
-			m.plManager.confirmDel = true
+		if m.plMgrPlaylistRealIndex(m.plManager.cursor) < 0 {
+			break
 		}
+		if idx := m.plMgrPlaylistRealIndex(m.plManager.cursor); idx >= 0 && m.plManager.playlists[idx].Name == history.PlaylistName {
+			m.status.Warning("Recently Played cannot be deleted", statusTTLDefault)
+			return nil
+		}
+		m.plManager.confirmDel = true
 	case "u":
 		m.plMgrUndoLast()
 	case "esc", "p":
@@ -2064,10 +2089,24 @@ func (m *Model) handlePlMgrNewNameKey(msg tea.KeyPressMsg) tea.Cmd {
 		name := strings.TrimSpace(m.plManager.newName)
 		if name == "" {
 			m.plManager.inputErr = "Playlist name is required."
-		} else if m.createPlaylistFromManager(name) {
-			m.plMgrRefreshList()
-			m.plManager.screen = plMgrScreenList
+			return nil
 		}
+		if !m.createPlaylistFromManager(name) {
+			return nil
+		}
+		m.plMgrRefreshList()
+		m.plManager.screen = plMgrScreenList
+		// Surface the new playlist in the provider pane right away.
+		cmd := m.fetchProviderPlaylists()
+		// Drop straight into the file browser targeted at the new
+		// playlist, starting from home: select folders and/or files
+		// with Space, descend with Enter, finish with Esc.
+		if home, err := os.UserHomeDir(); err == nil && home != "" {
+			m.fileBrowser.dir = home
+		}
+		m.openFileBrowserForPlaylist(name)
+		m.status.Showf(statusTTLDefault, "Created %q — Space to select, Esc when done", name)
+		return cmd
 	default:
 		if msg.Code == tea.KeySpace && msg.Text == "" {
 			m.insertText("playlist-manager-new-name", &m.plManager.newName, " ")
@@ -2409,73 +2448,15 @@ func (m *Model) persistLoadedPlaylistOrder() {
 	m.status.Showf(statusTTLDefault, "Reordered %q", m.loadedPlaylist)
 }
 
-// addToPlaylist appends the current track to a local playlist and shows a status message.
-func (m *Model) addToPlaylist(name string) {
-	track, idx := m.currentPlaybackTrack()
-	if idx < 0 {
-		m.status.Warning("No track to add", statusTTLShort)
-		return
-	}
-	if bw, ok := m.localProvider.(provider.PlaylistBatchWriter); ok {
-		added, skipped, err := bw.AddTracksToPlaylist(context.Background(), name, []playlist.Track{track})
-		if err != nil {
-			m.status.Errorf(statusTTLDefault, "Failed: %s", err)
-			return
-		}
-		switch {
-		case added > 0:
-			m.status.Showf(statusTTLDefault, "Added to %q", name)
-		case skipped > 0:
-			m.status.Warningf(statusTTLDefault, "Already in %q", name)
-		default:
-			m.status.Warningf(statusTTLDefault, "Nothing added to %q", name)
-		}
-		return
-	}
-	if w, ok := m.localProvider.(provider.PlaylistWriter); ok {
-		if err := w.AddTrackToPlaylist(context.Background(), name, track); err != nil {
-			m.status.Errorf(statusTTLDefault, "Failed: %s", err)
-		} else {
-			m.status.Showf(statusTTLDefault, "Added to %q", name)
-		}
-	}
-}
-
 func (m *Model) createPlaylistFromManager(name string) bool {
 	c, ok := m.localProvider.(provider.PlaylistCreator)
 	if !ok {
 		m.plManager.inputErr = "Playlist creation is not supported."
 		return false
 	}
-	id, err := c.CreatePlaylist(context.Background(), name)
-	if err != nil {
+	if _, err := c.CreatePlaylist(context.Background(), name); err != nil {
 		m.plManager.inputErr = "Create failed: " + err.Error()
 		return false
-	}
-	track, idx := m.currentPlaybackTrack()
-	if idx < 0 {
-		m.status.Showf(statusTTLDefault, "Created %q", name)
-		return true
-	}
-	if bw, ok := m.localProvider.(provider.PlaylistBatchWriter); ok {
-		added, skipped, err := bw.AddTracksToPlaylist(context.Background(), id, []playlist.Track{track})
-		if err != nil {
-			m.status.Errorf(statusTTLDefault, "Created %q, add failed: %s", name, err)
-			return true
-		}
-		if added > 0 {
-			m.status.Showf(statusTTLDefault, "Created %q & added track", name)
-		} else if skipped > 0 {
-			m.status.Warningf(statusTTLDefault, "Created %q; track was duplicate", name)
-		}
-		return true
-	}
-	if w, ok := m.localProvider.(provider.PlaylistWriter); ok {
-		if err := w.AddTrackToPlaylist(context.Background(), id, track); err != nil {
-			m.status.Errorf(statusTTLDefault, "Created %q, add failed: %s", name, err)
-			return true
-		}
-		m.status.Showf(statusTTLDefault, "Created %q & added track", name)
 	}
 	return true
 }

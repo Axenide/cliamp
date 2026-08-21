@@ -114,13 +114,13 @@ active when the picker opened. While typing a filter, `Enter` finishes it and
 | `/` | Filter (incremental); `Esc` clears |
 | `Enter` / `→` | List screen: open the highlighted playlist · Tracks screen: play the **highlighted** track |
 | `p` | Tracks screen: play all from the top |
-| `a` | List: add the now-playing track to the highlighted playlist. Tracks: mark/unmark all visible tracks. |
 | `w` | List: save the current queue through the playlist picker. Tracks: copy marked/highlighted tracks to another playlist. |
 | `Space` | Tracks: mark/unmark highlighted track and advance |
 | `[` `]` | Tracks: move highlighted track and save the playlist |
 | `s` | Tracks: sort and save, cycling `track`, `title`, `artist`, `album`, `artist+album`, `path` |
 | `o` | Tracks: open file browser to add files to this playlist |
-| `D` | Tracks: open the directory-sources screen for this playlist |
+| `D` | List: open the file browser to add `[[dir]]` sources to the highlighted playlist. Tracks: open the directory-sources screen |
+| `a` | List: new playlist — after naming, the file browser opens so you can add folders as sources. Tracks: mark/unmark all visible tracks. |
 | `r` | List: rename the playlist |
 | `d` | List: delete playlist (confirms). Tracks: remove marked tracks, or highlighted track when none are marked |
 | `u` | Undo the last manager edit |
@@ -150,9 +150,18 @@ Shift-letter keys are reserved for provider switching, so playlist-manager track
 | `a` | Select/unselect all visible audio files |
 | `R` | Replace the current queue with selected files (confirm when it is non-empty) |
 | `w` | Write selected files to a local playlist |
-| `D` | Add the selected directory (or the current directory when none is selected) as a live `[[dir]]` source to the target playlist |
+| `D` | Add the highlighted or selected folder(s) — or the directory being browsed when nothing is highlighted — as a live `[[dir]]` source to the target playlist; the browser stays open so you can add more |
 | `~` `.` | Jump to home / current working directory |
 | `Esc` `o` | Close file browser |
+
+When the browser is adding to a playlist (opened with `D` from the manager's
+list screen, `o` from its tracks screen, or automatically after creating a
+playlist from the provider pane or the manager), selected folders become
+`[[dir]]` sources and selected audio files are written as explicit tracks.
+In this mode `Esc` acts as "done": any pending selection is committed before
+the browser closes.
+Confirming a selection with `Enter` adds selected folders as sources and
+writes selected audio files as explicit tracks.
 
 ## Provider browser (`N` key)
 
@@ -185,6 +194,7 @@ The playlists pane (visible when focus is on a provider — Spotify, Navidrome, 
 | `/` | Filter the playlist list |
 | `Ctrl+F` | Online/server search (Spotify/Navidrome/NetEase/etc.'s own search) |
 | `Ctrl+R` | Refresh — re-pull the playlist list from the provider |
+| `p` | Open the playlist manager (create, rename, delete, add dirs/tracks) |
 | `S` `N` `P` `J` `E` `Y` `C` `M` `Q` `L` `R` | Switch to that provider |
 | `Tab` | Switch focus to EQ |
 | `Esc` `b` | Back to the playlist pane |

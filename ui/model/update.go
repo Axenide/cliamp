@@ -614,7 +614,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.status.Warningf(statusTTLDefault, "Nothing added to %q", msg.targetPlaylist)
 			}
 			m.refreshPlaylistManagerAfterWrite(msg.targetPlaylist)
-			return m, nil
+			// Track/dir counts in the provider pane come from Playlists();
+			// re-pull now that the file write has landed.
+			return m, m.fetchProviderPlaylists()
 		}
 		if msg.toPlaylist {
 			m.openPlaylistPicker(msg.tracks, fmt.Sprintf("%d tracks selected", len(msg.tracks)))

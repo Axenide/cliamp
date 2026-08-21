@@ -1,12 +1,15 @@
 package model
 
 import (
+	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/bjarneo/cliamp/history"
 	"github.com/bjarneo/cliamp/playlist"
 	"github.com/bjarneo/cliamp/ui"
 )
@@ -67,7 +70,7 @@ func (p *dirSourceTestProvider) SetDirRecursive(_, dir string, recursive bool) e
 	return nil
 }
 
-func newDirsScreenTestModel(prov *dirSourceTestProvider) Model {
+func newDirsScreenTestModel(prov playlist.Provider) Model {
 	m := Model{
 		playlist:      playlist.New(),
 		localProvider: prov,
@@ -81,6 +84,18 @@ func newDirsScreenTestModel(prov *dirSourceTestProvider) Model {
 		},
 	}
 	return m
+}
+
+// creatingDirSourceProvider adds PlaylistCreator to the dir-source fake so the
+// manager's new-playlist flow can be exercised without touching the filesystem.
+type creatingDirSourceProvider struct {
+	dirSourceTestProvider
+	created bool
+}
+
+func (p *creatingDirSourceProvider) CreatePlaylist(_ context.Context, name string) (string, error) {
+	p.created = true
+	return name, nil
 }
 
 func TestPlMgrDKeyOpensDirsScreen(t *testing.T) {
@@ -132,6 +147,49 @@ func TestPlMgrDKeyNoticeWhenUnsupported(t *testing.T) {
 	}
 	if m.status.text == "" {
 		t.Fatal("expected a status notice when the provider lacks dir sources")
+	}
+}
+
+// paneManageProvider records playlist deletions for guard tests.
+type paneManageProvider struct {
+	commandsTestProvider
+	deleted []string
+}
+
+func (p *paneManageProvider) CreatePlaylist(_ context.Context, _ string) (string, error) {
+	return "", nil
+}
+
+func (p *paneManageProvider) RemoveTrack(_ string, _ int) error { return nil }
+
+func (p *paneManageProvider) DeletePlaylist(name string) error {
+	p.deleted = append(p.deleted, name)
+	return nil
+}
+
+func TestPlMgrDeleteGuardsRecentlyPlayed(t *testing.T) {
+	prov := &paneManageProvider{commandsTestProvider: commandsTestProvider{name: "Local"}}
+	m := newDirsScreenTestModel(prov)
+	m.plManager.screen = plMgrScreenList
+	m.plManager.playlists = []playlist.PlaylistInfo{
+		{ID: "music", Name: "music"},
+		{ID: history.PlaylistName, Name: history.PlaylistName},
+	}
+	m.plManager.cursor = 1
+
+	m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "d"})
+	if m.plManager.confirmDel {
+		t.Fatal("d on Recently Played must not ask for confirmation")
+	}
+	if !strings.Contains(m.status.text, "cannot be deleted") {
+		t.Fatalf("status = %q, want a protection notice", m.status.text)
+	}
+
+	// Even if the confirm flag is somehow set, y must not delete it.
+	m.plManager.confirmDel = true
+	m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "y"})
+	if len(prov.deleted) != 0 {
+		t.Fatalf("deleted = %v, want Recently Played untouched", prov.deleted)
 	}
 }
 
@@ -190,7 +248,7 @@ func TestFileBrowserDAddsDirSource(t *testing.T) {
 	}
 	m := newDirsScreenTestModel(prov)
 	// Reproduce the file-browser state set up by openFileBrowserForPlaylist:
-	// the current browsing dir becomes the added source when nothing is selected.
+	// with nothing selected or highlighted, the browsing dir becomes the source.
 	m.plManager.screen = plMgrScreenDirs
 	m.fileBrowser.visible = true
 	m.fileBrowser.targetPlaylist = "music"
@@ -198,14 +256,40 @@ func TestFileBrowserDAddsDirSource(t *testing.T) {
 
 	m.handleFileBrowserKey(tea.KeyPressMsg{Text: "D"})
 
-	if m.fileBrowser.visible {
-		t.Fatal("file browser should close after adding a dir source")
+	if !m.fileBrowser.visible {
+		t.Fatal("file browser should stay open for adding more folders")
 	}
 	if len(prov.added) != 1 || prov.added[0] != "/home/me/Music" {
 		t.Fatalf("added = %v, want [/home/me/Music]", prov.added)
 	}
 	if len(m.plManager.dirs) != 1 {
 		t.Fatalf("manager dirs after add = %+v, want refreshed to 1", m.plManager.dirs)
+	}
+}
+
+func TestFileBrowserDGrabsHighlightedFolder(t *testing.T) {
+	prov := &dirSourceTestProvider{
+		commandsTestProvider: commandsTestProvider{name: "Local"},
+	}
+	m := newDirsScreenTestModel(prov)
+	m.plManager.screen = plMgrScreenDirs
+	m.fileBrowser.visible = true
+	m.fileBrowser.targetPlaylist = "music"
+	m.fileBrowser.dir = "/home/me/Music"
+	m.fileBrowser.entries = []fbEntry{
+		{name: "..", path: "/home/me", isDir: true, isParent: true},
+		{name: "Metal", path: "/home/me/Music/Metal", isDir: true},
+		{name: "song.mp3", path: "/home/me/Music/song.mp3", isAudio: true},
+	}
+	m.fileBrowser.cursor = 1 // highlight Metal, nothing selected
+
+	m.handleFileBrowserKey(tea.KeyPressMsg{Text: "D"})
+
+	if len(prov.added) != 1 || prov.added[0] != "/home/me/Music/Metal" {
+		t.Fatalf("added = %v, want the highlighted folder", prov.added)
+	}
+	if m.fileBrowser.dir != "/home/me/Music" {
+		t.Fatalf("browser navigated to %q, want it to stay put", m.fileBrowser.dir)
 	}
 }
 
@@ -238,5 +322,170 @@ func TestFileBrowserDPartialFailureStillRefreshes(t *testing.T) {
 	}
 	if !strings.Contains(m.status.text, "then failed") {
 		t.Fatalf("status = %q, want a partial-failure message", m.status.text)
+	}
+}
+
+func TestFbConfirmSelectedDirBecomesSource(t *testing.T) {
+	prov := &dirSourceTestProvider{
+		commandsTestProvider: commandsTestProvider{name: "Local"},
+	}
+	m := newDirsScreenTestModel(prov)
+	m.fileBrowser.visible = true
+	m.fileBrowser.targetPlaylist = "music"
+	m.fileBrowser.entries = []fbEntry{
+		{name: "Album", path: "/music/Album", isDir: true},
+	}
+	m.fileBrowser.selected = map[string]bool{"/music/Album": true}
+
+	cmd := m.fbConfirm(false)
+
+	if cmd != nil {
+		t.Fatal("confirm with only directories selected must not resolve tracks")
+	}
+	if m.fileBrowser.visible {
+		t.Fatal("file browser should close after confirm")
+	}
+	if len(prov.added) != 1 || prov.added[0] != "/music/Album" {
+		t.Fatalf("added = %v, want [/music/Album]", prov.added)
+	}
+}
+
+func TestFbConfirmMixedSelectionSplitsDirsAndFiles(t *testing.T) {
+	prov := &dirSourceTestProvider{
+		commandsTestProvider: commandsTestProvider{name: "Local"},
+	}
+	m := newDirsScreenTestModel(prov)
+	m.fileBrowser.visible = true
+	m.fileBrowser.targetPlaylist = "music"
+	m.fileBrowser.entries = []fbEntry{
+		{name: "Album", path: "/music/Album", isDir: true},
+		{name: "song.mp3", path: "/music/song.mp3", isAudio: true},
+	}
+	m.fileBrowser.selected = map[string]bool{"/music/Album": true, "/music/song.mp3": true}
+
+	cmd := m.fbConfirm(false)
+
+	if cmd == nil {
+		t.Fatal("confirm with audio files selected should return a track-resolution command")
+	}
+	if len(prov.added) != 1 || prov.added[0] != "/music/Album" {
+		t.Fatalf("added = %v, want the directory as a source", prov.added)
+	}
+}
+
+func TestProviderPanePOpensPlaylistManager(t *testing.T) {
+	prov := &dirSourceTestProvider{commandsTestProvider: commandsTestProvider{name: "Local"}}
+	m := newDirsScreenTestModel(prov)
+	m.focus = focusProvider
+	m.plManager.visible = false
+
+	m.handleKey(tea.KeyPressMsg{Text: "p"})
+
+	if !m.plManager.visible {
+		t.Fatal("p should open the playlist manager from the provider pane")
+	}
+	if m.plManager.screen != plMgrScreenList {
+		t.Fatalf("screen = %v, want plMgrScreenList", m.plManager.screen)
+	}
+}
+
+func TestPlMgrAKeyOpensNewPlaylistInput(t *testing.T) {
+	prov := &dirSourceTestProvider{commandsTestProvider: commandsTestProvider{name: "Local"}}
+	m := newDirsScreenTestModel(prov)
+	m.plManager.screen = plMgrScreenList
+
+	m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "a"})
+
+	if m.plManager.screen != plMgrScreenNewName {
+		t.Fatalf("screen = %v, want plMgrScreenNewName", m.plManager.screen)
+	}
+	if m.plManager.newName != "" {
+		t.Fatalf("newName = %q, want empty", m.plManager.newName)
+	}
+}
+
+func TestPlMgrDKeyOnListOpensBrowserForPlaylist(t *testing.T) {
+	prov := &dirSourceTestProvider{commandsTestProvider: commandsTestProvider{name: "Local"}}
+	m := newDirsScreenTestModel(prov)
+	m.plManager.screen = plMgrScreenList
+	m.plManager.playlists = []playlist.PlaylistInfo{{ID: "music", Name: "music"}}
+	m.plManager.cursor = 0
+
+	m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "D"})
+
+	if !m.fileBrowser.visible {
+		t.Fatal("file browser should open for the highlighted playlist")
+	}
+	if m.fileBrowser.targetPlaylist != "music" {
+		t.Fatalf("targetPlaylist = %q, want music", m.fileBrowser.targetPlaylist)
+	}
+}
+
+func TestPlMgrNewNameEnterCreatesAndOpensBrowser(t *testing.T) {
+	prov := &creatingDirSourceProvider{dirSourceTestProvider: dirSourceTestProvider{
+		commandsTestProvider: commandsTestProvider{name: "Local"},
+	}}
+	m := newDirsScreenTestModel(prov)
+	m.plManager.screen = plMgrScreenNewName
+	m.plManager.newName = "fresh"
+
+	m.handlePlMgrNewNameKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	if !prov.created {
+		t.Fatal("provider CreatePlaylist was not called")
+	}
+	if m.plManager.screen != plMgrScreenList {
+		t.Fatalf("screen = %v, want back on plMgrScreenList", m.plManager.screen)
+	}
+	if !m.fileBrowser.visible || m.fileBrowser.targetPlaylist != "fresh" {
+		t.Fatalf("browser visible=%v target=%q, want it open targeted at fresh", m.fileBrowser.visible, m.fileBrowser.targetPlaylist)
+	}
+	if !strings.Contains(m.status.text, "Created") {
+		t.Fatalf("status = %q, want a created hint", m.status.text)
+	}
+}
+
+func TestPlMgrNewNameBrowserStartsAtHome(t *testing.T) {
+	prov := &creatingDirSourceProvider{dirSourceTestProvider: dirSourceTestProvider{
+		commandsTestProvider: commandsTestProvider{name: "Local"},
+	}}
+	m := newDirsScreenTestModel(prov)
+	m.plManager.screen = plMgrScreenNewName
+	m.plManager.newName = "fresh"
+	m.fileBrowser.dir = "/var/log"
+
+	m.handlePlMgrNewNameKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		t.Skip("no home directory")
+	}
+	if m.fileBrowser.dir != home {
+		t.Fatalf("browser dir = %q, want %q", m.fileBrowser.dir, home)
+	}
+}
+
+func TestFileBrowserEscDoneCommitsSelection(t *testing.T) {
+	prov := &dirSourceTestProvider{
+		commandsTestProvider: commandsTestProvider{name: "Local"},
+	}
+	m := newDirsScreenTestModel(prov)
+	m.focus = focusPlaylist
+	m.fileBrowser.visible = true
+	m.fileBrowser.targetPlaylist = "music"
+	m.fileBrowser.selected = make(map[string]bool)
+	m.fileBrowser.entries = []fbEntry{
+		{name: "..", path: "/home/me", isDir: true, isParent: true},
+		{name: "Metal/", path: "/home/me/Music/Metal", isDir: true},
+	}
+	m.fileBrowser.selected["/home/me/Music/Metal"] = true
+
+	m.handleFileBrowserKey(tea.KeyPressMsg{Text: "esc"})
+
+	if m.fileBrowser.visible {
+		t.Fatal("Esc should close the browser")
+	}
+	if len(prov.added) != 1 || prov.added[0] != "/home/me/Music/Metal" {
+		t.Fatalf("added = %v, want the pending selection committed on Esc", prov.added)
 	}
 }

@@ -115,6 +115,7 @@ var commandRegistry = []commandSpec{
 	{Mode: commandModeMain, Keys: []string{"Q"}, KeyLabel: "Q", Label: "Open Qobuz provider", Keymap: true},
 	{Mode: commandModeMain, Keys: []string{"ctrl+j"}, KeyLabel: "Ctrl+J", Label: "Jump to time", Keymap: true},
 	{Mode: commandModeMain, Keys: []string{"p"}, KeyLabel: "p", Label: "Playlist manager", Keymap: true},
+	{Mode: commandModeProvider, Keys: []string{"p"}, KeyLabel: "p", Label: "Playlist manager", Keymap: true, ContextHelp: true},
 	{Mode: commandModeMain, Keys: []string{"ctrl+h"}, KeyLabel: "Ctrl+H", Label: "Toggle album headers", Keymap: true},
 	{Mode: commandModeMain, Keys: []string{"i"}, KeyLabel: "i", Label: "Track info / metadata", Keymap: true, ContextHelp: true},
 	{Mode: commandModeMain, Keys: []string{"ctrl+s"}, KeyLabel: "Ctrl+S", Label: "Save/download track to ~/Music/cliamp", Keymap: true},
@@ -170,8 +171,22 @@ var commandRegistry = []commandSpec{
 	{Mode: commandModeLyrics, Keys: []string{"esc"}, KeyLabel: "Esc", Label: "Close", ContextHelp: true, Cancel: true},
 	{Mode: commandModeInfo, Keys: []string{"esc"}, KeyLabel: "Esc", Label: "Close", ContextHelp: true, Cancel: true},
 
-	{Mode: commandModePlaylistManager, Keys: []string{"D"}, KeyLabel: "D", Label: "Dir sources", ContextHelp: true, Enabled: func(m Model) bool {
-		return m.plManager.visible && m.plManager.screen == plMgrScreenTracks && m.plManager.selPlaylist != history.PlaylistName
+	{Mode: commandModePlaylistManager, Keys: []string{"a"}, KeyLabel: "a", Label: "New playlist", ContextHelp: true, Primary: true, Enabled: func(m Model) bool {
+		return m.plManager.visible && m.plManager.screen == plMgrScreenList
+	}},
+	{Mode: commandModePlaylistManager, Keys: []string{"D"}, KeyLabel: "D", Label: "Add dir sources", ContextHelp: true, Enabled: func(m Model) bool {
+		if !m.plManager.visible {
+			return false
+		}
+		switch m.plManager.screen {
+		case plMgrScreenTracks:
+			return m.plManager.selPlaylist != history.PlaylistName
+		case plMgrScreenList:
+			idx := m.plMgrPlaylistRealIndex(m.plManager.cursor)
+			return idx >= 0 && m.plManager.playlists[idx].Name != history.PlaylistName
+		default:
+			return false
+		}
 	}},
 	{Mode: commandModePlaylistManagerDirs, Keys: []string{"esc", "backspace", "h", "left"}, KeyLabel: "Esc", Label: "Back to tracks", ContextHelp: true, Cancel: true},
 	{Mode: commandModePlaylistManagerDirs, Keys: []string{"a"}, KeyLabel: "a", Label: "Add dir", ContextHelp: true, Primary: true},

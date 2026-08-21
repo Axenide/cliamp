@@ -503,10 +503,11 @@ func (m *Model) plMgrRefreshTracksForSel() {
 	m.setHeaderStateFromTracks(tracks)
 }
 
-// fbAddDirSource adds the file browser's selected directories (or the current
-// browsing directory when none are selected) as [[dir]] sources on the target
-// playlist, then closes the browser. Invoked by the file browser's D key when
-// a target playlist is set.
+// fbAddDirSource adds directories as [[dir]] sources on the target playlist:
+// the selected folders when any are selected, otherwise the folder under the
+// cursor, otherwise the directory being browsed. The browser stays open so
+// several folders can be added in a row (Esc leaves). Invoked by the file
+// browser's D key and Enter-on-folder when a target playlist is set.
 func (m *Model) fbAddDirSource() {
 	target := m.fileBrowser.targetPlaylist
 	if target == "" || target == history.PlaylistName {
@@ -515,21 +516,34 @@ func (m *Model) fbAddDirSource() {
 		}
 		return
 	}
-	dm, ok := m.localProvider.(provider.PlaylistDirSourceManager)
-	if !ok {
-		m.status.Showf(statusTTLDefault, "This provider does not support directory sources")
-		return
-	}
 	var dirs []string
 	for _, e := range m.fileBrowser.entries {
 		if m.fileBrowser.selected[e.path] && e.isDir && !e.isParent {
 			dirs = append(dirs, e.path)
 		}
 	}
+	if len(dirs) == 0 && m.fileBrowser.cursor < m.fbCount() {
+		if e := m.fbEntry(m.fileBrowser.cursor); e.isDir && !e.isParent {
+			dirs = []string{e.path}
+		}
+	}
 	if len(dirs) == 0 {
 		dirs = []string{m.fileBrowser.dir}
 	}
-	added, skipped := 0, 0
+	m.plMgrAddDirSources(target, dirs)
+}
+
+// plMgrAddDirSources adds dirs to the target playlist via the local provider,
+// refreshes an open manager screen for it, and reports the outcome in the
+// status bar. It returns how many sources were added and skipped as already
+// referenced.
+func (m *Model) plMgrAddDirSources(target string, dirs []string) (added, skipped int) {
+	dm, ok := m.localProvider.(provider.PlaylistDirSourceManager)
+	if !ok {
+		m.status.Showf(statusTTLDefault, "This provider does not support directory sources")
+		return 0, 0
+	}
+	added, skipped = 0, 0
 	var firstErr error
 	for _, d := range dirs {
 		a, err := dm.AddDirSource(target, d)
@@ -543,7 +557,6 @@ func (m *Model) fbAddDirSource() {
 			skipped++
 		}
 	}
-	m.fileBrowser.visible = false
 	// Reflect any successful additions in an open manager screen for this
 	// playlist before reporting a partial failure, so the open screen never
 	// shows stale sources or counts after an AddDirSource error mid-loop.
@@ -557,15 +570,11 @@ func (m *Model) fbAddDirSource() {
 		}
 		m.plMgrRefreshList()
 	}
-	if firstErr != nil {
-		if added > 0 {
-			m.status.Showf(statusTTLDefault, "Added %d dir source(s) to %q; then failed: %s", added, target, firstErr)
-		} else {
-			m.status.Showf(statusTTLDefault, "Add dir source failed: %s", firstErr)
-		}
-		return
-	}
 	switch {
+	case firstErr != nil && added > 0:
+		m.status.Showf(statusTTLDefault, "Added %d dir source(s) to %q; then failed: %s", added, target, firstErr)
+	case firstErr != nil:
+		m.status.Showf(statusTTLDefault, "Add dir source failed: %s", firstErr)
 	case added > 0 && skipped > 0:
 		m.status.Showf(statusTTLDefault, "Added %d dir source(s) to %q (%d already referenced)", added, target, skipped)
 	case added > 0:
@@ -573,6 +582,7 @@ func (m *Model) fbAddDirSource() {
 	default:
 		m.status.Showf(statusTTLDefault, "%q already references that directory", target)
 	}
+	return added, skipped
 }
 
 // plMgrResetFilter clears any active `/` filter on the playlist manager.
