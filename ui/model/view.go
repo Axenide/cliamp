@@ -97,12 +97,19 @@ func (m Model) isProviderRowActive(p playlist.PlaylistInfo) bool {
 // playlistLabel formats a playlist entry, omitting fields the provider didn't
 // supply. Track count and total duration are appended when available. The
 // Favorites virtual playlist always shows its count — it stays listed even
-// when empty, and a bare name would look broken.
+// when empty, and a bare name would look broken. Directory-backed playlists
+// hide the duration: their track counts are cheap estimates, so a runtime
+// total would be misleading.
 func playlistLabel(prefix string, p playlist.PlaylistInfo) string {
 	out := prefix + p.Name
 	var parts []string
 	if p.TrackCount > 0 || p.Name == favorites.PlaylistName {
 		parts = append(parts, fmt.Sprintf("%d tracks", p.TrackCount))
+	}
+	if p.DirSourceCount == 0 {
+		if d := formatPlaylistDuration(p.DurationSecs); d != "" {
+			parts = append(parts, d)
+		}
 	}
 	if len(parts) > 0 {
 		out += " · " + strings.Join(parts, " · ")

@@ -1975,6 +1975,10 @@ func (m *Model) handlePlMgrTracksKey(msg tea.KeyPressMsg) tea.Cmd {
 	case "D":
 		m.plMgrOpenDirs()
 	case "f":
+		if name := plMgrVirtualPlaylistName(m.plManager.selPlaylist); name != "" {
+			m.status.Warningf(statusTTLDefault, "%s does not support bookmarks", name)
+			return nil
+		}
 		if bs, ok := m.localProvider.(provider.BookmarkSetter); ok {
 			realIdx := m.plMgrTrackRealIndex(m.plManager.cursor)
 			if realIdx >= 0 && realIdx < len(m.plManager.tracks) {

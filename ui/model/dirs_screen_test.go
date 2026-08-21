@@ -116,7 +116,7 @@ func (p *dirSourceTestProvider) FavoritesCount() int {
 }
 
 func (p *dirSourceTestProvider) Playlists() ([]playlist.PlaylistInfo, error) {
-	favs := playlist.PlaylistInfo{ID: favorites.PlaylistName, Name: favorites.PlaylistName, Section: "Favorites"}
+	favs := playlist.PlaylistInfo{ID: favorites.PlaylistName, Name: favorites.PlaylistName, Section: favorites.PlaylistName}
 	if p.favPaths != nil {
 		favs.TrackCount = len(p.favPaths)
 	}
@@ -175,7 +175,7 @@ func TestPlMgrDKeyOpensDirsScreen(t *testing.T) {
 func TestPlMgrDKeyHistoryShowsNotice(t *testing.T) {
 	prov := &dirSourceTestProvider{}
 	m := newDirsScreenTestModel(prov)
-	m.plManager.selPlaylist = "Recently Played"
+	m.plManager.selPlaylist = history.PlaylistName
 
 	m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "D"})
 
@@ -820,6 +820,27 @@ func TestMaybeScrobbleReloadsOpenHistoryTracks(t *testing.T) {
 	}
 	if m.plManager.cursor != 1 {
 		t.Fatalf("cursor = %d, want clamped to 1", m.plManager.cursor)
+	}
+}
+
+// Removing the last favorite empties the screen; a stale scroll offset must
+// not survive (the scroll adjuster returns early on an empty list).
+func TestPlMgrReloadTracksResetsScrollWhenEmpty(t *testing.T) {
+	prov := &dirSourceTestProvider{}
+	m := newDirsScreenTestModel(prov)
+	m.plManager.screen = plMgrScreenTracks
+	m.plManager.selPlaylist = favorites.PlaylistName
+	m.plManager.tracks = []playlist.Track{{Path: "/a.mp3", Title: "A"}}
+	m.plManager.cursor = 0
+	m.plManager.scroll = 5
+
+	m.plMgrReloadTracks(favorites.PlaylistName)
+
+	if len(m.plManager.tracks) != 0 {
+		t.Fatalf("tracks = %d, want 0 after reload with no favorites", len(m.plManager.tracks))
+	}
+	if m.plManager.cursor != 0 || m.plManager.scroll != 0 {
+		t.Fatalf("cursor=%d scroll=%d, want both reset to 0", m.plManager.cursor, m.plManager.scroll)
 	}
 }
 

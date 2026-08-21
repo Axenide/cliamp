@@ -417,6 +417,13 @@ func (m *Model) plMgrReloadTracks(name string) {
 		m.plMgrRecomputeFilter()
 	}
 	newCount := m.plMgrTracksViewCount()
+	if newCount == 0 {
+		// An emptied list (e.g. the last favorite removed) can leave a
+		// stale scroll offset: the adjust helper returns early at zero.
+		m.plManager.cursor = 0
+		m.plManager.scroll = 0
+		return
+	}
 	if m.plManager.cursor >= newCount {
 		m.plManager.cursor = newCount - 1
 	}

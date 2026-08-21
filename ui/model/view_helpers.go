@@ -40,6 +40,26 @@ func formatTrackTime(secs int) string {
 	return fmt.Sprintf("%d:%02d", m, s)
 }
 
+// formatPlaylistDuration formats a total runtime for a playlist as "1h 23m"
+// or "12m" or "45s". Returns "" when secs is non-positive.
+func formatPlaylistDuration(secs int) string {
+	if secs <= 0 {
+		return ""
+	}
+	h := secs / 3600
+	m := (secs % 3600) / 60
+	if h > 0 {
+		if m == 0 {
+			return fmt.Sprintf("%dh", h)
+		}
+		return fmt.Sprintf("%dh %dm", h, m)
+	}
+	if m > 0 {
+		return fmt.Sprintf("%dm", m)
+	}
+	return fmt.Sprintf("%ds", secs)
+}
+
 // formatTrackRow renders a track list row of the form
 //
 //	"01. Title · Album         3:42"

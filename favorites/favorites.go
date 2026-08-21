@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/bjarneo/cliamp/internal/appdir"
+	"github.com/bjarneo/cliamp/internal/fileutil"
 	"github.com/bjarneo/cliamp/internal/tomlutil"
 	"github.com/bjarneo/cliamp/playlist"
 )
@@ -69,6 +70,11 @@ func (s *Store) Toggle(track playlist.Track) (bool, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	unlock, err := s.lockFile()
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = unlock() }()
 
 	entries, err := s.loadLocked()
 	if err != nil {
@@ -99,6 +105,11 @@ func (s *Store) Favorite(track playlist.Track) (bool, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	unlock, err := s.lockFile()
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = unlock() }()
 
 	entries, err := s.loadLocked()
 	if err != nil {
@@ -124,6 +135,11 @@ func (s *Store) Remove(path string) (bool, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	unlock, err := s.lockFile()
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = unlock() }()
 
 	entries, err := s.loadLocked()
 	if err != nil {
@@ -202,11 +218,25 @@ func (s *Store) Clear() error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	err := os.Remove(s.path)
+	unlock, err := s.lockFile()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = unlock() }()
+	err = os.Remove(s.path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
-	return err
+	if err != nil {
+		return fmt.Errorf("remove favorites: %w", err)
+	}
+	return nil
+}
+
+// lockFile serializes writers across cliamp processes: the per-instance
+// mutex alone cannot stop two processes from rewriting the same file.
+func (s *Store) lockFile() (func() error, error) {
+	return fileutil.LockFile(s.path + ".lock")
 }
 
 func (s *Store) loadLocked() ([]Entry, error) {
@@ -215,15 +245,12 @@ func (s *Store) loadLocked() ([]Entry, error) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read favorites: %w", err)
 	}
 	return parse(data), nil
 }
 
 func (s *Store) saveLocked(entries []Entry) error {
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
-		return err
-	}
 	var b strings.Builder
 	for i, e := range entries {
 		if i > 0 {
@@ -231,16 +258,10 @@ func (s *Store) saveLocked(entries []Entry) error {
 		}
 		writeEntry(&b, e)
 	}
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(b.String()), 0o644); err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	if err := os.Rename(tmp, s.path); err != nil {
-		_ = os.Remove(tmp)
-		return fmt.Errorf("rename favorites: %w", err)
-	}
-	return nil
+	// WriteFileAtomic uses a unique temp file per write and fsyncs before
+	// renaming, so a crash or a second process can never leave a torn or
+	// half-clobbered favorites.toml behind.
+	return fileutil.WriteFileAtomic(s.path, []byte(b.String()), 0o644)
 }
 
 func writeEntry(w io.Writer, e Entry) {
@@ -265,6 +286,9 @@ func writeEntry(w io.Writer, e Entry) {
 	}
 	if e.Track.DurationSecs != 0 {
 		fmt.Fprintf(w, "duration_secs = %d\n", e.Track.DurationSecs)
+	}
+	if e.Track.Feed {
+		fmt.Fprintln(w, "feed = true")
 	}
 }
 
@@ -326,6 +350,8 @@ func parse(data []byte) []Entry {
 			if n, err := strconv.Atoi(val); err == nil {
 				cur.Track.DurationSecs = n
 			}
+		case "feed":
+			cur.Track.Feed = val == "true"
 		}
 	}
 	flush()

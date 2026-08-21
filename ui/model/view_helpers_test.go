@@ -51,15 +51,21 @@ func TestPlaylistLabel(t *testing.T) {
 			"> Mix · 12 tracks",
 		},
 		{
-			"duration ignored",
+			"duration shown for static playlists",
 			"  ",
 			playlist.PlaylistInfo{Name: "Mix", DurationSecs: 3660},
-			"  Mix",
+			"  Mix · 1h 1m",
 		},
 		{
-			"tracks and duration shows only tracks",
+			"tracks and duration both shown",
 			"  ",
 			playlist.PlaylistInfo{Name: "Mix", TrackCount: 12, DurationSecs: 2700},
+			"  Mix · 12 tracks · 45m",
+		},
+		{
+			"duration hidden for dir-backed playlists",
+			"  ",
+			playlist.PlaylistInfo{Name: "Mix", TrackCount: 12, DurationSecs: 2700, DirSourceCount: 2},
 			"  Mix · 12 tracks",
 		},
 		{

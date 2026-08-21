@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/bjarneo/cliamp/internal/fileutil"
 	"github.com/bjarneo/cliamp/playlist"
 )
 
@@ -154,6 +155,46 @@ func TestStreamFlagInferredOnReload(t *testing.T) {
 	tracks, _ := s2.Tracks()
 	if len(tracks) != 1 || !tracks[0].Stream {
 		t.Fatalf("Stream flag not inferred: %+v", tracks)
+	}
+}
+
+// A favorited feed URL without a feed-like extension must survive a restart
+// as a feed, or it would reload as an ordinary stream.
+func TestFeedFlagPersistsAcrossReload(t *testing.T) {
+	s := newTestStore(t)
+	added, err := s.Toggle(playlist.Track{
+		Path:  "https://example.com/podcast?feed_id=7",
+		Title: "Show",
+		Feed:  true,
+	})
+	if err != nil || !added {
+		t.Fatalf("toggle = %v, %v", added, err)
+	}
+
+	s2 := NewAt(s.Path())
+	tracks, _ := s2.Tracks()
+	if len(tracks) != 1 || !tracks[0].Feed {
+		t.Fatalf("Feed flag lost on reload: %+v", tracks)
+	}
+}
+
+func TestLockFileSerializesAndReleases(t *testing.T) {
+	lockPath := filepath.Join(t.TempDir(), "favorites.toml.lock")
+
+	unlock, err := fileutil.LockFile(lockPath)
+	if err != nil {
+		t.Fatalf("first lock: %v", err)
+	}
+	if err := unlock(); err != nil {
+		t.Fatalf("unlock: %v", err)
+	}
+	// A released lock must be acquirable again.
+	unlock2, err := fileutil.LockFile(lockPath)
+	if err != nil {
+		t.Fatalf("relock after release: %v", err)
+	}
+	if err := unlock2(); err != nil {
+		t.Fatalf("second unlock: %v", err)
 	}
 }
 

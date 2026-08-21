@@ -45,7 +45,7 @@ func New(p player.Engine, pl *playlist.Playlist, providers []ProviderEntry, defa
 		historyStore:     history.New(),
 		showAlbumHeaders: false,
 	}
-	if fm, ok := any(localProv).(provider.FavoritesManager); ok {
+	if fm, ok := localProv.(provider.FavoritesManager); ok {
 		m.favMgr = fm
 		m.refreshFavSet()
 	}

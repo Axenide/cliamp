@@ -365,7 +365,7 @@ title = "My Radio"
 | `s` | Sort tracks, cycling supported sort keys (tracks screen) |
 | `w` | Write marked/highlighted tracks, or the current queue from the list screen, to another playlist |
 | `o` | Add files to the open playlist (tracks screen) |
-| `D` | Open the directory-sources screen for the open playlist (tracks screen) |
+| `D` | List: open the file browser to add `[[dir]]` sources to the highlighted playlist. Tracks: open the directory-sources screen for the open playlist |
 | `[` `]` | Move track up/down and save (tracks screen) |
 | `d` | Delete playlist (confirms; `Recently Played` cannot be deleted) / Remove marked tracks, or highlighted track if none are marked |
 | `u` | Undo the last playlist-manager edit |
@@ -384,11 +384,12 @@ The playlist list flags playlists that reference `[[dir]]` sources with a
 | `r` | Toggle `recursive` on the highlighted source (re-scans immediately) |
 | `←` / `Backspace` / `Esc` | Back to the tracks screen |
 
-From the file browser (opened with `a` above, or with `o` from the tracks
-screen), press `D` to add all selected directories — or the highlighted
-directory, or the directory you are currently browsing when neither applies —
-as live `[[dir]]` sources instead of expanding them into explicit tracks.
-Directories already referenced are skipped and reported.
+From the file browser (opened with `a` above, with `o` from the tracks
+screen, or with `D` from the list screen), press `D` to add all selected
+directories — or the highlighted directory, or the directory you are currently
+browsing when neither applies — as live `[[dir]]` sources instead of expanding
+them into explicit tracks. Directories already referenced are skipped and
+reported.
 
 ## Favorites
 

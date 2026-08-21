@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bjarneo/cliamp/favorites"
+	"github.com/bjarneo/cliamp/history"
 	"github.com/bjarneo/cliamp/playlist"
 )
 
@@ -195,6 +197,14 @@ func TestCreateDirPlaylist(t *testing.T) {
 	}
 	if len(dirs) != 1 || dirs[0].Path != audio || !dirs[0].Recursive {
 		t.Fatalf("dirs = %+v", dirs)
+	}
+
+	// Virtual playlists have no directory sources: both reserved names must
+	// be rejected so the manager never opens the dirs screen for them.
+	for _, name := range []string{history.PlaylistName, favorites.PlaylistName} {
+		if dirs, err := p.DirSources(name); err == nil {
+			t.Fatalf("DirSources(%q) = %+v, want reserved-name error", name, dirs)
+		}
 	}
 	// Reject duplicate create.
 	if err := p.CreateDirPlaylist("music", []string{audio}); err == nil {
