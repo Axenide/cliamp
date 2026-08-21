@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/bjarneo/cliamp/applog"
+	"github.com/bjarneo/cliamp/history"
 	"github.com/bjarneo/cliamp/internal/playback"
 	"github.com/bjarneo/cliamp/luaplugin"
 	"github.com/bjarneo/cliamp/playlist"
@@ -161,9 +162,13 @@ func (m *Model) maybeScrobble(track playlist.Track, elapsed, duration time.Durat
 	if pastThreshold && m.historyStore != nil {
 		if err := m.historyStore.Record(track, time.Now()); err == nil {
 			// Recently Played rows in the manager list and provider pane
-			// render from Playlists(); re-pull so they track listens.
+			// render from Playlists(); re-pull so they track listens. An
+			// open Recently Played tracks screen reloads in place.
 			if m.plManager.visible {
 				m.plMgrRefreshList()
+				if m.plManager.screen == plMgrScreenTracks && m.plManager.selPlaylist == history.PlaylistName {
+					m.plMgrReloadHistoryTracks()
+				}
 			}
 			refresh = m.fetchProviderPlaylists()
 		}

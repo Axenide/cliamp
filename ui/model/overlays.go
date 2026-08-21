@@ -402,6 +402,29 @@ func (m *Model) plMgrEnterTrackList(name string) {
 	m.plMgrTracksMaybeAdjustScroll(m.plMgrTracksVisible())
 }
 
+// plMgrReloadHistoryTracks re-reads the Recently Played track list in place so
+// entries recorded while the screen is open appear without leaving it. The
+// cursor is clamped rather than reset, and any active filter is re-applied.
+func (m *Model) plMgrReloadHistoryTracks() {
+	tracks, err := m.localProvider.Tracks(history.PlaylistName)
+	if err != nil {
+		return
+	}
+	m.plMgrLoadTracks(tracks)
+	m.setHeaderStateFromTracks(tracks)
+	if m.plManager.filter != "" {
+		m.plMgrRecomputeFilter()
+	}
+	newCount := m.plMgrTracksViewCount()
+	if m.plManager.cursor >= newCount {
+		m.plManager.cursor = newCount - 1
+	}
+	if m.plManager.cursor < 0 {
+		m.plManager.cursor = 0
+	}
+	m.plMgrTracksMaybeAdjustScroll(m.plMgrTracksVisible())
+}
+
 // plMgrLoadTracks refreshes missing-file state only at an explicit list load.
 // The synchronous stats stay out of render and in-memory edit paths.
 func (m *Model) plMgrLoadTracks(tracks []playlist.Track) {

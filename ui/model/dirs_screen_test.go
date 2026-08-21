@@ -21,16 +21,24 @@ import (
 // can be exercised without touching the filesystem.
 type dirSourceTestProvider struct {
 	commandsTestProvider
-	dirs    []playlist.DirSource
-	removed []string
-	setRec  []dirSetRecCall
-	added   []string
-	failOn  map[string]error // dirs that AddDirSource should fail on
+	dirs          []playlist.DirSource
+	removed       []string
+	setRec        []dirSetRecCall
+	added         []string
+	failOn        map[string]error // dirs that AddDirSource should fail on
+	historyTracks []playlist.Track // served for the Recently Played playlist
 }
 
 type dirSetRecCall struct {
 	dir       string
 	recursive bool
+}
+
+func (p *dirSourceTestProvider) Tracks(id string) ([]playlist.Track, error) {
+	if id == history.PlaylistName {
+		return append([]playlist.Track(nil), p.historyTracks...), nil
+	}
+	return p.commandsTestProvider.Tracks(id)
 }
 
 func (p *dirSourceTestProvider) DirSources(string) ([]playlist.DirSource, error) {
@@ -519,5 +527,30 @@ func TestMaybeScrobbleRefreshesRecentlyPlayed(t *testing.T) {
 	}
 	if len(m.plManager.playlists) != 0 {
 		t.Fatal("below-threshold scrobble must not re-pull the manager list")
+	}
+}
+
+func TestMaybeScrobbleReloadsOpenHistoryTracks(t *testing.T) {
+	prov := &dirSourceTestProvider{commandsTestProvider: commandsTestProvider{name: "Local"}}
+	m := newDirsScreenTestModel(prov)
+	m.historyStore = history.NewAt(filepath.Join(t.TempDir(), "history.toml"))
+	m.plManager.screen = plMgrScreenTracks
+	m.plManager.selPlaylist = history.PlaylistName
+	m.plMgrLoadTracks([]playlist.Track{{Path: "/old.mp3", Title: "Old"}})
+	m.plManager.cursor = 5 // beyond the new list; must clamp
+
+	prov.historyTracks = []playlist.Track{
+		{Path: "/new1.mp3", Title: "New1"},
+		{Path: "/new2.mp3", Title: "New2"},
+	}
+
+	if cmd := m.maybeScrobble(playlist.Track{Path: "/song.mp3", Title: "Song", DurationSecs: 120}, 120*time.Second, 120*time.Second); cmd == nil {
+		t.Fatal("expected a provider-playlist refresh command after scrobble")
+	}
+	if len(m.plManager.tracks) != 2 || m.plManager.tracks[0].Path != "/new1.mp3" {
+		t.Fatalf("tracks = %+v, want the reloaded history entries", m.plManager.tracks)
+	}
+	if m.plManager.cursor != 1 {
+		t.Fatalf("cursor = %d, want clamped to 1", m.plManager.cursor)
 	}
 }
