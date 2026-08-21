@@ -472,7 +472,7 @@ func TestGaplessAdvanceRefreshesLyricsAndArtwork(t *testing.T) {
 	}
 }
 
-func TestDrainedTrackRecordsHistoryWithoutMetadataDuration(t *testing.T) {
+func TestDrainedTrackDoesNotReRecordHistory(t *testing.T) {
 	player := &playbackFakeEngine{playing: true, drained: true, reportedDuration: 120 * time.Second}
 	p := playlist.New()
 	p.Replace([]playlist.Track{
@@ -489,19 +489,20 @@ func TestDrainedTrackRecordsHistoryWithoutMetadataDuration(t *testing.T) {
 		vis:          ui.NewVisualizer(float64(player.SampleRate())),
 	}
 	m.SetVisualizer("none")
-
 	m.Update(tickMsg(time.Now()))
 
 	entries, err := store.Recent(10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 1 || entries[0].Track.Path != "/tmp/first.mp3" {
-		t.Fatalf("history = %+v, want the drained track recorded", entries)
+	// The finished track is not re-recorded on drain; the next track that
+	// auto-starts is recorded at its start.
+	if len(entries) != 1 || entries[0].Track.Path != "/tmp/second.mp3" {
+		t.Fatalf("history = %+v, want only the auto-started next track", entries)
 	}
 }
 
-func TestGaplessAdvanceRecordsHistoryFromPlayerDuration(t *testing.T) {
+func TestGaplessAdvanceRecordsNewTrackAtStart(t *testing.T) {
 	player := &playbackFakeEngine{
 		playing:            true,
 		gaplessAdvanced:    true,
@@ -529,15 +530,15 @@ func TestGaplessAdvanceRecordsHistoryFromPlayerDuration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 1 || entries[0].Track.Path != "/tmp/old.mp3" {
-		t.Fatalf("history = %+v, want the finished track recorded", entries)
+	if len(entries) != 1 || entries[0].Track.Path != "/tmp/new.mp3" {
+		t.Fatalf("history = %+v, want the starting track recorded on gapless advance", entries)
 	}
 	if m.playlist.Index() != 1 {
 		t.Fatalf("playlist index = %d, want 1 after gapless advance", m.playlist.Index())
 	}
 }
 
-func TestGaplessAdvanceRecordsHistoryEvenWithoutDuration(t *testing.T) {
+func TestGaplessAdvanceRecordsNewTrackEvenWithoutDuration(t *testing.T) {
 	player := &playbackFakeEngine{playing: true, gaplessAdvanced: true}
 	p := playlist.New()
 	p.Replace([]playlist.Track{
@@ -561,8 +562,8 @@ func TestGaplessAdvanceRecordsHistoryEvenWithoutDuration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 1 || entries[0].Track.Path != "/tmp/old.mp3" {
-		t.Fatalf("history = %+v, want the finished track recorded even with unknown duration", entries)
+	if len(entries) != 1 || entries[0].Track.Path != "/tmp/new.mp3" {
+		t.Fatalf("history = %+v, want the starting track recorded even with unknown duration", entries)
 	}
 	if m.playlist.Index() != 1 {
 		t.Fatalf("playlist index = %d, want 1 after gapless advance", m.playlist.Index())

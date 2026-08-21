@@ -402,11 +402,12 @@ func (m *Model) plMgrEnterTrackList(name string) {
 	m.plMgrTracksMaybeAdjustScroll(m.plMgrTracksVisible())
 }
 
-// plMgrReloadHistoryTracks re-reads the Recently Played track list in place so
-// entries recorded while the screen is open appear without leaving it. The
-// cursor is clamped rather than reset, and any active filter is re-applied.
-func (m *Model) plMgrReloadHistoryTracks() {
-	tracks, err := m.localProvider.Tracks(history.PlaylistName)
+// plMgrReloadTracks re-reads the open track list in place so store changes
+// (fresh history entries, favorite toggles) appear without leaving the
+// screen. The cursor is clamped rather than reset, and any active filter is
+// re-applied.
+func (m *Model) plMgrReloadTracks(name string) {
+	tracks, err := m.localProvider.Tracks(name)
 	if err != nil {
 		return
 	}

@@ -500,7 +500,7 @@ func TestFileBrowserEscDoneCommitsSelection(t *testing.T) {
 	}
 }
 
-func TestMaybeScrobbleRefreshesRecentlyPlayed(t *testing.T) {
+func TestBeginPlaybackTrackRecordsHistoryImmediately(t *testing.T) {
 	prov := &dirSourceTestProvider{commandsTestProvider: commandsTestProvider{
 		name:  "Local",
 		lists: []playlist.PlaylistInfo{{ID: "music", Name: "music"}},
@@ -510,31 +510,43 @@ func TestMaybeScrobbleRefreshesRecentlyPlayed(t *testing.T) {
 	m.plManager.screen = plMgrScreenList
 	m.plManager.playlists = nil
 
-	// Fully played 120s track: history records and both surfaces refresh.
-	cmd := m.maybeScrobble(playlist.Track{Path: "/song.mp3", Title: "Song", DurationSecs: 120}, 120*time.Second, 120*time.Second)
+	// Starting a track records it right away: after pressing next, the
+	// current song — not the previous one — tops Recently Played.
+	_, cmd := m.beginPlaybackTrack(playlist.Track{Path: "/now.mp3", Title: "Now"})
 	if cmd == nil {
-		t.Fatal("expected a provider-playlist refresh command after scrobble")
+		t.Fatal("expected a provider-playlist refresh command when history records")
 	}
 	if len(m.plManager.playlists) == 0 {
-		t.Fatal("manager list should be re-pulled after a scrobble")
-	}
-
-	// Skipped early: still counts as played — Recently Played mirrors
-	// everything the user listened to, not just completed tracks.
-	m.plManager.playlists = nil
-	if cmd := m.maybeScrobble(playlist.Track{Path: "/other.mp3", DurationSecs: 120}, 10*time.Second, 120*time.Second); cmd == nil {
-		t.Fatal("early skip must still record history and schedule a refresh")
-	}
-	if len(m.plManager.playlists) == 0 {
-		t.Fatal("skip scrobble must re-pull the manager list")
+		t.Fatal("manager list should be re-pulled when a track starts")
 	}
 
 	entries, err := m.historyStore.Recent(10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 2 {
-		t.Fatalf("history entries = %d, want both the finished and skipped plays", len(entries))
+	if len(entries) != 1 || entries[0].Track.Path != "/now.mp3" {
+		t.Fatalf("history = %+v, want the starting track recorded", entries)
+	}
+}
+
+func TestMaybeScrobbleLeavesHistoryToTrackStart(t *testing.T) {
+	prov := &dirSourceTestProvider{commandsTestProvider: commandsTestProvider{name: "Local"}}
+	m := newDirsScreenTestModel(prov)
+	m.historyStore = history.NewAt(filepath.Join(t.TempDir(), "history.toml"))
+	m.plManager.screen = plMgrScreenList
+	m.plManager.playlists = nil
+
+	// Leaving a track (skip/finish) only handles provider scrobbles; the
+	// history entry was already written when playback started.
+	if cmd := m.maybeScrobble(playlist.Track{Path: "/song.mp3", DurationSecs: 120}, 120*time.Second, 120*time.Second); cmd != nil {
+		t.Fatal("scrobble must not schedule a history refresh")
+	}
+	entries, err := m.historyStore.Recent(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("history = %+v, want no entries from scrobble alone", entries)
 	}
 }
 
@@ -552,8 +564,8 @@ func TestMaybeScrobbleReloadsOpenHistoryTracks(t *testing.T) {
 		{Path: "/new2.mp3", Title: "New2"},
 	}
 
-	if cmd := m.maybeScrobble(playlist.Track{Path: "/song.mp3", Title: "Song", DurationSecs: 120}, 120*time.Second, 120*time.Second); cmd == nil {
-		t.Fatal("expected a provider-playlist refresh command after scrobble")
+	if _, cmd := m.beginPlaybackTrack(playlist.Track{Path: "/song.mp3", Title: "Song"}); cmd == nil {
+		t.Fatal("expected a provider-playlist refresh command when a track starts")
 	}
 	if len(m.plManager.tracks) != 2 || m.plManager.tracks[0].Path != "/new1.mp3" {
 		t.Fatalf("tracks = %+v, want the reloaded history entries", m.plManager.tracks)
