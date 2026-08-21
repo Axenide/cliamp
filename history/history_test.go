@@ -219,3 +219,50 @@ func TestNilStoreSafe(t *testing.T) {
 		t.Errorf("nil Clear returned err: %v", err)
 	}
 }
+
+func TestLoadHealsLegacyDuplicates(t *testing.T) {
+	s := newTestStore(t)
+	// A file written by an older version that appended repeats: /a.mp3 twice.
+	raw := `[[entry]]
+played_at = "2026-01-01T12:02:00Z"
+path = "/a.mp3"
+title = "A"
+
+[[entry]]
+played_at = "2026-01-01T12:01:00Z"
+path = "/b.mp3"
+title = "B"
+
+[[entry]]
+played_at = "2026-01-01T12:00:00Z"
+path = "/a.mp3"
+title = "A"
+`
+	if err := os.WriteFile(s.Path(), []byte(raw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.Recent(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("entries = %d, want 2 after healing duplicates", len(got))
+	}
+	if got[0].Track.Path != "/a.mp3" || !got[0].PlayedAt.Equal(time.Date(2026, 1, 1, 12, 2, 0, 0, time.UTC)) {
+		t.Fatalf("top = %q at %v, want the newest /a.mp3 play kept", got[0].Track.Path, got[0].PlayedAt)
+	}
+	if got[1].Track.Path != "/b.mp3" {
+		t.Fatalf("second = %q, want /b.mp3", got[1].Track.Path)
+	}
+
+	// A subsequent record rewrites the healed list, cleaning the file too.
+	mustRecord(t, s, playlist.Track{Path: "/c.mp3", Title: "C"}, time.Date(2026, 1, 1, 12, 3, 0, 0, time.UTC))
+	got, err = s.Recent(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("entries = %d, want 3 after a clean rewrite", len(got))
+	}
+}

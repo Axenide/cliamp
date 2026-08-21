@@ -165,7 +165,23 @@ func (s *Store) loadLocked() ([]Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	return parse(data), nil
+	return dedupeNewestFirst(parse(data)), nil
+}
+
+// dedupeNewestFirst collapses repeated paths, keeping the newest occurrence.
+// History written by older versions could contain duplicate rows for the same
+// track; this heals them on read so the list always shows distinct tracks.
+func dedupeNewestFirst(entries []Entry) []Entry {
+	seen := make(map[string]struct{}, len(entries))
+	clean := make([]Entry, 0, len(entries))
+	for _, e := range entries {
+		if _, dup := seen[e.Track.Path]; dup {
+			continue
+		}
+		seen[e.Track.Path] = struct{}{}
+		clean = append(clean, e)
+	}
+	return clean
 }
 
 func (s *Store) saveLocked(entries []Entry) error {
