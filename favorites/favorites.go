@@ -142,6 +142,7 @@ func (s *Store) Remove(path string) (bool, error) {
 }
 
 // IsFavorited reports whether the given path is in the favorites store.
+// Read helper: load errors report false rather than failing the caller.
 func (s *Store) IsFavorited(path string) bool {
 	if s == nil {
 		return false
@@ -159,6 +160,7 @@ func (s *Store) IsFavorited(path string) bool {
 }
 
 // Count returns the number of favorited tracks.
+// Read helper: load errors report 0 rather than failing the caller.
 func (s *Store) Count() int {
 	if s == nil {
 		return 0
@@ -231,13 +233,18 @@ func (s *Store) saveLocked(entries []Entry) error {
 	}
 	tmp := s.path + ".tmp"
 	if err := os.WriteFile(tmp, []byte(b.String()), 0o644); err != nil {
+		_ = os.Remove(tmp)
 		return err
 	}
-	return os.Rename(tmp, s.path)
+	if err := os.Rename(tmp, s.path); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("rename favorites: %w", err)
+	}
+	return nil
 }
 
 func writeEntry(w io.Writer, e Entry) {
-	fmt.Fprintf(w, "[[entry]]\n")
+	fmt.Fprintln(w, "[[entry]]")
 	fmt.Fprintf(w, "favorited_at = %q\n", e.FavoritedAt.UTC().Format(time.RFC3339))
 	fmt.Fprintf(w, "path = %q\n", e.Track.Path)
 	fmt.Fprintf(w, "title = %q\n", e.Track.Title)

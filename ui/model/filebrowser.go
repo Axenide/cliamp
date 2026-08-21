@@ -8,7 +8,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/bjarneo/cliamp/history"
 	"github.com/bjarneo/cliamp/internal/fuzzy"
 	"github.com/bjarneo/cliamp/player"
 	"github.com/bjarneo/cliamp/playlist"
@@ -540,7 +539,7 @@ func (m *Model) fbConfirm(replace bool) tea.Cmd {
 	m.fileBrowser.visible = false
 
 	target := m.fileBrowser.targetPlaylist
-	if target != "" && target != history.PlaylistName {
+	if target != "" && plMgrVirtualPlaylistName(target) == "" {
 		paths = m.fbSplitDirSources(target, paths)
 		if len(paths) == 0 {
 			return nil

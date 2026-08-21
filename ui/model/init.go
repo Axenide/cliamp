@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/bjarneo/cliamp/favorites"
 	"github.com/bjarneo/cliamp/history"
 	"github.com/bjarneo/cliamp/luaplugin"
 	"github.com/bjarneo/cliamp/player"
@@ -225,7 +226,7 @@ func (m *Model) refreshFavSet() {
 	if m.favMgr == nil {
 		return
 	}
-	tracks, err := m.localProvider.Tracks("Favorites")
+	tracks, err := m.localProvider.Tracks(favorites.PlaylistName)
 	if err != nil || len(tracks) == 0 {
 		return
 	}

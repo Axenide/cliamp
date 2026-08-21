@@ -438,6 +438,9 @@ func (p *Provider) DirSources(name string) ([]playlist.DirSource, error) {
 	if isHistoryName(name) {
 		return nil, errReservedHistoryName
 	}
+	if isFavoritesName(name) {
+		return nil, errReservedFavoritesName
+	}
 	doc, err := p.loadDocByName(name)
 	if err != nil {
 		return nil, err

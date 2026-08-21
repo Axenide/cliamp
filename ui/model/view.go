@@ -622,10 +622,9 @@ func (m Model) renderPlaylistHeader() string {
 	}
 
 	var favStr string
-	if m.favMgr != nil {
-		if count := m.favMgr.FavoritesCount(); count > 0 {
-			favStr = " " + activeToggle.Render(fmt.Sprintf("[♥ %d]", count))
-		}
+	// Render from the cached favSet: the render path must not hit disk.
+	if count := len(m.favSet); count > 0 {
+		favStr = " " + activeToggle.Render(fmt.Sprintf("[♥ %d]", count))
 	}
 
 	var themeStr string

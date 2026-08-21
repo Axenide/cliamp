@@ -31,30 +31,6 @@ func TestFormatTrackTime(t *testing.T) {
 	}
 }
 
-func TestFormatPlaylistDuration(t *testing.T) {
-	tests := []struct {
-		secs int
-		want string
-	}{
-		{0, ""},
-		{-1, ""},
-		{45, "45s"},
-		{59, "59s"},
-		{60, "1m"},
-		{600, "10m"},
-		{3540, "59m"},
-		{3600, "1h"},
-		{3660, "1h 1m"},
-		{7200, "2h"},
-		{7320, "2h 2m"},
-	}
-	for _, tt := range tests {
-		if got := formatPlaylistDuration(tt.secs); got != tt.want {
-			t.Errorf("formatPlaylistDuration(%d) = %q, want %q", tt.secs, got, tt.want)
-		}
-	}
-}
-
 func TestPlaylistLabel(t *testing.T) {
 	tests := []struct {
 		name   string

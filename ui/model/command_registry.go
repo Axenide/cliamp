@@ -5,7 +5,6 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/bjarneo/cliamp/history"
 	"github.com/bjarneo/cliamp/ui"
 )
 
@@ -182,10 +181,10 @@ var commandRegistry = []commandSpec{
 		}
 		switch m.plManager.screen {
 		case plMgrScreenTracks:
-			return m.plManager.selPlaylist != history.PlaylistName
+			return plMgrVirtualPlaylistName(m.plManager.selPlaylist) == ""
 		case plMgrScreenList:
 			idx := m.plMgrPlaylistRealIndex(m.plManager.cursor)
-			return idx >= 0 && m.plManager.playlists[idx].Name != history.PlaylistName
+			return idx >= 0 && plMgrVirtualPlaylistName(m.plManager.playlists[idx].Name) == ""
 		default:
 			return false
 		}

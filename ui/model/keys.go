@@ -2409,6 +2409,8 @@ func (m *Model) plMgrSaveTracks(status string) bool {
 func (m *Model) plMgrDropTrackRow(idx int) {
 	m.plManager.tracks = append(m.plManager.tracks[:idx], m.plManager.tracks[idx+1:]...)
 	m.plManager.missingLocal = append(m.plManager.missingLocal[:idx], m.plManager.missingLocal[idx+1:]...)
+	// Row indices shift past idx; stale marks would act on the wrong tracks.
+	m.plManager.marked = make(map[int]bool)
 	if m.plManager.filter != "" {
 		m.plMgrRecomputeFilter()
 	}

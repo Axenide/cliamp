@@ -467,8 +467,8 @@ func missingLocalTrack(track playlist.Track) bool {
 // to the directory-sources screen. Playlists whose provider does not implement
 // provider.PlaylistDirSourceManager show a notice instead of switching.
 func (m *Model) plMgrOpenDirs() {
-	if m.plManager.selPlaylist == history.PlaylistName {
-		m.status.Showf(statusTTLDefault, "%q is a virtual playlist with no directory sources", m.plManager.selPlaylist)
+	if name := plMgrVirtualPlaylistName(m.plManager.selPlaylist); name != "" {
+		m.status.Showf(statusTTLDefault, "%q is a virtual playlist with no directory sources", name)
 		return
 	}
 	dm, ok := m.localProvider.(provider.PlaylistDirSourceManager)
@@ -534,10 +534,11 @@ func (m *Model) plMgrRefreshTracksForSel() {
 // browser's D key when a target playlist is set.
 func (m *Model) fbAddDirSource() {
 	target := m.fileBrowser.targetPlaylist
-	if target == "" || target == history.PlaylistName {
-		if target == history.PlaylistName {
-			m.status.Showf(statusTTLDefault, "%q is a virtual playlist with no directory sources", target)
-		}
+	if target == "" {
+		return
+	}
+	if name := plMgrVirtualPlaylistName(target); name != "" {
+		m.status.Showf(statusTTLDefault, "%q is a virtual playlist with no directory sources", name)
 		return
 	}
 	var dirs []string

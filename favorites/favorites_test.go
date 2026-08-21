@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/bjarneo/cliamp/playlist"
 )
@@ -83,11 +82,10 @@ func TestRemoveNonexistent(t *testing.T) {
 
 func TestTracksOrdering(t *testing.T) {
 	s := newTestStore(t)
-	base := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 
 	s.Toggle(playlist.Track{Path: "/a.mp3", Title: "A"})
-	// Simulate earlier favorited time by toggling and re-adding with a known time.
-	// Since Toggle is time.Now()-based, we just add two tracks in sequence.
+	// Toggle is time.Now()-based, so ordering rests on call sequence:
+	// add two tracks in order and expect newest first.
 	s.Toggle(playlist.Track{Path: "/b.mp3", Title: "B"})
 
 	tracks, err := s.Tracks()
@@ -101,7 +99,6 @@ func TestTracksOrdering(t *testing.T) {
 	if tracks[0].Title != "B" || tracks[1].Title != "A" {
 		t.Fatalf("order wrong: %+v", tracks)
 	}
-	_ = base // used above for documentation
 }
 
 func TestPersistAcrossInstances(t *testing.T) {
