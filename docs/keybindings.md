@@ -194,7 +194,7 @@ The playlists pane (visible when focus is on a provider — Spotify, Navidrome, 
 | `/` | Filter the playlist list |
 | `Ctrl+F` | Online/server search (Spotify/Navidrome/NetEase/etc.'s own search) |
 | `Ctrl+R` | Refresh — re-pull the playlist list from the provider |
-| `p` | Open the playlist manager (create, rename, delete, add dirs/tracks) |
+| `p` | Open the playlist manager (Local pane only; create, rename, delete, add dirs/tracks) |
 | `S` `N` `P` `J` `E` `Y` `C` `M` `Q` `L` `R` | Switch to that provider |
 | `Tab` | Switch focus to EQ |
 | `Esc` `b` | Back to the playlist pane |

@@ -336,7 +336,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		case "q", "ctrl+c":
 			return m.quit()
 		case "p":
-			if m.localProvider != nil {
+			if m.isActiveProvider("Local") && m.localProvider != nil {
 				m.openPlaylistManager()
 			}
 		case "up", "k":
