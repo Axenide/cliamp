@@ -630,7 +630,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.refreshPlaylistManagerAfterWrite(msg.targetPlaylist)
 			// Track/dir counts in the provider pane come from Playlists();
 			// re-pull now that the file write has landed.
-			return m, m.fetchProviderPlaylists()
+			return m, m.refreshPaneAfterLocalWrite()
 		}
 		if msg.toPlaylist {
 			m.openPlaylistPicker(msg.tracks, fmt.Sprintf("%d tracks selected", len(msg.tracks)))

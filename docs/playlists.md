@@ -274,8 +274,8 @@ Press `p` from any view to open the playlist manager:
 12. **Write tracks elsewhere**: press `w` to copy the marked or highlighted tracks to another playlist; duplicate paths are skipped
 13. **Add files**: press `o` from inside a playlist to browse files and add them to that playlist
 14. **Play this**: press `Enter` on the track list to start playback at the highlighted track. The rest of the playlist follows.
-14. **Play all**: press `p` to start from the top, regardless of cursor position
-15. **New playlist**: select "+ New Playlist...", type a name, and press Enter. If you create a playlist while a `/` filter is active, the filter text is pre-filled as the new playlist name.
+15. **Play all**: press `p` to start from the top, regardless of cursor position
+16. **New playlist**: select "+ New Playlist...", type a name, and press Enter — the file browser opens so you can fill the playlist right away. If you create a playlist while a `/` filter is active, the filter text is pre-filled as the new playlist name.
 
 Tracks with an `album` field are grouped by album with visual separator headers in the playlist manager (album grouping is hidden while a filter is active) and the main player view.
 
@@ -360,14 +360,14 @@ title = "My Radio"
 | `Enter` / `→` | Open playlist (list screen) / Play **highlighted** track (tracks screen) |
 | `p` | Play all tracks from the top (tracks screen) |
 | `a` | List: new playlist — after naming, the file browser opens at `~` so you can pick folders and/or files (`Space` selects, `Esc` finishes). Tracks: mark/unmark all visible tracks |
-| `r` | Rename the highlighted playlist (list screen) |
+| `r` | Rename the highlighted playlist (list screen; `Recently Played` cannot be renamed) |
 | `Space` | Mark/unmark track and advance (tracks screen) |
 | `s` | Sort tracks, cycling supported sort keys (tracks screen) |
 | `w` | Write marked/highlighted tracks, or the current queue from the list screen, to another playlist |
 | `o` | Add files to the open playlist (tracks screen) |
 | `D` | Open the directory-sources screen for the open playlist (tracks screen) |
 | `[` `]` | Move track up/down and save (tracks screen) |
-| `d` | Delete playlist (confirms) / Remove marked tracks, or highlighted track if none are marked |
+| `d` | Delete playlist (confirms; `Recently Played` cannot be deleted) / Remove marked tracks, or highlighted track if none are marked |
 | `u` | Undo the last playlist-manager edit |
 | `←` / `Backspace` | Go back from tracks screen to list |
 
@@ -385,7 +385,7 @@ The playlist list flags playlists that reference `[[dir]]` sources with a
 | `←` / `Backspace` / `Esc` | Back to the tracks screen |
 
 From the file browser (opened with `a` above, or with `o` from the tracks
-screen), press `D` to add the selected directory — or the directory you are
-currently browsing when nothing is selected — as a live `[[dir]]` source
-instead of expanding it into explicit tracks. Directories already referenced
-are skipped and reported.
+screen), press `D` to add all selected directories — or the highlighted
+directory, or the directory you are currently browsing when neither applies —
+as live `[[dir]]` sources instead of expanding them into explicit tracks.
+Directories already referenced are skipped and reported.

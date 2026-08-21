@@ -484,9 +484,13 @@ func (m *Model) handleFileBrowserKey(msg tea.KeyPressMsg) tea.Cmd {
 func (m *Model) fbCommitAndRefresh() tea.Cmd {
 	cmd := m.fbConfirm(false)
 	if cmd == nil {
+		// Directory-only commit: the write landed synchronously, so pull
+		// playlist counts now. A resolver command refreshes from its
+		// fbTracksResolvedMsg handler instead — batching a fetch here
+		// would read Playlists() before the tracks are written.
 		return m.fetchProviderPlaylists()
 	}
-	return tea.Batch(cmd, m.fetchProviderPlaylists())
+	return cmd
 }
 
 // fbDescend opens the directory under the cursor (or plays a highlighted

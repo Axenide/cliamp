@@ -121,8 +121,8 @@ active when the picker opened. While typing a filter, `Enter` finishes it and
 | `o` | Tracks: open file browser to add files to this playlist |
 | `D` | List: open the file browser to add `[[dir]]` sources to the highlighted playlist. Tracks: open the directory-sources screen |
 | `a` | List: new playlist — after naming, the file browser opens at `~`: descend with `Enter`, select folders and/or files with `Space`, confirm with `Enter`, or finish with `Esc`. Tracks: mark/unmark all visible tracks. |
-| `r` | List: rename the playlist |
-| `d` | List: delete playlist (confirms). Tracks: remove marked tracks, or highlighted track when none are marked |
+| `r` | List: rename the playlist (`Recently Played` cannot be renamed) |
+| `d` | List: delete playlist (confirms; `Recently Played` cannot be deleted). Tracks: remove marked tracks, or highlighted track when none are marked |
 | `u` | Undo the last manager edit |
 | `←` `Backspace` `h` | Tracks screen: go back to the list |
 | `Esc` | Close the playlist manager or go back |
@@ -150,7 +150,7 @@ Shift-letter keys are reserved for provider switching, so playlist-manager track
 | `a` | Select/unselect all visible audio files |
 | `R` | Replace the current queue with selected files (confirm when it is non-empty) |
 | `w` | Write selected files to a local playlist |
-| `D` | Add the highlighted or selected folder(s) — or the directory being browsed when nothing is highlighted — as a live `[[dir]]` source to the target playlist; the browser stays open so you can add more |
+| `D` | Add all selected folders — or the highlighted folder, or the directory being browsed when neither applies — as a live `[[dir]]` source to the target playlist; the browser stays open so you can add more |
 | `~` `.` | Jump to home / current working directory |
 | `Esc` `o` | Close file browser |
 

@@ -514,16 +514,16 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return refresh
 
 	case ">", ".":
-		m.scrobbleCurrent()
+		refresh := m.scrobbleCurrent()
 		cmd := m.nextTrack()
 		m.notifyPlayback()
-		return cmd
+		return tea.Batch(refresh, cmd)
 
 	case "<", ",":
-		m.scrobbleCurrent()
+		refresh := m.scrobbleCurrent()
 		cmd := m.prevTrack()
 		m.notifyPlayback()
-		return cmd
+		return tea.Batch(refresh, cmd)
 
 	case "left":
 		if m.focus == focusEQ {
@@ -1630,7 +1630,7 @@ func (m *Model) handlePlMgrListKey(msg tea.KeyPressMsg) tea.Cmd {
 				m.plMgrRefreshList()
 				// The provider pane lists playlists too; re-pull so the
 				// deleted row disappears there without a pill switch.
-				refresh = m.fetchProviderPlaylists()
+				refresh = m.refreshPaneAfterLocalWrite()
 			}
 			m.plManager.confirmDel = false
 			return refresh
@@ -2110,7 +2110,7 @@ func (m *Model) handlePlMgrNewNameKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.plMgrRefreshList()
 		m.plManager.screen = plMgrScreenList
 		// Surface the new playlist in the provider pane right away.
-		cmd := m.fetchProviderPlaylists()
+		cmd := m.refreshPaneAfterLocalWrite()
 		// Drop straight into the file browser targeted at the new
 		// playlist, starting from home: select folders and/or files
 		// with Space, descend with Enter, finish with Esc.
@@ -2225,7 +2225,7 @@ func (m *Model) plMgrUndoLast() tea.Cmd {
 	m.plMgrRefreshList()
 	var refresh tea.Cmd
 	if undo.kind == plUndoPlaylist {
-		refresh = m.fetchProviderPlaylists()
+		refresh = m.refreshPaneAfterLocalWrite()
 	}
 	if m.plManager.screen == plMgrScreenTracks && m.plManager.selPlaylist == undo.name {
 		m.plMgrRestoreTracks(undo.tracks, undo.missingLocal)

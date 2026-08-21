@@ -257,6 +257,29 @@ func TestPlMgrDeleteRefreshesProviderPane(t *testing.T) {
 	}
 }
 
+// A local playlist mutation while a remote provider is active must not start
+// a fetch for that remote provider (or surface its errors).
+func TestPlMgrDeleteSkipsPaneFetchWhenRemoteActive(t *testing.T) {
+	local := &paneManageProvider{commandsTestProvider: commandsTestProvider{
+		name:  "Local",
+		lists: []playlist.PlaylistInfo{{ID: "top40", Name: "top40"}},
+	}}
+	remote := &commandsTestProvider{name: "Navidrome", lists: []playlist.PlaylistInfo{{ID: "nd", Name: "nd"}}}
+	m := newDirsScreenTestModel(local)
+	m.provider = remote
+	m.plManager.screen = plMgrScreenList
+	m.plManager.playlists = []playlist.PlaylistInfo{{ID: "top40", Name: "top40"}}
+	m.plManager.cursor = 0
+
+	m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "d"})
+	if cmd := m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "y"}); cmd != nil {
+		t.Fatal("delete with a remote provider active must not schedule a pane refresh")
+	}
+	if len(local.deleted) != 1 || local.deleted[0] != "top40" {
+		t.Fatalf("deleted = %v, want [top40] on the local provider", local.deleted)
+	}
+}
+
 func TestPlMgrDeleteGuardsRecentlyPlayed(t *testing.T) {
 	prov := &paneManageProvider{commandsTestProvider: commandsTestProvider{name: "Local"}}
 	m := newDirsScreenTestModel(prov)
