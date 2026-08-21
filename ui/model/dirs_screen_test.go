@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -163,7 +164,8 @@ func TestPlMgrDKeyNoticeWhenUnsupported(t *testing.T) {
 // paneManageProvider records playlist deletions for guard tests.
 type paneManageProvider struct {
 	commandsTestProvider
-	deleted []string
+	deleted  []string
+	restored []string
 }
 
 func (p *paneManageProvider) CreatePlaylist(_ context.Context, _ string) (string, error) {
@@ -172,9 +174,87 @@ func (p *paneManageProvider) CreatePlaylist(_ context.Context, _ string) (string
 
 func (p *paneManageProvider) RemoveTrack(_ string, _ int) error { return nil }
 
+func (p *paneManageProvider) SavePlaylist(name string, _ []playlist.Track) error {
+	p.restored = append(p.restored, name)
+	return nil
+}
+
 func (p *paneManageProvider) DeletePlaylist(name string) error {
 	p.deleted = append(p.deleted, name)
 	return nil
+}
+
+// Playlists mirrors the file-backed provider: deleted names vanish and
+// restored names reappear on the next pull.
+func (p *paneManageProvider) Playlists() ([]playlist.PlaylistInfo, error) {
+	lists, err := p.commandsTestProvider.Playlists()
+	if err != nil {
+		return nil, err
+	}
+	var out []playlist.PlaylistInfo
+	for _, pl := range lists {
+		deleted := false
+		for _, name := range p.deleted {
+			if pl.Name == name && !slices.Contains(p.restored, name) {
+				deleted = true
+				break
+			}
+		}
+		if !deleted {
+			out = append(out, pl)
+		}
+	}
+	return out, nil
+}
+
+func TestPlMgrDeleteRefreshesProviderPane(t *testing.T) {
+	prov := &paneManageProvider{commandsTestProvider: commandsTestProvider{
+		name:  "Local",
+		lists: []playlist.PlaylistInfo{{ID: "music", Name: "music"}, {ID: "top40", Name: "top40"}},
+	}}
+	m := newDirsScreenTestModel(prov)
+	m.plManager.screen = plMgrScreenList
+	m.plManager.playlists = []playlist.PlaylistInfo{
+		{ID: "music", Name: "music"},
+		{ID: "top40", Name: "top40"},
+	}
+	m.plManager.cursor = 1
+
+	m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "d"}) // arm confirmation
+	if !m.plManager.confirmDel {
+		t.Fatal("confirmDel should be armed after 'd'")
+	}
+	cmd := m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "y"})
+	if len(prov.deleted) != 1 || prov.deleted[0] != "top40" {
+		t.Fatalf("deleted = %v, want [top40]", prov.deleted)
+	}
+	if cmd == nil {
+		t.Fatal("delete must schedule a provider-pane refresh")
+	}
+	// The manager list itself re-pulls immediately.
+	found := false
+	for _, pl := range m.plManager.playlists {
+		if pl.Name == "top40" {
+			found = true
+		}
+	}
+	if found {
+		t.Fatalf("playlists = %+v, want top40 gone from the manager list", m.plManager.playlists)
+	}
+
+	// Undo restores the playlist and schedules a pane refresh too.
+	if cmd := m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "u"}); cmd == nil {
+		t.Fatal("undo of a playlist must schedule a provider-pane refresh")
+	}
+	found = false
+	for _, pl := range m.plManager.playlists {
+		if pl.Name == "top40" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("playlists = %+v, want top40 restored in the manager list", m.plManager.playlists)
+	}
 }
 
 func TestPlMgrDeleteGuardsRecentlyPlayed(t *testing.T) {

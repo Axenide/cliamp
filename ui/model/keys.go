@@ -1609,6 +1609,7 @@ func (m *Model) handlePlMgrListKey(msg tea.KeyPressMsg) tea.Cmd {
 	if m.plManager.confirmDel {
 		switch msg.String() {
 		case "y", "Y":
+			var refresh tea.Cmd
 			realIdx := m.plMgrPlaylistRealIndex(m.plManager.cursor)
 			if realIdx >= 0 && m.plManager.playlists[realIdx].Name == history.PlaylistName {
 				m.plManager.confirmDel = false
@@ -1627,8 +1628,12 @@ func (m *Model) handlePlMgrListKey(msg tea.KeyPressMsg) tea.Cmd {
 					}
 				}
 				m.plMgrRefreshList()
+				// The provider pane lists playlists too; re-pull so the
+				// deleted row disappears there without a pill switch.
+				refresh = m.fetchProviderPlaylists()
 			}
 			m.plManager.confirmDel = false
+			return refresh
 		default:
 			m.plManager.confirmDel = false
 		}
@@ -1748,7 +1753,7 @@ func (m *Model) handlePlMgrListKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		m.plManager.confirmDel = true
 	case "u":
-		m.plMgrUndoLast()
+		return m.plMgrUndoLast()
 	case "esc", "p":
 		if m.plManager.filter != "" {
 			// First Esc clears an active filter rather than closing.
@@ -1936,7 +1941,7 @@ func (m *Model) handlePlMgrTracksKey(msg tea.KeyPressMsg) tea.Cmd {
 	case "d":
 		m.plMgrRemoveSelectedTracks()
 	case "u":
-		m.plMgrUndoLast()
+		return m.plMgrUndoLast()
 	case "esc", "backspace", "h", "left":
 		if m.plManager.filter != "" {
 			m.plMgrResetFilter()
@@ -2198,23 +2203,30 @@ func (m *Model) plMgrSetTrackUndo() {
 	}
 }
 
-func (m *Model) plMgrUndoLast() {
+// plMgrUndoLast restores the last deleted playlist or removed tracks and
+// returns a provider-pane refresh command when a playlist came back, so the
+// pane lists it without a pill switch.
+func (m *Model) plMgrUndoLast() tea.Cmd {
 	undo := m.plManager.undo
 	if undo.kind == plUndoNone || undo.name == "" {
 		m.status.Warning("Nothing to undo", statusTTLShort)
-		return
+		return nil
 	}
 	saver := m.localSaver()
 	if saver == nil {
 		m.status.Warning("Undo unavailable", statusTTLDefault)
-		return
+		return nil
 	}
 	if err := saver.SavePlaylist(undo.name, cloneTracks(undo.tracks)); err != nil {
 		m.status.Errorf(statusTTLDefault, "Undo failed: %s", err)
-		return
+		return nil
 	}
 	m.plManager.undo = plManagerUndo{}
 	m.plMgrRefreshList()
+	var refresh tea.Cmd
+	if undo.kind == plUndoPlaylist {
+		refresh = m.fetchProviderPlaylists()
+	}
 	if m.plManager.screen == plMgrScreenTracks && m.plManager.selPlaylist == undo.name {
 		m.plMgrRestoreTracks(undo.tracks, undo.missingLocal)
 		m.plManager.marked = make(map[int]bool)
@@ -2222,6 +2234,7 @@ func (m *Model) plMgrUndoLast() {
 		m.plMgrTracksMaybeAdjustScroll(m.plMgrTracksVisible())
 	}
 	m.status.Showf(statusTTLDefault, "Restored %q", undo.name)
+	return refresh
 }
 
 func (m *Model) plMgrSelectedTrackIndices() []int {
