@@ -331,7 +331,10 @@ jobs:
             desc "A retro terminal music player inspired by Winamp 2.x"
             homepage "https://github.com/bjarneo/cliamp"
 
-            head "https://github.com/bjarneo/cliamp.git", branch: "main"
+            head do
+              url "https://github.com/bjarneo/cliamp.git", branch: "main"
+              depends_on "go" => :build
+            end
 
             depends_on "flac"
             depends_on "libvorbis"
@@ -339,7 +342,6 @@ jobs:
             depends_on "mpg123"
             depends_on "ffmpeg" => :recommended
             depends_on "yt-dlp" => :recommended
-            depends_on "go" => :build
           FORMULA
 
           cat >> Formula/cliamp.rb << EOF
