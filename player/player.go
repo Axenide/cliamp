@@ -115,7 +115,7 @@ func (p *Player) handleGaplessSwap(token uint64) {
 	p.nextPipeline = nil
 	p.mu.Unlock()
 	if old != nil {
-		old.close()
+		go old.close()
 	}
 	p.gaplessAdvance.Store(true)
 }
@@ -194,6 +194,7 @@ func (p *Player) playPipeline(tp *trackPipeline) error {
 		// on every Stream() call.
 		speaker.Lock()
 		p.gapless.Replace(tp.stream)
+		p.gaplessAdvance.Store(false)
 		p.ctrl.Paused = false
 		p.mu.Lock()
 		oldCurrent = p.current
@@ -207,6 +208,7 @@ func (p *Player) playPipeline(tp *trackPipeline) error {
 	} else {
 		p.mu.Lock()
 		p.gapless.Replace(tp.stream)
+		p.gaplessAdvance.Store(false)
 
 		// Build the long-lived pipeline once
 		var s beep.Streamer = p.gapless
@@ -343,6 +345,7 @@ func (p *Player) Stop() {
 	// only see silence from the gapless streamer (paused ctrl).
 	speaker.Lock()
 	p.gapless.Clear()
+	p.gaplessAdvance.Store(false)
 	if p.ctrl != nil {
 		p.ctrl.Paused = true
 	}
@@ -478,6 +481,7 @@ func (p *Player) commitPreparedSeek(cur *trackPipeline, seeker preparedFFmpegSee
 	p.nextPipeline = nil
 	p.mu.Unlock()
 	p.gapless.Replace(cur.stream)
+	p.gaplessAdvance.Store(false)
 	speaker.Unlock()
 	p.lifecycleMu.Unlock()
 
@@ -514,6 +518,7 @@ func (p *Player) SeekYTDL(d time.Duration) error {
 	speaker.Lock()
 	curPos := cur.format.SampleRate.D(cur.decoder.Position()) + cur.streamOffset
 	p.gapless.Replace(nil)
+	p.gaplessAdvance.Store(false)
 	speaker.Unlock()
 
 	newPos := max(curPos+d, 0)
@@ -541,6 +546,7 @@ func (p *Player) SeekYTDL(d time.Duration) error {
 	speaker.Lock()
 	p.gapless.Replace(tp.stream)
 	p.gapless.SetNext(nil)
+	p.gaplessAdvance.Store(false)
 	speaker.Unlock()
 
 	p.mu.Lock()
@@ -578,6 +584,9 @@ func (p *Player) Position() time.Duration {
 	if cur == nil {
 		return 0
 	}
+	if cur.livePrefetch != nil {
+		return cur.livePrefetch.Position() + cur.streamOffset
+	}
 	return cur.format.SampleRate.D(cur.decoder.Position()) + cur.streamOffset
 }
 
@@ -593,6 +602,12 @@ func (p *Player) Duration() time.Duration {
 	p.mu.Unlock()
 	if cur == nil {
 		return 0
+	}
+	if cur.livePrefetch != nil {
+		if cur.knownDuration > 0 {
+			return cur.knownDuration
+		}
+		return cur.decodedDuration
 	}
 	if n := cur.decoder.Len(); n > 0 {
 		return cur.format.SampleRate.D(n)
@@ -610,6 +625,13 @@ func (p *Player) PositionAndDuration() (time.Duration, time.Duration) {
 	p.mu.Unlock()
 	if cur == nil {
 		return 0, 0
+	}
+	if cur.livePrefetch != nil {
+		dur := cur.knownDuration
+		if dur <= 0 {
+			dur = cur.decodedDuration
+		}
+		return cur.livePrefetch.Position() + cur.streamOffset, dur
 	}
 	pos := cur.format.SampleRate.D(cur.decoder.Position()) + cur.streamOffset
 	var dur time.Duration
@@ -699,6 +721,14 @@ func (p *Player) IsPlaying() bool {
 // IsPaused returns true if playback is paused.
 func (p *Player) IsPaused() bool {
 	return p.paused.Load()
+}
+
+// IsLiveStream reports whether ICY headers identify the current response as
+// live radio. A known duration takes precedence over transport metadata.
+func (p *Player) IsLiveStream() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.current != nil && p.current.live && p.current.knownDuration <= 0 && p.current.decodedDuration <= 0
 }
 
 // Drained returns true if the current track ended with no preloaded next track.
@@ -816,6 +846,9 @@ func (p *Player) StreamErr() error {
 	p.mu.Unlock()
 	if cur == nil {
 		return nil
+	}
+	if cur.livePrefetch != nil {
+		return cur.livePrefetch.Err()
 	}
 	return cur.decoder.Err()
 }

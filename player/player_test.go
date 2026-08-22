@@ -196,6 +196,17 @@ func TestIsPlayingDefaultsFalse(t *testing.T) {
 	}
 }
 
+func TestIsLiveStream(t *testing.T) {
+	p := newTestPlayer()
+	if p.IsLiveStream() {
+		t.Fatal("IsLiveStream() = true without a current pipeline")
+	}
+	p.current = &trackPipeline{live: true}
+	if !p.IsLiveStream() {
+		t.Fatal("IsLiveStream() = false for a live HTTP pipeline")
+	}
+}
+
 func TestSampleRate(t *testing.T) {
 	p := &Player{sr: 44100}
 	if p.SampleRate() != 44100 {

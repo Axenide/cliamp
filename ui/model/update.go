@@ -238,7 +238,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, lyricCmd)
 		}
 		// Check gapless transition (audio already playing next track)
-		if m.player.GaplessAdvanced() {
+		gaplessAdvanced := m.player.GaplessAdvanced()
+		if gaplessAdvanced {
 			// Capture the track that just finished before advancing the playlist.
 			// For gapless, the track played fully (100% ≥ 50%), so elapsed = duration.
 			finishedTrack, _ := m.currentPlaybackTrack()
@@ -287,9 +288,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Check if gapless drained (end of playlist, no preloaded next).
 		// Skip if already buffering a yt-dlp download to avoid advancing
 		// the playlist on every tick while waiting for the resolve.
-		if m.player.IsPlaying() && !m.player.IsPaused() && m.player.Drained() && !m.buffering && m.reconnect.at.IsZero() {
+		if !gaplessAdvanced && m.player.IsPlaying() && !m.player.IsPaused() && m.player.Drained() && !m.buffering && m.reconnect.at.IsZero() {
 			finishedTrack, idx := m.currentPlaybackTrack()
-			if idx >= 0 && finishedTrack.IsLive() {
+			if idx >= 0 && m.currentPlaybackIsLive(finishedTrack) {
 				// A live stream has no natural end. A clean decoder EOF is a
 				// disconnect, so retry this station instead of advancing.
 				m.scheduleReconnect(now)

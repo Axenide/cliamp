@@ -133,6 +133,8 @@ type sourceResult struct {
 	body          io.ReadCloser
 	contentType   string // e.g. "audio/aacp"; empty for local files
 	contentLength int64  // -1 if unknown; from Content-Length header for HTTP
+	prefetch      bool   // true when network decoding must be kept off the speaker callback
+	live          bool   // true when ICY headers identify a live radio response
 }
 
 // streamStallTimeout bounds how long a single Read on a live HTTP stream may
@@ -205,8 +207,9 @@ func openSource(path string, onMeta func(string)) (sourceResult, error) {
 	}
 
 	// Guard the body with a stall timeout so a stalled/half-open live stream
-	// can't park the audio-callback goroutine in Read forever. Close() cancels
-	// the request, so this also cleans up the context.
+	// cannot park a Read forever. Slow reads are moved off the speaker callback
+	// by livePrefetchStreamer; this timeout handles a connection that stops
+	// making progress entirely.
 	var body io.ReadCloser = &stallReader{rc: resp.Body, cancel: cancel, timeout: streamStallTimeout}
 
 	// Wrap in ICY reader if the server provides a metaint interval.
@@ -216,10 +219,19 @@ func openSource(path string, onMeta func(string)) (sourceResult, error) {
 		}
 	}
 
+	live := false
+	for key := range resp.Header {
+		if strings.HasPrefix(strings.ToLower(key), "icy-") {
+			live = true
+			break
+		}
+	}
 	return sourceResult{
 		body:          body,
 		contentType:   resp.Header.Get("Content-Type"),
 		contentLength: resp.ContentLength,
+		prefetch:      live || resp.ContentLength < 0,
+		live:          live,
 	}, nil
 }
 

@@ -504,7 +504,7 @@ func (m *Model) togglePlayPause() tea.Cmd {
 		if !m.pausedAt.IsZero() {
 			pausedFor = time.Since(m.pausedAt)
 		}
-		if shouldReconnectOnUnpause(track, idx, pausedFor) {
+		if m.currentPlaybackIsLive(track) || shouldReconnectOnUnpause(track, idx, pausedFor) {
 			if playlist.IsYTDL(track.Path) && m.player.IsYTDLSeek() {
 				return m.reconnectYTDLOnUnpause()
 			}

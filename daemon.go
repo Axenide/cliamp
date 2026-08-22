@@ -100,7 +100,7 @@ func runDaemon(p *player.Player, pl *playlist.Playlist, localProv *local.Provide
 // internally thread-safe so blocking I/O (Play, PlayYTDL) runs without it.
 type daemon struct {
 	mu              sync.Mutex
-	player          *player.Player
+	player          player.Engine
 	playlist        *playlist.Playlist
 	localProv       *local.Provider
 	providers       []model.ProviderEntry
@@ -139,7 +139,7 @@ func (d *daemon) Send(msg any) {
 	switch m := msg.(type) {
 	case ipc.PlayMsg, playback.PlayMsg:
 		if d.player.IsPaused() {
-			d.player.TogglePause()
+			d.resume()
 		} else if !d.player.IsPlaying() && d.playlist.Len() > 0 {
 			d.playCurrent()
 		}
@@ -268,7 +268,13 @@ func (d *daemon) handleSave(m ipc.SaveRequestMsg) {
 func (d *daemon) tick() {
 	d.mu.Lock()
 	if d.player.IsPlaying() && !d.player.IsPaused() && d.player.Drained() {
-		d.nextTrack()
+		track, idx := d.playlist.Current()
+		if idx >= 0 && d.playbackIsLive(track) {
+			d.player.Stop()
+			d.playTrack(track)
+		} else {
+			d.nextTrack()
+		}
 	}
 	d.recordHistory()
 	state := d.snapshotState()
@@ -315,23 +321,39 @@ func (d *daemon) playCurrent() {
 	d.playTrack(track)
 }
 
-// playTrack temporarily releases d.mu around the blocking Play call so
-// concurrent IPC requests (notably `cliamp status`) don't stall for the
-// 1-3s of HTTP/yt-dlp setup. The player itself serializes internally.
-// Caller must hold d.mu; the lock is held again on return.
+// playTrack runs while d.mu is held so playback decisions commit in request
+// order. Releasing it during setup lets a slow older request overwrite a newer
+// next/load request after that request has already updated the playlist.
 func (d *daemon) playTrack(track playlist.Track) {
 	dur := time.Duration(track.DurationSecs) * time.Second
-	d.mu.Unlock()
 	var err error
 	if playlist.IsYTDL(track.Path) {
 		err = d.player.PlayYTDL(track.Path, dur)
 	} else {
 		err = d.player.Play(track.Path, dur)
 	}
-	d.mu.Lock()
 	if err != nil {
 		applog.Warn("daemon: play %q: %v", track.Path, err)
+		d.player.Stop()
 	}
+}
+
+func (d *daemon) playbackIsLive(track playlist.Track) bool {
+	if track.IsLive() {
+		return true
+	}
+	reporter, ok := d.player.(interface{ IsLiveStream() bool })
+	return ok && reporter.IsLiveStream()
+}
+
+func (d *daemon) resume() {
+	track, idx := d.playlist.Current()
+	if idx >= 0 && d.playbackIsLive(track) {
+		d.player.Stop()
+		d.playTrack(track)
+		return
+	}
+	d.player.TogglePause()
 }
 
 func (d *daemon) toggle() {
@@ -339,6 +361,10 @@ func (d *daemon) toggle() {
 		if d.playlist.Len() > 0 {
 			d.playCurrent()
 		}
+		return
+	}
+	if d.player.IsPaused() {
+		d.resume()
 		return
 	}
 	d.player.TogglePause()

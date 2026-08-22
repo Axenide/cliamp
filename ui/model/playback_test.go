@@ -16,11 +16,14 @@ type playbackFakeEngine struct {
 	drained           bool
 	paused            bool
 	ytdlSeek          bool
+	live              bool
 	position          time.Duration
+	duration          time.Duration
 	playCalls         []string
 	seekYTDLCalls     []time.Duration
 	preloadCalls      []string
 	clearPreloadCalls int
+	stopCalls         int
 	eqBands           [eqBandCount]float64
 }
 
@@ -37,10 +40,13 @@ func (f *playbackFakeEngine) Preload(path string, _ time.Duration) error {
 }
 func (f *playbackFakeEngine) PreloadYTDL(string, time.Duration) error { return nil }
 func (f *playbackFakeEngine) ClearPreload()                           { f.clearPreloadCalls++ }
-func (f *playbackFakeEngine) Stop()                                   { f.playing, f.paused = false, false }
-func (f *playbackFakeEngine) Close()                                  {}
-func (f *playbackFakeEngine) TogglePause()                            { f.paused = !f.paused }
-func (f *playbackFakeEngine) Seek(time.Duration) error                { return nil }
+func (f *playbackFakeEngine) Stop() {
+	f.stopCalls++
+	f.playing, f.paused = false, false
+}
+func (f *playbackFakeEngine) Close()                   {}
+func (f *playbackFakeEngine) TogglePause()             { f.paused = !f.paused }
+func (f *playbackFakeEngine) Seek(time.Duration) error { return nil }
 func (f *playbackFakeEngine) SeekYTDL(d time.Duration) error {
 	f.seekYTDLCalls = append(f.seekYTDLCalls, d)
 	return nil
@@ -53,6 +59,7 @@ func (f *playbackFakeEngine) HasPreload() bool   { return false }
 func (f *playbackFakeEngine) Seekable() bool     { return false }
 func (f *playbackFakeEngine) IsStreamSeek() bool { return false }
 func (f *playbackFakeEngine) IsYTDLSeek() bool   { return f.ytdlSeek }
+func (f *playbackFakeEngine) IsLiveStream() bool { return f.live }
 func (f *playbackFakeEngine) GaplessAdvanced() bool {
 	if !f.gaplessAdvanced {
 		return false
@@ -61,7 +68,7 @@ func (f *playbackFakeEngine) GaplessAdvanced() bool {
 	return true
 }
 func (f *playbackFakeEngine) Position() time.Duration { return f.position }
-func (f *playbackFakeEngine) Duration() time.Duration { return 0 }
+func (f *playbackFakeEngine) Duration() time.Duration { return f.duration }
 func (f *playbackFakeEngine) PositionAndDuration() (time.Duration, time.Duration) {
 	return 0, 0
 }
@@ -373,6 +380,36 @@ func TestPreloadNextSkipsLiveStream(t *testing.T) {
 	}
 }
 
+func TestPreloadNextSkipsRuntimeDetectedLiveStream(t *testing.T) {
+	player := &playbackFakeEngine{playing: true, live: true}
+	p := playlist.New()
+	p.Replace([]playlist.Track{
+		{Title: "Station 1", Path: "https://example.com/one", Stream: true},
+		{Title: "Station 2", Path: "https://example.com/two", Stream: true},
+	})
+	p.SetIndex(0)
+
+	m := Model{player: player, playlist: p}
+	if cmd := m.preloadNext(); cmd != nil {
+		t.Fatal("preloadNext() returned a command for a runtime-detected live stream")
+	}
+}
+
+func TestPreloadNextSkipsUnknownDurationStream(t *testing.T) {
+	player := &playbackFakeEngine{playing: true}
+	p := playlist.New()
+	p.Replace([]playlist.Track{
+		{Title: "Current", Path: "current.mp3"},
+		{Title: "Unknown", Path: "https://example.com/unknown", Stream: true},
+	})
+	p.SetIndex(0)
+
+	m := Model{player: player, playlist: p}
+	if cmd := m.preloadNext(); cmd != nil {
+		t.Fatal("preloadNext() returned a command without a known stream boundary")
+	}
+}
+
 func TestDrainedLiveStreamReconnectsCurrentStation(t *testing.T) {
 	player := &playbackFakeEngine{playing: true, drained: true}
 	p := playlist.New()
@@ -398,6 +435,30 @@ func TestDrainedLiveStreamReconnectsCurrentStation(t *testing.T) {
 	}
 	if m.reconnect.at.IsZero() || !m.reconnect.at.After(now) {
 		t.Fatalf("reconnect time = %v, want a future retry", m.reconnect.at)
+	}
+}
+
+func TestGaplessAdvanceDoesNotAlsoDrainNextTrack(t *testing.T) {
+	player := &playbackFakeEngine{playing: true, gaplessAdvanced: true, drained: true}
+	p := playlist.New()
+	p.Replace([]playlist.Track{
+		{Title: "One", Path: "one.mp3", DurationSecs: 180},
+		{Title: "Two", Path: "two.mp3", DurationSecs: 180},
+		{Title: "Three", Path: "three.mp3", DurationSecs: 180},
+	})
+	p.SetIndex(0)
+
+	m := Model{
+		player:   player,
+		playlist: p,
+		vis:      ui.NewVisualizer(float64(player.SampleRate())),
+	}
+	m.SetVisualizer("none")
+
+	updated, _ := m.Update(tickMsg(time.Now()))
+	m = updated.(Model)
+	if got := m.playlist.Index(); got != 1 {
+		t.Fatalf("playlist index = %d, want one gapless advance to index 1", got)
 	}
 }
 
