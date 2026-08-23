@@ -42,6 +42,7 @@ const (
 	commandModeThemePickerFilter
 	commandModeVisPickerFilter
 	commandModeProviderSearch
+	commandModeRadioStats
 )
 
 const commandModeAny = ^commandMode(0)
@@ -167,6 +168,9 @@ var commandRegistry = []commandSpec{
 	{Mode: commandModeLyrics, Keys: []string{"r"}, KeyLabel: "r", Label: "Retry", ContextHelp: true, Primary: true, Enabled: func(m Model) bool { return !m.lyrics.loading && (m.lyrics.err != nil || len(m.lyrics.lines) == 0) }},
 	{Mode: commandModeLyrics, Keys: []string{"esc"}, KeyLabel: "Esc", Label: "Close", ContextHelp: true, Cancel: true},
 	{Mode: commandModeInfo, Keys: []string{"esc"}, KeyLabel: "Esc", Label: "Close", ContextHelp: true, Cancel: true},
+	{Mode: commandModeRadioStats, Keys: []string{"esc"}, KeyLabel: "Esc", Label: "Close", ContextHelp: true, Cancel: true},
+	{Mode: commandModeRadioStats, Keys: []string{"r"}, KeyLabel: "r", Label: "Refresh", ContextHelp: true, Primary: true},
+	{Mode: commandModeRadioStats, Keys: []string{"up", "down", "k", "j"}, KeyLabel: "Up Down", Label: "Scroll", ContextHelp: true},
 }
 
 func (m Model) commandHelp(mode commandMode) string {
