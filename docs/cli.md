@@ -73,13 +73,23 @@ cliamp search-sc "lofi beats"                  # search SoundCloud
 
 Press `Ctrl+F` in the player for context-aware search: it runs the active provider's native search when available or falls back to YouTube search.
 
+## Updates
+
+```sh
+cliamp upgrade                # latest stable release
+cliamp upgrade --prerelease   # latest beta or release candidate
+```
+
+Prerelease updates are opt-in for each upgrade. Normal installs, package-manager updates, and `cliamp upgrade` continue to use stable releases only.
+
+Maintainers publish a prerelease by tagging the release commit with a SemVer prerelease tag such as `v1.5.0-beta.1` or `v1.5.0-rc.1`. The release workflow builds all platform binaries and creates a GitHub prerelease without updating Homebrew, AUR, or the public changelog.
+
 ## General
 
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--help` | `-h` | Show help and exit |
 | `--version` | `-v` | Print version and exit |
-| `--upgrade` | | Update to the latest release |
 
 ## Shell completion
 

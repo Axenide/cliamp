@@ -209,8 +209,18 @@ jobs:
 
   release:
     needs: build
+    outputs:
+      prerelease: ${{ steps.release-type.outputs.prerelease }}
     runs-on: ubuntu-latest
     steps:
+      - name: Classify release
+        id: release-type
+        run: |
+          case "${GITHUB_REF_NAME}" in
+            *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
       - name: Checkout
         uses: actions/checkout@v7.0.0
         with:
@@ -235,7 +245,18 @@ jobs:
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
 
-          PREV_TAG=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || echo "")
+          if [[ "$TAG" == *-* ]]; then
+            PREV_TAG=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || echo "")
+          else
+            # Include the full beta-tested change set in the final release notes.
+            PREV_TAG=""
+            while IFS= read -r candidate; do
+              case "$candidate" in
+                v*-*) ;;
+                v*) PREV_TAG="$candidate"; break ;;
+              esac
+            done < <(git tag --merged "${TAG}^" --sort=-version:refname)
+          fi
 
           CHANGELOG=""
 
@@ -278,6 +299,7 @@ jobs:
         uses: softprops/action-gh-release@v3.0.1
         with:
           body_path: release_notes.md
+          prerelease: ${{ steps.release-type.outputs.prerelease }}
           files: |
             artifacts/cliamp-*
             artifacts/checksums.txt
@@ -290,6 +312,7 @@ jobs:
 
   update-homebrew:
     needs: release
+    if: needs.release.outputs.prerelease != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Download checksums

@@ -225,9 +225,12 @@ func overridesFromFlags(c *cli.Command) (config.Overrides, error) {
 func upgradeCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "upgrade",
-		Usage: "upgrade cliamp to the latest release",
+		Usage: "upgrade cliamp to the latest stable release",
+		Flags: []cli.Flag{
+			&cli.BoolFlag{Name: "prerelease", Usage: "upgrade to the latest prerelease"},
+		},
 		Action: func(ctx context.Context, c *cli.Command) error {
-			return upgrade.Run(version)
+			return upgrade.Run(version, c.Bool("prerelease"))
 		},
 	}
 }
