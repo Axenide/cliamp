@@ -1,6 +1,6 @@
 module github.com/bjarneo/cliamp
 
-go 1.26.5
+go 1.26.6
 
 require (
 	charm.land/bubbletea/v2 v2.0.2
