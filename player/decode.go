@@ -128,6 +128,17 @@ func (p *Player) matchCustomURI(path string) StreamerFactory {
 	return nil
 }
 
+// matchSourceResolver returns the SourceResolver for the given path if it
+// matches a registered scheme prefix, or nil if no scheme matches.
+func (p *Player) matchSourceResolver(path string) SourceResolver {
+	for scheme, r := range p.sourceResolvers {
+		if strings.HasPrefix(path, scheme) {
+			return r
+		}
+	}
+	return nil
+}
+
 // sourceResult holds the opened stream and optional HTTP metadata.
 type sourceResult struct {
 	body          io.ReadCloser

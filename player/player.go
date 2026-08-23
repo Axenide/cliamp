@@ -59,6 +59,7 @@ type Player struct {
 	streamTitle      atomic.Value               // stores string, set by ICY reader callback
 	customFactories  map[string]StreamerFactory // URI scheme prefix -> factory (e.g. "spotify:" -> fn)
 	bufferedURLMatch func(string) bool          // optional: returns true for URLs needing navBuffer pipeline
+	sourceResolvers  map[string]SourceResolver  // URI scheme prefix -> play-time source resolver (e.g. "tidal://")
 
 	streamMetaResolver StreamMetadataResolver // optional: API-based now-playing for streams without ICY
 	metaCancel         context.CancelFunc     // cancels the active metadata poller; guarded by mu
@@ -918,6 +919,32 @@ func (p *Player) RegisterBufferedURLMatcher(match func(string) bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.bufferedURLMatch = match
+}
+
+// ResolvedSource is a playable source produced by a SourceResolver at play
+// time: either a direct HTTP URL, or an ordered list of media segment URLs
+// whose concatenated bytes form one progressive stream (e.g. unencrypted
+// DASH fMP4 segments).
+type ResolvedSource struct {
+	URL      string
+	Segments []string
+}
+
+// SourceResolver turns a custom URI (e.g. "tidal://track/123") into a
+// ResolvedSource when playback starts. Resolving at play time keeps
+// short-lived signed URLs fresh no matter how long a track sat in the queue.
+type SourceResolver func(uri string) (ResolvedSource, error)
+
+// RegisterSourceResolver registers a resolver for a custom URI scheme prefix.
+// Unlike RegisterStreamerFactory, the provider only supplies bytes to fetch;
+// decoding stays in the player's buffered ffmpeg pipeline.
+func (p *Player) RegisterSourceResolver(scheme string, r SourceResolver) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.sourceResolvers == nil {
+		p.sourceResolvers = make(map[string]SourceResolver)
+	}
+	p.sourceResolvers[scheme] = r
 }
 
 // suspendSpeaker suspends the ALSA audio callback goroutine so it blocks

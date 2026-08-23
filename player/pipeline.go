@@ -159,6 +159,41 @@ func (p *Player) buildPipeline(path string) (*trackPipeline, error) {
 		}, nil
 	}
 
+	// Custom URIs with a registered SourceResolver (e.g. tidal://track/123)
+	// resolve to their actual bytes at play time, so short-lived signed URLs
+	// are always fresh. Segment lists get a concatenating navBuffer; direct
+	// URLs fall through to the normal HTTP handling below.
+	if resolver := p.matchSourceResolver(path); resolver != nil {
+		src, err := resolver(path)
+		if err != nil {
+			return nil, fmt.Errorf("resolve source: %w", err)
+		}
+		if len(src.Segments) > 0 {
+			nb, contentLen, err := newNavBufferSegments(src.Segments)
+			if err != nil {
+				return nil, fmt.Errorf("segment buffer: %w", err)
+			}
+			decoder, format, err := decodeNavFFmpeg(nb, p.sr, p.bitDepth, 0)
+			if err != nil {
+				nb.Close()
+				return nil, fmt.Errorf("decode segments: %w", err)
+			}
+			return &trackPipeline{
+				decoder:       decoder,
+				stream:        decoder,
+				format:        format,
+				seekable:      true, // navFFmpegStreamer.Seek() handles seeking without reconnect
+				path:          path,
+				bytesRead:     &nb.bytesIn,
+				contentLength: contentLen,
+			}, nil
+		}
+		if src.URL == "" {
+			return nil, fmt.Errorf("resolve source: empty result for %s", path)
+		}
+		path = src.URL
+	}
+
 	// For HTTP URLs, pass the ICY metadata callback; for local files, nil.
 	var onMeta func(string)
 	if isURL(path) {
