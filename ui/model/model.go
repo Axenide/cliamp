@@ -365,6 +365,10 @@ type Model struct {
 	// snapshot survives Update's value-receiver copy.
 	pluginEmit *pluginEmitState
 
+	// ipcRuntime publishes GUI-facing runtime snapshots from the Update owner.
+	// It is shared by value-receiver copies of Model.
+	ipcRuntime *ipcRuntimeState
+
 	// History recorder (nil if config dir unavailable; safe to call when nil)
 	historyStore *history.Store
 

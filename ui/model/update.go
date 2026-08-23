@@ -45,6 +45,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	defer func() {
 		m.maybeRequestVisualizerRefresh(msg, wasScreen, wasVisualizerVisible, wasMode, wasPlaying, wasPaused)
 		m.emitPluginEvents()
+		m.publishIPCRuntimeState()
 	}()
 
 	switch msg := msg.(type) {
@@ -1262,6 +1263,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ipc.SaveRequestMsg:
 		return m, m.handleIPCSave(msg)
+
+	case V2RequestMsg:
+		return m, m.handleV2Request(msg)
+
+	case ipcV2ResponseMsg:
+		if msg.Response.OK {
+			if msg.Operation == "device" && msg.Response.Device != "" {
+				_ = m.configSaver.Save("audio_device", msg.Response.Device)
+				m.devicePicker.devices = nil
+			}
+			m.completeV2Job(msg.Jobs, msg.JobID, msg.Response)
+		} else {
+			m.failV2Job(msg.Jobs, msg.JobID, v2InternalError())
+		}
+		return m, nil
 
 	case ipc.BandsRequestMsg:
 		resp := ipc.Response{OK: true}

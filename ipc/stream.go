@@ -1,7 +1,6 @@
 package ipc
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -32,8 +31,7 @@ func StreamBands(ctx context.Context, sockPath string, interval time.Duration, o
 	}
 	reqLine = append(reqLine, '\n')
 
-	scanner := bufio.NewScanner(conn)
-	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	scanner := newFrameScanner(conn)
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()

@@ -5,7 +5,7 @@ Override any config option for a single session without editing `~/.config/cliam
 ## Playback
 
 ```sh
-cliamp --volume -5 track.mp3          # volume in dB [-30, +6]
+cliamp --vol -5 track.mp3             # volume in dB [-30, +6]
 cliamp --shuffle ~/Music              # enable shuffle
 cliamp --repeat all ~/Music           # repeat mode: off, all, one
 cliamp --mono track.mp3               # downmix to mono
@@ -117,13 +117,13 @@ cliamp track.mp3 --repeat all --mono ~/Music
 
 | Flag | Type | Default | Range / Values |
 |------|------|---------|----------------|
-| `--volume` | float | 0 | -30 to +6 dB |
+| `--vol` | float | 0 | -30 to +6 dB |
 | `--shuffle` | bool | false | |
 | `--repeat` | string | off | off, all, one |
 | `--mono` / `--no-mono` | bool | false | |
 | `--auto-play` | bool | false | |
 | `--compact` | bool | false | |
-| `--theme` | string | | theme name |
+| `--start-theme` | string | | theme name |
 | `--eq-preset` | string | | preset name |
 | `--sample-rate` | int | 44100 | 22050, 44100, 48000, 96000, 192000 |
 | `--buffer-ms` | int | 250 | 50-5000 |
@@ -212,7 +212,7 @@ cliamp next / prev                     # track navigation
 cliamp status                          # current state
 cliamp status --json                   # machine-readable state
 cliamp volume -5                       # adjust volume (dB)
-cliamp seek 30                         # seek to position (seconds)
+cliamp seek 30                         # seek relative to current position (seconds)
 cliamp load "Playlist Name"            # load a playlist
 cliamp queue /path/to/file.mp3         # queue a track
 cliamp shuffle [on|off|toggle]         # toggle or set shuffle
@@ -223,6 +223,9 @@ cliamp eq Rock                         # set EQ preset by name
 cliamp eq --band 0 6.0                 # set EQ band 0 to +6 dB
 cliamp device list                     # list audio output devices
 cliamp device "My DAC"                 # switch audio output device
+cliamp remote state                     # v2 GUI-ready runtime snapshot
+cliamp remote capabilities              # v2 operation list
+cliamp remote events runtime.state      # v2 event stream
 ```
 
 See [remote-control.md](remote-control.md) for the full protocol specification.

@@ -1,7 +1,6 @@
 package ipc
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -52,7 +51,7 @@ func SendWithDeadline(sockPath string, req Request, deadline time.Duration) (Res
 	}
 
 	// Read the response line.
-	scanner := bufio.NewScanner(conn)
+	scanner := newFrameScanner(conn)
 	if !scanner.Scan() {
 		if err := scanner.Err(); err != nil {
 			return Response{}, fmt.Errorf("read response: %w", err)

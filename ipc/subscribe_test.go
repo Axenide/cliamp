@@ -1,7 +1,6 @@
 package ipc
 
 import (
-	"bufio"
 	"encoding/json"
 	"net"
 	"path/filepath"
@@ -77,7 +76,7 @@ func TestSubscriptionClearsRequestReadDeadline(t *testing.T) {
 	}()
 	defer clientConn.Close()
 
-	scanner := bufio.NewScanner(clientConn)
+	scanner := newFrameScanner(clientConn)
 	if !scanner.Scan() {
 		t.Fatalf("read acknowledgment: %v", scanner.Err())
 	}

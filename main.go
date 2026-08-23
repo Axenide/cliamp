@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -338,6 +339,7 @@ func run(overrides config.Overrides, positional []string, daemon bool) error {
 	}
 
 	m := model.New(p, pl, providers, defaultProvider, localProv, themes, luaMgr, config.SaveFunc{})
+	m.SetIPCBroker(pluginBroker)
 	m.SetCustomEQBands(cfg.EQ)
 	m.SetVisVolumeLinked(cfg.VisVolumeLinked)
 
@@ -496,6 +498,13 @@ func run(overrides config.Overrides, positional []string, daemon bool) error {
 		fmt.Fprintf(os.Stderr, "ipc: %v\n", ipcErr)
 	} else {
 		defer ipcSrv.Close()
+		ipcSrv.SetV2Dispatcher(newTUIV2Dispatcher(prog, ipcSrv.JobStore(), luaMgr))
+		if luaMgr == nil {
+			operations := ipc.DefaultOperationRegistry()
+			operations.Unregister("plugin.call", "plugin.commands")
+			ipcSrv.SetOperationRegistry(operations)
+		}
+		go publishV2JobEvents(ipcSrv.Done(), ipcSrv.JobStore(), pluginBroker)
 		if luaMgr != nil {
 			ipcSrv.SetPluginDispatcher(luaMgr)
 		}
@@ -519,6 +528,92 @@ func run(overrides config.Overrides, positional []string, daemon bool) error {
 	}
 
 	return nil
+}
+
+func newTUIV2Dispatcher(prog *tea.Program, jobs *ipc.JobStore, plugins *luaplugin.Manager) ipc.V2Dispatcher {
+	return ipc.V2DispatcherFunc(func(ctx context.Context, request ipc.V2Request) (ipc.V2Result, *ipc.V2Error) {
+		if request.Operation == "runtime.snapshot" || request.Operation == "runtime.status" {
+			request.Method = "state.get"
+			request.Operation = ""
+		}
+		switch request.Method {
+		case "state.get", "spectrum.get":
+			reply := make(chan model.V2RequestResult, 1)
+			go prog.Send(model.V2RequestMsg{Request: request, Reply: reply})
+			select {
+			case result := <-reply:
+				return result.Result, result.Error
+			case <-ctx.Done():
+				return ipc.V2Result{}, &ipc.V2Error{Code: ipc.V2ErrorCodeCanceled, Message: ipc.V2MessageCanceled}
+			case <-time.After(3 * time.Second):
+				return ipc.V2Result{}, &ipc.V2Error{Code: ipc.V2ErrorCodeUnavailable, Message: ipc.V2MessageUnavailable}
+			}
+		}
+
+		job, err := jobs.CreateWithContext(ctx, request.Operation)
+		if err != nil {
+			return ipc.V2Result{}, &ipc.V2Error{Code: ipc.V2ErrorCodeConflict, Message: ipc.V2MessageConflict}
+		}
+		if request.Operation == "plugin.call" || request.Operation == "plugin.commands" {
+			go runV2PluginJob(jobs, job.ID, request, plugins)
+			return ipc.V2Result{Job: &job}, nil
+		}
+		// Program.Send may wait for the TUI update loop. Job submission itself
+		// stays non-blocking so the IPC response can always acknowledge the job.
+		go prog.Send(model.V2RequestMsg{Request: request, Jobs: jobs, JobID: job.ID})
+		return ipc.V2Result{Job: &job}, nil
+	})
+}
+
+func runV2PluginJob(jobs *ipc.JobStore, jobID string, request ipc.V2Request, plugins *luaplugin.Manager) {
+	ctx, err := jobs.Start(jobID)
+	if err != nil || ctx.Err() != nil {
+		return
+	}
+	if plugins == nil {
+		_ = jobs.Fail(jobID, ipc.V2Error{Code: ipc.V2ErrorCodeUnavailable, Message: ipc.V2MessageUnavailable})
+		return
+	}
+	if request.Operation == "plugin.commands" {
+		data, err := json.Marshal(ipc.Response{OK: true, Items: plugins.CommandList()})
+		if err != nil {
+			_ = jobs.Fail(jobID, ipc.V2Error{Code: ipc.V2ErrorCodeInternal, Message: ipc.V2MessageInternal})
+			return
+		}
+		_ = jobs.Succeed(jobID, data)
+		return
+	}
+
+	var params ipc.Request
+	if err := json.Unmarshal(request.Params, &params); err != nil || params.Name == "" || params.Sub == "" {
+		_ = jobs.Fail(jobID, ipc.V2Error{Code: ipc.V2ErrorCodeInvalidParams, Message: ipc.V2MessageInvalidParams})
+		return
+	}
+	output, err := plugins.EmitCommand(params.Name, params.Sub, params.Args)
+	if err != nil {
+		_ = jobs.Fail(jobID, ipc.V2Error{Code: ipc.V2ErrorCodeInternal, Message: ipc.V2MessageInternal})
+		return
+	}
+	data, err := json.Marshal(ipc.Response{OK: true, Output: output})
+	if err != nil {
+		_ = jobs.Fail(jobID, ipc.V2Error{Code: ipc.V2ErrorCodeInternal, Message: ipc.V2MessageInternal})
+		return
+	}
+	_ = jobs.Succeed(jobID, data)
+}
+
+func publishV2JobEvents(done <-chan struct{}, jobs *ipc.JobStore, broker *ipc.Broker) {
+	for {
+		select {
+		case <-done:
+			return
+		case event := <-jobs.Events():
+			data, err := json.Marshal(event)
+			if err == nil {
+				_ = broker.Publish("runtime.job", data, false)
+			}
+		}
+	}
 }
 
 // initLogging always returns a non-nil close func so the caller can defer

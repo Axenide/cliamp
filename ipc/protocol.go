@@ -2,33 +2,38 @@
 // The protocol is newline-delimited JSON over a Unix domain socket.
 package ipc
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // Compile-time interface check.
 var _ Dispatcher = DispatcherFunc(nil)
 
 // Request is the JSON command sent by the client.
 type Request struct {
-	Cmd      string     `json:"cmd"`
-	Value    float64    `json:"value,omitempty"`
-	Playlist string     `json:"playlist,omitempty"`
-	Path     string     `json:"path,omitempty"`
-	Name     string     `json:"name,omitempty"`
-	Band     int        `json:"band,omitempty"`
-	Sub      string     `json:"sub,omitempty"`
-	Args     []string   `json:"args,omitempty"`
-	Provider string     `json:"provider,omitempty"`
-	Query    string     `json:"query,omitempty"`
-	Artist   string     `json:"artist,omitempty"`
-	Album    string     `json:"album,omitempty"`
-	Sort     string     `json:"sort,omitempty"`
-	Offset   int        `json:"offset,omitempty"`
-	Index    int        `json:"index,omitempty"`
-	To       int        `json:"to,omitempty"`
-	Limit    int        `json:"limit,omitempty"`
-	NewName  string     `json:"new_name,omitempty"`
-	Track    *TrackInfo `json:"track,omitempty"`
-	Topics   []string   `json:"topics,omitempty"`
+	Cmd      string      `json:"cmd"`
+	Value    float64     `json:"value,omitempty"`
+	Playlist string      `json:"playlist,omitempty"`
+	Path     string      `json:"path,omitempty"`
+	Name     string      `json:"name,omitempty"`
+	Band     int         `json:"band,omitempty"`
+	Sub      string      `json:"sub,omitempty"`
+	Args     []string    `json:"args,omitempty"`
+	Provider string      `json:"provider,omitempty"`
+	Query    string      `json:"query,omitempty"`
+	Artist   string      `json:"artist,omitempty"`
+	Album    string      `json:"album,omitempty"`
+	Sort     string      `json:"sort,omitempty"`
+	Offset   int         `json:"offset,omitempty"`
+	Index    int         `json:"index,omitempty"`
+	To       int         `json:"to,omitempty"`
+	Limit    int         `json:"limit,omitempty"`
+	Revision uint64      `json:"if_revision,omitempty"`
+	NewName  string      `json:"new_name,omitempty"`
+	Track    *TrackInfo  `json:"track,omitempty"`
+	Tracks   []TrackInfo `json:"tracks,omitempty"`
+	Topics   []string    `json:"topics,omitempty"`
 }
 
 // Response is the JSON response sent by the server.
@@ -89,23 +94,26 @@ type PluginDispatcher interface {
 
 // TrackInfo is the track metadata in a status response.
 type TrackInfo struct {
-	Title         string `json:"title,omitempty"`
-	Artist        string `json:"artist,omitempty"`
-	Album         string `json:"album,omitempty"`
-	Genre         string `json:"genre,omitempty"`
-	Path          string `json:"path"`
-	AlbumArtURL   string `json:"album_art_url,omitempty"`
-	Year          int    `json:"year,omitempty"`
-	TrackNumber   int    `json:"track_number,omitempty"`
-	DurationSecs  int    `json:"duration_secs,omitempty"`
-	Index         int    `json:"index,omitempty"`
-	QueuePosition int    `json:"queue_position,omitempty"`
-	Stream        bool   `json:"stream,omitempty"`
-	StreamTitle   string `json:"stream_title,omitempty"`
-	Station       string `json:"station,omitempty"`
-	Realtime      bool   `json:"realtime,omitempty"`
-	Bookmark      bool   `json:"bookmark,omitempty"`
-	Unplayable    bool   `json:"unplayable,omitempty"`
+	Title         string            `json:"title,omitempty"`
+	Artist        string            `json:"artist,omitempty"`
+	Album         string            `json:"album,omitempty"`
+	Genre         string            `json:"genre,omitempty"`
+	Path          string            `json:"path"`
+	AlbumArtURL   string            `json:"album_art_url,omitempty"`
+	Year          int               `json:"year,omitempty"`
+	TrackNumber   int               `json:"track_number,omitempty"`
+	DurationSecs  int               `json:"duration_secs,omitempty"`
+	Index         int               `json:"index,omitempty"`
+	QueuePosition int               `json:"queue_position,omitempty"`
+	Stream        bool              `json:"stream,omitempty"`
+	StreamTitle   string            `json:"stream_title,omitempty"`
+	Station       string            `json:"station,omitempty"`
+	Realtime      bool              `json:"realtime,omitempty"`
+	Feed          bool              `json:"feed,omitempty"`
+	Bookmark      bool              `json:"bookmark,omitempty"`
+	Unplayable    bool              `json:"unplayable,omitempty"`
+	DirSourced    bool              `json:"dir_sourced,omitempty"`
+	ProviderMeta  map[string]string `json:"provider_meta,omitempty"`
 }
 
 type PlaylistInfo struct {
@@ -287,6 +295,8 @@ type LibraryRequestMsg struct {
 	Index    int
 	NewName  string
 	Track    *TrackInfo
+	Tracks   []TrackInfo
+	Context  context.Context
 	Reply    chan Response
 }
 
@@ -301,8 +311,9 @@ type HistoryRequestMsg struct {
 }
 
 type URLRequestMsg struct {
-	URL   string
-	Reply chan Response
+	URL     string
+	Context context.Context
+	Reply   chan Response
 }
 
 type SaveRequestMsg struct {

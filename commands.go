@@ -94,6 +94,7 @@ func buildApp() *cli.Command {
 			speedCommand(),
 			eqCommand(),
 			deviceCommand(),
+			remoteCommand(),
 		},
 	}
 }
@@ -1023,5 +1024,180 @@ func deviceCommand() *cli.Command {
 			fmt.Printf("Audio device: %s\n", resp.Device)
 			return nil
 		},
+	}
+}
+
+func remoteCommand() *cli.Command {
+	return &cli.Command{
+		Name:  "remote",
+		Usage: "use the version 2 IPC API",
+		Commands: []*cli.Command{
+			{
+				Name:  "state",
+				Usage: "print the complete runtime snapshot as JSON",
+				Action: func(ctx context.Context, c *cli.Command) error {
+					response, err := ipc.SendV2(ipc.DefaultSocketPath(), ipc.V2Request{ID: json.RawMessage(`"cliamp"`), Method: "state.get"})
+					if err != nil {
+						return userIPCError(err)
+					}
+					return printV2Response(response)
+				},
+			},
+			{
+				Name:  "capabilities",
+				Usage: "print available v2 operations as JSON",
+				Action: func(ctx context.Context, c *cli.Command) error {
+					response, err := ipc.SendV2(ipc.DefaultSocketPath(), ipc.V2Request{ID: json.RawMessage(`"cliamp"`), Method: "capabilities"})
+					if err != nil {
+						return userIPCError(err)
+					}
+					return printV2Response(response)
+				},
+			},
+			{
+				Name:      "call",
+				Usage:     "submit a v2 operation",
+				ArgsUsage: "<operation>",
+				Flags: []cli.Flag{
+					&cli.StringFlag{Name: "params", Usage: "JSON object passed as operation parameters", Value: "{}"},
+					&cli.BoolFlag{Name: "wait", Usage: "wait for a submitted job to finish"},
+				},
+				Action: func(ctx context.Context, c *cli.Command) error {
+					if c.Args().Len() == 0 {
+						return fmt.Errorf("usage: cliamp remote call <operation> [--params '{}']")
+					}
+					params := json.RawMessage(c.String("params"))
+					if !json.Valid(params) {
+						return fmt.Errorf("--params must be a JSON value")
+					}
+					response, err := ipc.SendV2(ipc.DefaultSocketPath(), ipc.V2Request{
+						ID:        json.RawMessage(`"cliamp"`),
+						Method:    "operation.submit",
+						Operation: c.Args().First(),
+						Params:    params,
+					})
+					if err != nil {
+						return userIPCError(err)
+					}
+					if err := v2ResponseError(response); err != nil {
+						return err
+					}
+					if c.Bool("wait") && response.Job != nil {
+						response, err = waitForV2Job(ctx, response.Job.ID)
+						if err != nil {
+							return err
+						}
+					}
+					return printV2Response(response)
+				},
+			},
+			{
+				Name:      "job",
+				Usage:     "print a v2 job",
+				ArgsUsage: "<job-id>",
+				Action: func(ctx context.Context, c *cli.Command) error {
+					if c.Args().Len() == 0 {
+						return fmt.Errorf("usage: cliamp remote job <job-id>")
+					}
+					response, err := ipc.SendV2(ipc.DefaultSocketPath(), ipc.V2Request{ID: json.RawMessage(`"cliamp"`), Method: "job.get", JobID: c.Args().First()})
+					if err != nil {
+						return userIPCError(err)
+					}
+					return printV2Response(response)
+				},
+			},
+			{
+				Name:      "cancel",
+				Usage:     "cancel a v2 job",
+				ArgsUsage: "<job-id>",
+				Action: func(ctx context.Context, c *cli.Command) error {
+					if c.Args().Len() == 0 {
+						return fmt.Errorf("usage: cliamp remote cancel <job-id>")
+					}
+					response, err := ipc.SendV2(ipc.DefaultSocketPath(), ipc.V2Request{ID: json.RawMessage(`"cliamp"`), Method: "job.cancel", JobID: c.Args().First()})
+					if err != nil {
+						return userIPCError(err)
+					}
+					return printV2Response(response)
+				},
+			},
+			{
+				Name:      "events",
+				Usage:     "stream v2 runtime events as NDJSON",
+				ArgsUsage: "<topic> [topic...]",
+				Action: func(ctx context.Context, c *cli.Command) error {
+					if c.Args().Len() == 0 {
+						return fmt.Errorf("usage: cliamp remote events runtime.state [runtime.job]")
+					}
+					stream, err := ipc.SubscribeV2(ipc.DefaultSocketPath(), json.RawMessage(`"cliamp"`), c.Args().Slice())
+					if err != nil {
+						return userIPCError(err)
+					}
+					defer stream.Close()
+					encoder := json.NewEncoder(os.Stdout)
+					for {
+						select {
+						case <-ctx.Done():
+							return nil
+						default:
+						}
+						event, err := stream.Next()
+						if err != nil {
+							return err
+						}
+						if err := encoder.Encode(event); err != nil {
+							return err
+						}
+					}
+				},
+			},
+		},
+	}
+}
+
+func printV2Response(response ipc.V2Response) error {
+	if err := v2ResponseError(response); err != nil {
+		return err
+	}
+	return json.NewEncoder(os.Stdout).Encode(response)
+}
+
+func v2ResponseError(response ipc.V2Response) error {
+	if response.OK {
+		return nil
+	}
+	if response.Error == nil {
+		return fmt.Errorf("remote operation failed")
+	}
+	return fmt.Errorf("remote operation failed (%s): %s", response.Error.Code, response.Error.Message)
+}
+
+func waitForV2Job(ctx context.Context, jobID string) (ipc.V2Response, error) {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		response, err := ipc.SendV2(ipc.DefaultSocketPath(), ipc.V2Request{ID: json.RawMessage(`"cliamp"`), Method: "job.get", JobID: jobID})
+		if err != nil {
+			return ipc.V2Response{}, userIPCError(err)
+		}
+		if err := v2ResponseError(response); err != nil {
+			return ipc.V2Response{}, err
+		}
+		if response.Job != nil {
+			switch response.Job.State {
+			case ipc.JobSucceeded:
+				return response, nil
+			case ipc.JobFailed, ipc.JobCanceled:
+				if response.Job.Error != nil {
+					return ipc.V2Response{}, fmt.Errorf("job %s (%s): %s", response.Job.State, response.Job.Error.Code, response.Job.Error.Message)
+				}
+				return ipc.V2Response{}, fmt.Errorf("job %s", response.Job.State)
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return ipc.V2Response{}, ctx.Err()
+		case <-ticker.C:
+		}
 	}
 }

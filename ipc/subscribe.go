@@ -38,8 +38,7 @@ func Subscribe(sockPath string, topics []string) (*EventStream, error) {
 		return fail(fmt.Errorf("write subscribe request: %w", err))
 	}
 
-	scanner := bufio.NewScanner(conn)
-	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	scanner := newFrameScanner(conn)
 	if !scanner.Scan() {
 		if err := scanner.Err(); err != nil {
 			return fail(fmt.Errorf("read subscribe response: %w", err))

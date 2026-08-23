@@ -1,7 +1,7 @@
 package ipc
 
 import (
-	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,13 +27,24 @@ const ipcRequestReadTimeout = 60 * time.Second
 
 // Server listens on a Unix socket and dispatches IPC commands.
 type Server struct {
-	listener net.Listener
-	sockPath string
-	disp     Dispatcher
-	plugins  PluginDispatcher
-	broker   *Broker
-	done     chan struct{}
-	wg       sync.WaitGroup
+	listener    net.Listener
+	sockPath    string
+	disp        Dispatcher
+	plugins     PluginDispatcher
+	broker      *Broker
+	brokerOwned bool
+
+	v2Mu       sync.RWMutex
+	v2         V2Dispatcher
+	operations *OperationRegistry
+	jobs       *JobStore
+	context    context.Context
+	cancel     context.CancelFunc
+
+	done      chan struct{}
+	wg        sync.WaitGroup
+	closeOnce sync.Once
+	closeErr  error
 
 	connMu sync.Mutex
 	conns  map[net.Conn]struct{} // live connections, closed on shutdown
@@ -75,17 +86,55 @@ func (s *Server) SetPluginDispatcher(p PluginDispatcher) {
 	s.plugins = p
 }
 
-// NewServer creates and starts the IPC server with a new event broker.
-func NewServer(sockPath string, disp Dispatcher) (*Server, error) {
-	return NewServerWithBroker(sockPath, disp, nil)
+// SetV2Dispatcher wires the runtime owner for version 2 requests. V2 remains
+// available for capability discovery and subscriptions when it is nil.
+func (s *Server) SetV2Dispatcher(dispatcher V2Dispatcher) {
+	s.v2Mu.Lock()
+	s.v2 = dispatcher
+	s.v2Mu.Unlock()
 }
 
-// NewServerWithBroker creates and starts the IPC server using broker. A new
-// broker is allocated when broker is nil.
+// SetOperationRegistry replaces the advertised V2 capability set. It should
+// be called during runtime setup before accepting client traffic.
+func (s *Server) SetOperationRegistry(registry *OperationRegistry) {
+	s.v2Mu.Lock()
+	s.operations = registry
+	s.v2Mu.Unlock()
+}
+
+// JobStore returns the server's in-memory V2 job store.
+func (s *Server) JobStore() *JobStore {
+	return s.jobs
+}
+
+// Broker returns the server event broker. Callers may publish runtime events
+// but must not close a broker they do not own.
+func (s *Server) Broker() *Broker {
+	return s.broker
+}
+
+// Done closes when the server begins shutdown.
+func (s *Server) Done() <-chan struct{} {
+	return s.done
+}
+
+// NewServer creates and starts the IPC server with a new event broker.
+func NewServer(sockPath string, disp Dispatcher) (*Server, error) {
+	return newServer(sockPath, disp, NewBroker(), true)
+}
+
+// NewServerWithBroker creates and starts the IPC server using broker. The
+// caller retains ownership of a supplied broker and it is not closed by Server.
 func NewServerWithBroker(sockPath string, disp Dispatcher, broker *Broker) (*Server, error) {
+	owned := false
 	if broker == nil {
 		broker = NewBroker()
+		owned = true
 	}
+	return newServer(sockPath, disp, broker, owned)
+}
+
+func newServer(sockPath string, disp Dispatcher, broker *Broker, brokerOwned bool) (*Server, error) {
 	if err := cleanStaleSocket(sockPath); err != nil {
 		return nil, err
 	}
@@ -115,13 +164,19 @@ func NewServerWithBroker(sockPath string, disp Dispatcher, broker *Broker) (*Ser
 		return nil, fmt.Errorf("ipc: write pid: %w", err)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	s := &Server{
-		listener: ln,
-		sockPath: sockPath,
-		disp:     disp,
-		broker:   broker,
-		done:     make(chan struct{}),
-		conns:    make(map[net.Conn]struct{}),
+		listener:    ln,
+		sockPath:    sockPath,
+		disp:        disp,
+		broker:      broker,
+		brokerOwned: brokerOwned,
+		operations:  DefaultOperationRegistry(),
+		jobs:        NewJobStore(),
+		context:     ctx,
+		cancel:      cancel,
+		done:        make(chan struct{}),
+		conns:       make(map[net.Conn]struct{}),
 	}
 
 	s.wg.Add(1)
@@ -131,15 +186,32 @@ func NewServerWithBroker(sockPath string, disp Dispatcher, broker *Broker) (*Ser
 
 // Close shuts down the server, removes socket and PID file.
 func (s *Server) Close() error {
-	close(s.done)
-	err := s.listener.Close()
-	// Close in-flight connections so their handleConn read loops unblock
-	// immediately rather than waiting out the per-request read deadline.
-	s.closeConns()
-	s.wg.Wait()
-	os.Remove(s.sockPath)
-	os.Remove(s.sockPath + ".pid")
-	return err
+	s.closeOnce.Do(func() {
+		if s.cancel != nil {
+			s.cancel()
+		}
+		if s.jobs != nil {
+			s.jobs.CancelAll()
+		}
+		if s.done != nil {
+			close(s.done)
+		}
+		if s.listener != nil {
+			s.closeErr = s.listener.Close()
+		}
+		// Close in-flight connections so their handleConn read loops unblock
+		// immediately rather than waiting out the per-request read deadline.
+		s.closeConns()
+		s.wg.Wait()
+		if s.brokerOwned && s.broker != nil {
+			s.broker.Close()
+		}
+		if s.sockPath != "" {
+			_ = os.Remove(s.sockPath)
+			_ = os.Remove(s.sockPath + ".pid")
+		}
+	})
+	return s.closeErr
 }
 
 // acceptLoop accepts incoming connections until the server is closed.
@@ -179,7 +251,7 @@ func (s *Server) handleConn(conn net.Conn) {
 	}
 	defer s.removeConn(conn)
 
-	scanner := bufio.NewScanner(conn)
+	scanner := newFrameScanner(conn)
 
 	for {
 		// Per-request deadline so long-lived streaming clients (e.g. vis bands
@@ -194,40 +266,84 @@ func (s *Server) handleConn(conn net.Conn) {
 			continue
 		}
 
-		var req Request
-		if err := json.Unmarshal(line, &req); err != nil {
+		version, id, versioned, err := parseProtocolVersion(line)
+		if err != nil {
 			writeResponse(conn, Response{OK: false, Error: "invalid JSON: " + err.Error()})
 			continue
 		}
+		if !versioned {
+			var req Request
+			if err := json.Unmarshal(line, &req); err != nil {
+				writeResponse(conn, Response{OK: false, Error: "invalid JSON: " + err.Error()})
+				continue
+			}
 
-		if strings.EqualFold(req.Cmd, "subscribe") {
-			s.streamSubscription(conn, req.Topics)
+			if strings.EqualFold(req.Cmd, "subscribe") {
+				s.streamSubscription(conn, req.Topics)
+				return
+			}
+
+			resp := s.dispatch(req)
+			conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+			writeResponse(conn, resp)
+			continue
+		}
+
+		if version != protocolVersion2 {
+			conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+			_ = writeJSONLine(conn, V2Response{
+				ID:    id,
+				OK:    false,
+				Error: v2Error(V2ErrorCodeInvalidVersion, V2MessageInvalidVersion),
+			})
+			continue
+		}
+
+		var req V2Request
+		if err := json.Unmarshal(line, &req); err != nil {
+			conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+			_ = writeJSONLine(conn, V2Response{ID: id, OK: false, Error: invalidV2Request()})
+			continue
+		}
+		if isV2Subscribe(req) {
+			s.streamV2Subscription(conn, req)
 			return
 		}
 
-		resp := s.dispatch(req)
 		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		writeResponse(conn, resp)
+		_ = writeJSONLine(conn, s.dispatchV2(req))
 	}
 }
 
 func (s *Server) streamSubscription(conn net.Conn, topics []string) {
+	s.streamSubscriptionWithAck(conn, topics, Response{OK: true})
+}
+
+func (s *Server) streamV2Subscription(conn net.Conn, req V2Request) {
+	s.streamSubscriptionWithAck(conn, req.Topics, V2Response{ID: req.ID, OK: true})
+}
+
+func (s *Server) streamSubscriptionWithAck(conn net.Conn, topics []string, acknowledgement any) {
 	// handleConn sets a per-request read deadline. Subscriptions are idle,
 	// server-to-client streams after the initial request, so they must not
 	// inherit that deadline or they will be closed every request timeout.
 	if err := conn.SetReadDeadline(time.Time{}); err != nil {
-		writeResponse(conn, Response{OK: false, Error: "clear subscription deadline: " + err.Error()})
+		s.writeSubscriptionError(conn, acknowledgement, err)
 		return
 	}
 
+	if s.broker == nil {
+		s.writeSubscriptionError(conn, acknowledgement, errors.New("event broker is unavailable"))
+		return
+	}
 	sub, err := s.broker.Subscribe(topics)
 	if err != nil {
-		writeResponse(conn, Response{OK: false, Error: err.Error()})
+		s.writeSubscriptionError(conn, acknowledgement, err)
 		return
 	}
 	defer sub.Close()
 	conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if !writeJSONLine(conn, Response{OK: true}) {
+	if !writeJSONLine(conn, acknowledgement) {
 		return
 	}
 
@@ -256,6 +372,191 @@ func (s *Server) streamSubscription(conn net.Conn, topics []string) {
 			}
 		}
 	}
+}
+
+func (s *Server) writeSubscriptionError(conn net.Conn, acknowledgement any, err error) {
+	switch response := acknowledgement.(type) {
+	case V2Response:
+		response.OK = false
+		response.Error = invalidV2Params()
+		_ = writeJSONLine(conn, response)
+	default:
+		_ = writeJSONLine(conn, Response{OK: false, Error: err.Error()})
+	}
+}
+
+// parseProtocolVersion distinguishes exactly unversioned V1 requests from
+// versioned envelopes. Any present version field, including null, is V2-shaped
+// and therefore receives a structured V2 invalid_version response when invalid.
+func parseProtocolVersion(line []byte) (version int, id json.RawMessage, versioned bool, err error) {
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(line, &envelope); err != nil {
+		return 0, nil, false, err
+	}
+	versionRaw, ok := envelope["version"]
+	if !ok {
+		return 0, nil, false, nil
+	}
+	returnVersioned := true
+	id = cloneRawMessage(envelope["id"])
+	if err := json.Unmarshal(versionRaw, &version); err != nil {
+		return 0, id, returnVersioned, nil
+	}
+	return version, id, returnVersioned, nil
+}
+
+func isV2Subscribe(req V2Request) bool {
+	return strings.EqualFold(req.Method, "subscribe") || strings.EqualFold(req.Operation, "subscribe")
+}
+
+func (s *Server) dispatchV2(req V2Request) V2Response {
+	response := V2Response{ID: cloneRawMessage(req.ID)}
+	method := strings.ToLower(strings.TrimSpace(req.Method))
+	s.v2Mu.RLock()
+	operations := s.operations
+	s.v2Mu.RUnlock()
+	operation := strings.TrimSpace(req.Operation)
+	if operation == "" && operations != nil {
+		if _, ok := operations.Lookup(req.Method); ok {
+			operation = req.Method
+		}
+	}
+
+	switch method {
+	case "capabilities":
+		if operation != "" {
+			response.Error = invalidV2Request()
+			return response
+		}
+		return s.v2Capabilities(response)
+	case "job.get":
+		return s.v2GetJob(response, req.JobID)
+	case "job.cancel":
+		return s.v2CancelJob(response, req.JobID)
+	case "state.get", "spectrum.get":
+		if operation != "" {
+			response.Error = invalidV2Request()
+			return response
+		}
+		return s.dispatchV2ToOwner(response, req)
+	}
+	if operation == "capabilities" {
+		return s.v2Capabilities(response)
+	}
+	if operation == "" {
+		response.Error = invalidV2Request()
+		return response
+	}
+	if operations == nil {
+		response.Error = v2Error(V2ErrorCodeUnavailable, V2MessageUnavailable)
+		return response
+	}
+	if err := operations.Validate(operation, req.Params); err != nil {
+		response.Error = err
+		return response
+	}
+	// A method alias is normalized at the server boundary so runtime owners only
+	// need to dispatch the canonical operation name.
+	req.Operation = operation
+
+	return s.dispatchV2ToOwner(response, req)
+}
+
+func (s *Server) dispatchV2ToOwner(response V2Response, req V2Request) V2Response {
+	s.v2Mu.RLock()
+	dispatcher := s.v2
+	s.v2Mu.RUnlock()
+	if dispatcher == nil {
+		response.Error = v2Error(V2ErrorCodeUnavailable, V2MessageUnavailable)
+		return response
+	}
+	ctx := s.context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	result, err := dispatcher.DispatchV2(ctx, req)
+	if err != nil {
+		response.Error = cloneV2Error(err)
+		if response.Error.Code == "" || response.Error.Message == "" {
+			response.Error = v2Error(V2ErrorCodeInternal, V2MessageInternal)
+		}
+		return response
+	}
+	if err := validV2Result(result.Result); err != nil {
+		response.Error = v2ErrorFromError(err)
+		return response
+	}
+	response.OK = true
+	response.Result = cloneRawMessage(result.Result)
+	response.Snapshot = cloneSnapshot(result.Snapshot)
+	if result.Job != nil {
+		job := cloneJob(*result.Job)
+		response.Job = &job
+	}
+	return response
+}
+
+func (s *Server) v2Capabilities(response V2Response) V2Response {
+	s.v2Mu.RLock()
+	operations := s.operations
+	s.v2Mu.RUnlock()
+	if operations == nil {
+		response.Error = v2Error(V2ErrorCodeUnavailable, V2MessageUnavailable)
+		return response
+	}
+	result, err := json.Marshal(operations.Operations())
+	if err != nil {
+		response.Error = v2Error(V2ErrorCodeInternal, V2MessageInternal)
+		return response
+	}
+	response.OK = true
+	response.Result = result
+	return response
+}
+
+func (s *Server) v2GetJob(response V2Response, jobID string) V2Response {
+	if jobID == "" {
+		response.Error = invalidV2Params()
+		return response
+	}
+	if s.jobs == nil {
+		response.Error = v2Error(V2ErrorCodeUnavailable, V2MessageUnavailable)
+		return response
+	}
+	job, ok := s.jobs.Get(jobID)
+	if !ok {
+		response.Error = v2Error(V2ErrorCodeNotFound, V2MessageNotFound)
+		return response
+	}
+	response.OK = true
+	response.Job = &job
+	return response
+}
+
+func (s *Server) v2CancelJob(response V2Response, jobID string) V2Response {
+	if jobID == "" {
+		response.Error = invalidV2Params()
+		return response
+	}
+	if s.jobs == nil {
+		response.Error = v2Error(V2ErrorCodeUnavailable, V2MessageUnavailable)
+		return response
+	}
+	if err := s.jobs.Cancel(jobID); err != nil {
+		switch {
+		case errors.Is(err, ErrJobNotFound):
+			response.Error = v2Error(V2ErrorCodeNotFound, V2MessageNotFound)
+		case errors.Is(err, ErrInvalidJobState):
+			response.Error = v2Error(V2ErrorCodeConflict, V2MessageConflict)
+		default:
+			response.Error = v2Error(V2ErrorCodeInternal, V2MessageInternal)
+		}
+		return response
+	}
+	job, _ := s.jobs.Get(jobID)
+	response.OK = true
+	response.Job = &job
+	return response
 }
 
 // dispatch handles a single parsed request.
@@ -389,12 +690,12 @@ func (s *Server) dispatch(req Request) Response {
 	case "provider.list", "provider.playlists", "provider.tracks", "provider.load", "provider.search",
 		"provider.artists", "provider.artist_albums", "provider.albums", "provider.album_tracks", "provider.load_album",
 		"provider.favorite", "provider.catalog",
-		"playlist.create", "playlist.rename", "playlist.delete", "playlist.add", "playlist.remove", "playlist.bookmark":
+		"playlist.create", "playlist.rename", "playlist.delete", "playlist.add", "playlist.add_many", "playlist.replace", "playlist.remove", "playlist.bookmark":
 		reply := make(chan Response, 1)
 		s.disp.Send(LibraryRequestMsg{
 			Op: strings.ToLower(req.Cmd), Provider: req.Provider, Playlist: req.Playlist,
 			Query: req.Query, Artist: req.Artist, Album: req.Album, Sort: req.Sort, Offset: req.Offset,
-			Limit: req.Limit, Index: req.Index, NewName: req.NewName, Track: req.Track, Reply: reply,
+			Limit: req.Limit, Index: req.Index, NewName: req.NewName, Track: req.Track, Tracks: req.Tracks, Reply: reply,
 		})
 		return waitReply(reply, s.done, req.Cmd, 30*time.Second)
 
@@ -473,8 +774,18 @@ func writeJSONLine(conn net.Conn, value any) bool {
 }
 
 // cleanStaleSocket removes a leftover socket and PID file from a dead process.
-// If the PID file exists and the process is still alive, it returns an error.
+// A connect probe always runs before deleting either path, so a live server is
+// never displaced because its PID file is missing, stale, or malformed.
 func cleanStaleSocket(sockPath string) error {
+	conn, err := dialSocket(sockPath, 200*time.Millisecond)
+	if err == nil {
+		_ = conn.Close()
+		return fmt.Errorf("ipc: cliamp is already running")
+	}
+	if !isSocketUnavailable(err) {
+		return fmt.Errorf("ipc: probe socket %s: %w", sockPath, err)
+	}
+
 	pidPath := sockPath + ".pid"
 	pidData, err := os.ReadFile(pidPath)
 	if err != nil {
