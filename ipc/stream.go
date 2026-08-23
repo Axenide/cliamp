@@ -36,9 +36,6 @@ func StreamBands(ctx context.Context, sockPath string, interval time.Duration, o
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	// Reused per-frame buffer so we make one out.Write call per line.
-	frame := make([]byte, 0, 512)
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -72,7 +69,7 @@ func StreamBands(ctx context.Context, sockPath string, interval time.Duration, o
 		if err := json.Unmarshal(response.Result, &bands); err != nil {
 			return fmt.Errorf("decode spectrum: %w", err)
 		}
-		frame, err = json.Marshal(bands)
+		frame, err := json.Marshal(bands)
 		if err != nil {
 			return fmt.Errorf("marshal spectrum: %w", err)
 		}
