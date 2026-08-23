@@ -26,7 +26,16 @@ var (
 	seekDimStyle  = lipgloss.NewStyle().Foreground(ui.ColorDim)
 	volBarStyle   = lipgloss.NewStyle().Foreground(ui.ColorVolume)
 	activeToggle  = lipgloss.NewStyle().Foreground(ui.ColorAccent).Bold(true)
+	// favMarkerStyle paints the favorite heart in the theme's red so it
+	// reads as a deliberate accent instead of inheriting the dim/unavailable
+	// look. The glyph carries U+FE0E (text presentation) so terminals render
+	// it as a compact font glyph rather than a large color emoji.
+	favMarkerStyle = lipgloss.NewStyle().Foreground(ui.ColorError)
 )
+
+// favHeart is the small, text-presentation favorite heart used everywhere the
+// UI shows favorite state (track rows, header badge, status messages).
+const favHeart = "♥\uFE0E"
 
 // providerEmptyStateHint, keyed by lowercase provider Name(), returns the
 // remediation hint shown under the generic "No playlists in X" message.
@@ -631,7 +640,7 @@ func (m Model) renderPlaylistHeader() string {
 	var favStr string
 	// Render from the cached favSet: the render path must not hit disk.
 	if count := len(m.favSet); count > 0 {
-		favStr = " " + activeToggle.Render(fmt.Sprintf("[♥ %d]", count))
+		favStr = " " + activeToggle.Render(fmt.Sprintf("[%s %d]", favHeart, count))
 	}
 
 	var themeStr string
@@ -864,7 +873,7 @@ func (m Model) renderPlaylist() string {
 		favMarker := " "
 		if m.favSet != nil {
 			if _, ok := m.favSet[t.Path]; ok {
-				favMarker = "♥"
+				favMarker = favHeart
 			}
 		}
 		unavailableMarker := " "
@@ -908,7 +917,8 @@ func (m Model) renderPlaylist() string {
 
 		numStr := fmt.Sprintf("%*d. ", numWidth, i+1)
 		line := dimStyle.Render(cursorMarker) + playlistActiveStyle.Render(playingMarker) +
-			activeToggle.Render(queueMarker+bookmarkMarker) + playlistUnavailableStyle.Render(favMarker+unavailableMarker) +
+			activeToggle.Render(queueMarker+bookmarkMarker) + favMarkerStyle.Render(favMarker) +
+			playlistUnavailableStyle.Render(unavailableMarker) +
 			" " + style.Render(numStr)
 		line += style.Render(name)
 		if albumSuffix != "" {

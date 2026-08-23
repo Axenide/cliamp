@@ -404,6 +404,6 @@ in "Favorites" and vice versa. The "Favorites" playlist is backed by
 a virtual playlist that cannot be renamed, deleted, or modified via the
 playlist manager. Use `n` again to unfavorite a track.
 
-Favorited tracks display a `♥` marker in the track list. The bookmark
+Favorited tracks display a small red `♥` marker in the track list. The bookmark
 system (`f` key, `★` marker) is separate — bookmarks are per-playlist,
 while favorites span all playlists.
