@@ -461,8 +461,15 @@ func (p *TidalProvider) ResolveSource(uri string) (streamURL string, segments []
 	p.noteDowngrade(src.quality)
 
 	if len(src.segments) > 0 {
+		detail := ""
+		if pi.BitDepth > 0 && pi.SampleRate > 0 {
+			detail = fmt.Sprintf(", %d-bit/%dHz", pi.BitDepth, pi.SampleRate)
+		}
+		applog.Info("tidal: track %s delivered %s via DASH FLAC (%d segments%s)",
+			trackID, src.quality, len(src.segments), detail)
 		return "", src.segments, nil
 	}
+	applog.Info("tidal: track %s delivered %s via direct URL (AAC)", trackID, src.quality)
 	streamURLs.register(trackID, src.url)
 	return src.url, nil, nil
 }
