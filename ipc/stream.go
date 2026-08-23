@@ -25,7 +25,7 @@ func StreamBands(ctx context.Context, sockPath string, interval time.Duration, o
 	}
 	defer conn.Close()
 
-	reqLine, err := json.Marshal(Request{Cmd: "bands"})
+	reqLine, err := json.Marshal(V2Request{ID: json.RawMessage(`"visstream"`), Method: "spectrum.get"})
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
 	}
@@ -58,8 +58,24 @@ func StreamBands(ctx context.Context, sockPath string, interval time.Duration, o
 			return nil
 		}
 
-		// Pass the response through as-is; it is already NDJSON.
-		frame = append(frame[:0], scanner.Bytes()...)
+		var response V2Response
+		if err := json.Unmarshal(scanner.Bytes(), &response); err != nil {
+			return fmt.Errorf("decode response: %w", err)
+		}
+		if !response.OK {
+			if response.Error == nil {
+				return fmt.Errorf("spectrum request failed")
+			}
+			return response.Error
+		}
+		var bands Response
+		if err := json.Unmarshal(response.Result, &bands); err != nil {
+			return fmt.Errorf("decode spectrum: %w", err)
+		}
+		frame, err = json.Marshal(bands)
+		if err != nil {
+			return fmt.Errorf("marshal spectrum: %w", err)
+		}
 		frame = append(frame, '\n')
 		if _, err := out.Write(frame); err != nil {
 			return err

@@ -296,8 +296,7 @@ func pluginsCommand() *cli.Command {
 					if len(args) < 2 {
 						return fmt.Errorf("usage: cliamp plugins call <plugin> <command> [args...]")
 					}
-					resp, err := ipcSendLong(ipc.Request{
-						Cmd:  "plugin.call",
+					resp, err := ipcSendLong("plugin.call", ipc.Request{
 						Name: args[0],
 						Sub:  args[1],
 						Args: args[2:],
@@ -315,7 +314,7 @@ func pluginsCommand() *cli.Command {
 				Name:  "commands",
 				Usage: "list plugin commands registered in the running cliamp",
 				Action: func(ctx context.Context, c *cli.Command) error {
-					resp, err := ipcSend(ipc.Request{Cmd: "plugin.commands"})
+					resp, err := ipcSend("plugin.commands", ipc.Request{})
 					if err != nil {
 						return err
 					}
@@ -653,7 +652,7 @@ func ipcSimpleCommand(name, usage string) *cli.Command {
 		Name:  name,
 		Usage: usage,
 		Action: func(ctx context.Context, c *cli.Command) error {
-			_, err := ipcSend(ipc.Request{Cmd: name})
+			_, err := ipcSend(name, ipc.Request{})
 			return err
 		},
 	}
@@ -667,10 +666,11 @@ func statusCommand() *cli.Command {
 			&cli.BoolFlag{Name: "json", Usage: "machine-readable JSON output"},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
-			resp, err := ipcSend(ipc.Request{Cmd: "status"})
+			snapshot, err := ipcState()
 			if err != nil {
 				return err
 			}
+			resp := stateResult(snapshot)
 			if c.Bool("json") {
 				enc := json.NewEncoder(os.Stdout)
 				enc.SetIndent("", "  ")
@@ -732,7 +732,7 @@ func volumeCommand() *cli.Command {
 			if err != nil {
 				return fmt.Errorf("invalid volume value %q", c.Args().First())
 			}
-			_, err = ipcSend(ipc.Request{Cmd: "volume", Value: db})
+			_, err = ipcSend("volume", ipc.Request{Value: db})
 			return err
 		},
 	}
@@ -751,7 +751,7 @@ func seekCommand() *cli.Command {
 			if err != nil {
 				return fmt.Errorf("invalid seek value %q", c.Args().First())
 			}
-			_, err = ipcSend(ipc.Request{Cmd: "seek", Value: secs})
+			_, err = ipcSend("seek", ipc.Request{Value: secs})
 			return err
 		},
 	}
@@ -766,7 +766,7 @@ func loadCommand() *cli.Command {
 			if c.Args().Len() == 0 {
 				return fmt.Errorf("usage: cliamp load \"Playlist Name\"")
 			}
-			_, err := ipcSend(ipc.Request{Cmd: "load", Playlist: c.Args().First()})
+			_, err := ipcSend("load", ipc.Request{Playlist: c.Args().First()})
 			return err
 		},
 	}
@@ -781,7 +781,7 @@ func queueCommand() *cli.Command {
 			if c.Args().Len() == 0 {
 				return fmt.Errorf("usage: cliamp queue /path/to/file.mp3")
 			}
-			_, err := ipcSend(ipc.Request{Cmd: "queue", Path: c.Args().First()})
+			_, err := ipcSend("queue", ipc.Request{Path: c.Args().First()})
 			return err
 		},
 	}
@@ -803,7 +803,7 @@ func themeCommand() *cli.Command {
 				}
 				return nil
 			}
-			_, err := ipcSend(ipc.Request{Cmd: "theme", Name: c.Args().First()})
+			_, err := ipcSend("theme", ipc.Request{Name: c.Args().First()})
 			if err != nil {
 				return err
 			}
@@ -844,9 +844,8 @@ func visCommand() *cli.Command {
 			}
 			if strings.EqualFold(c.Args().First(), "list") {
 				var active string
-				sockPath := ipc.DefaultSocketPath()
-				if resp, err := ipc.Send(sockPath, ipc.Request{Cmd: "status"}); err == nil {
-					active = resp.Visualizer
+				if snapshot, err := ipcState(); err == nil {
+					active = snapshot.Visualizer
 				} else {
 					fmt.Fprintln(os.Stderr, "(cliamp not running — active marker unavailable)")
 				}
@@ -859,7 +858,7 @@ func visCommand() *cli.Command {
 				}
 				return nil
 			}
-			resp, err := ipcSend(ipc.Request{Cmd: "vis", Name: c.Args().First()})
+			resp, err := ipcSend("vis", ipc.Request{Name: c.Args().First()})
 			if err != nil {
 				return err
 			}
@@ -879,7 +878,7 @@ func shuffleCommand() *cli.Command {
 			if c.Args().Len() > 0 {
 				name = strings.ToLower(c.Args().First())
 			}
-			resp, err := ipcSend(ipc.Request{Cmd: "shuffle", Name: name})
+			resp, err := ipcSend("shuffle", ipc.Request{Name: name})
 			if err != nil {
 				return err
 			}
@@ -903,7 +902,7 @@ func repeatCommand() *cli.Command {
 			if c.Args().Len() > 0 {
 				name = strings.ToLower(c.Args().First())
 			}
-			resp, err := ipcSend(ipc.Request{Cmd: "repeat", Name: name})
+			resp, err := ipcSend("repeat", ipc.Request{Name: name})
 			if err != nil {
 				return err
 			}
@@ -923,7 +922,7 @@ func monoCommand() *cli.Command {
 			if c.Args().Len() > 0 {
 				name = strings.ToLower(c.Args().First())
 			}
-			resp, err := ipcSend(ipc.Request{Cmd: "mono", Name: name})
+			resp, err := ipcSend("mono", ipc.Request{Name: name})
 			if err != nil {
 				return err
 			}
@@ -950,7 +949,7 @@ func speedCommand() *cli.Command {
 			if err != nil {
 				return fmt.Errorf("invalid speed %q", c.Args().First())
 			}
-			resp, err := ipcSend(ipc.Request{Cmd: "speed", Value: ratio})
+			resp, err := ipcSend("speed", ipc.Request{Value: ratio})
 			if err != nil {
 				return err
 			}
@@ -979,7 +978,7 @@ func eqCommand() *cli.Command {
 				if err != nil {
 					return fmt.Errorf("invalid dB value %q", c.Args().First())
 				}
-				resp, err := ipcSend(ipc.Request{Cmd: "eq", Band: band, Value: db})
+				resp, err := ipcSend("eq", ipc.Request{Band: band, Value: db})
 				if err != nil {
 					return err
 				}
@@ -990,7 +989,7 @@ func eqCommand() *cli.Command {
 			if c.Args().Len() == 0 {
 				return fmt.Errorf("usage: cliamp eq <preset>  (e.g. Flat, Rock, Pop, Jazz)")
 			}
-			resp, err := ipcSend(ipc.Request{Cmd: "eq", Name: c.Args().First()})
+			resp, err := ipcSend("eq", ipc.Request{Name: c.Args().First()})
 			if err != nil {
 				return err
 			}
@@ -1010,14 +1009,14 @@ func deviceCommand() *cli.Command {
 				return fmt.Errorf("usage: cliamp device <name|list>")
 			}
 			if strings.EqualFold(c.Args().First(), "list") {
-				resp, err := ipcSend(ipc.Request{Cmd: "device", Name: "list"})
+				resp, err := ipcSend("device", ipc.Request{Name: "list"})
 				if err != nil {
 					return err
 				}
 				fmt.Println(resp.Device)
 				return nil
 			}
-			resp, err := ipcSend(ipc.Request{Cmd: "device", Name: c.Args().First()})
+			resp, err := ipcSend("device", ipc.Request{Name: c.Args().First()})
 			if err != nil {
 				return err
 			}
@@ -1169,6 +1168,9 @@ func v2ResponseError(response ipc.V2Response) error {
 	if response.Error == nil {
 		return fmt.Errorf("remote operation failed")
 	}
+	if response.Error.Detail != "" {
+		return fmt.Errorf("remote operation failed (%s): %s (%s)", response.Error.Code, response.Error.Message, response.Error.Detail)
+	}
 	return fmt.Errorf("remote operation failed (%s): %s", response.Error.Code, response.Error.Message)
 }
 
@@ -1189,6 +1191,9 @@ func waitForV2Job(ctx context.Context, jobID string) (ipc.V2Response, error) {
 				return response, nil
 			case ipc.JobFailed, ipc.JobCanceled:
 				if response.Job.Error != nil {
+					if response.Job.Error.Detail != "" {
+						return ipc.V2Response{}, fmt.Errorf("job %s (%s): %s (%s)", response.Job.State, response.Job.Error.Code, response.Job.Error.Message, response.Job.Error.Detail)
+					}
 					return ipc.V2Response{}, fmt.Errorf("job %s (%s): %s", response.Job.State, response.Job.Error.Code, response.Job.Error.Message)
 				}
 				return ipc.V2Response{}, fmt.Errorf("job %s", response.Job.State)

@@ -64,7 +64,7 @@ func TestOperationRegistryValidation(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := registry.Validate("runtime.queue.enqueue", json.RawMessage(test.params))
+			err := registry.Validate("queue.enqueue", json.RawMessage(test.params))
 			if got := errorCode(err); got != test.want {
 				t.Fatalf("Validate() error code = %q, want %q", got, test.want)
 			}
@@ -77,7 +77,7 @@ func TestOperationRegistryValidation(t *testing.T) {
 
 func TestJobStoreLifecycleCancelAndExpiry(t *testing.T) {
 	store := NewJobStore(WithJobTTL(5 * time.Millisecond))
-	job, err := store.Create("runtime.library.batch")
+	job, err := store.Create("provider.search")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,24 +131,41 @@ func TestJobStoreSnapshotResult(t *testing.T) {
 	}
 }
 
-func TestServerRoutesV2AndPreservesV1(t *testing.T) {
+func TestJobStorePreservesFailureDetail(t *testing.T) {
+	store := NewJobStore()
+	job, err := store.Create("provider.search")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Start(job.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Fail(job.ID, V2Error{Code: V2ErrorCodeInternal, Message: V2MessageInternal, Detail: "provider timed out"}); err != nil {
+		t.Fatal(err)
+	}
+	completed, ok := store.Get(job.ID)
+	if !ok || completed.Error == nil || completed.Error.Detail != "provider timed out" {
+		t.Fatalf("job = %#v", completed)
+	}
+}
+
+func TestServerRoutesV2(t *testing.T) {
 	sock := filepath.Join(shortTempDir(t), "cliamp.sock")
-	server, err := NewServer(sock, &captureDispatcher{})
+	server, err := NewServer(sock)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = server.Close() })
 	server.SetV2Dispatcher(V2DispatcherFunc(func(ctx context.Context, request V2Request) (V2Result, *V2Error) {
-		if request.Operation != "runtime.snapshot" {
-			t.Fatalf("operation = %q", request.Operation)
+		if request.Method != "state.get" {
+			t.Fatalf("method = %q", request.Method)
 		}
 		return V2Result{Snapshot: &RuntimeSnapshot{State: "playing"}}, nil
 	}))
 
 	response := sendV2Request(t, sock, V2Request{
-		ID:        json.RawMessage(`42`),
-		Method:    "call",
-		Operation: "runtime.snapshot",
+		ID:     json.RawMessage(`42`),
+		Method: "state.get",
 	})
 	if !response.OK || response.Version != protocolVersion2 || string(response.ID) != "42" || response.Snapshot == nil || response.Snapshot.State != "playing" {
 		t.Fatalf("v2 response = %#v", response)
@@ -159,15 +176,11 @@ func TestServerRoutesV2AndPreservesV1(t *testing.T) {
 		t.Fatalf("unsupported response = %#v", unsupported)
 	}
 
-	v1, err := Send(sock, Request{Cmd: "play"})
-	if err != nil || !v1.OK {
-		t.Fatalf("V1 response = %#v, err=%v", v1, err)
-	}
 }
 
 func TestServerCanonicalizesMethodOperation(t *testing.T) {
 	sock := filepath.Join(shortTempDir(t), "cliamp.sock")
-	server, err := NewServer(sock, &captureDispatcher{})
+	server, err := NewServer(sock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,9 +198,29 @@ func TestServerCanonicalizesMethodOperation(t *testing.T) {
 	}
 }
 
+func TestServerRoutesRuntimeSnapshotAliasToV2State(t *testing.T) {
+	sock := filepath.Join(shortTempDir(t), "cliamp.sock")
+	server, err := NewServer(sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = server.Close() })
+	server.SetV2Dispatcher(V2DispatcherFunc(func(_ context.Context, request V2Request) (V2Result, *V2Error) {
+		if request.Method != "state.get" || request.Operation != "" {
+			t.Fatalf("request = %#v", request)
+		}
+		return V2Result{Snapshot: &RuntimeSnapshot{State: "paused"}}, nil
+	}))
+
+	response := sendV2Request(t, sock, V2Request{ID: json.RawMessage(`"snapshot"`), Method: "operation.submit", Operation: "runtime.snapshot"})
+	if !response.OK || response.Job != nil || response.Snapshot == nil || response.Snapshot.State != "paused" {
+		t.Fatalf("response = %#v", response)
+	}
+}
+
 func TestServerCloseIsIdempotent(t *testing.T) {
 	sock := filepath.Join(shortTempDir(t), "cliamp.sock")
-	server, err := NewServer(sock, &captureDispatcher{})
+	server, err := NewServer(sock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +235,7 @@ func TestServerCloseIsIdempotent(t *testing.T) {
 func TestV2SubscribeAcknowledgesThenStreamsEvents(t *testing.T) {
 	broker := NewBroker()
 	sock := filepath.Join(shortTempDir(t), "cliamp.sock")
-	server, err := NewServerWithBroker(sock, &captureDispatcher{}, broker)
+	server, err := NewServerWithBroker(sock, broker)
 	if err != nil {
 		t.Fatal(err)
 	}

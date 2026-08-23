@@ -15,8 +15,9 @@ cliamp remote state
 cliamp remote events runtime.state runtime.job
 ```
 
-The original unversioned protocol remains supported. New GUI and integration
-clients should use version 2.
+IPC is version 2 only. Clients must send a V2 envelope for every request.
+See [Upgrading IPC Clients To V2](upgrading-ipc-v2.md) when migrating a raw
+socket integration.
 
 ## Version 2
 
@@ -140,9 +141,9 @@ If a client cannot keep up, it receives `system.overflow` with
 
 ## Spectrum Stream
 
-`cliamp visstream` remains the low-overhead V1 spectrum stream for status-bar
-and visualizer integrations. It emits NDJSON frames at 30 FPS by default; use
-`--fps` for a rate from 1 through 60. V2 clients can pull one current frame
+`cliamp visstream` uses V2 `spectrum.get` internally and emits one plain NDJSON
+frame at 30 FPS by default for status-bar and visualizer integrations. Use
+`--fps` for a rate from 1 through 60. GUI clients can pull one current frame
 with `spectrum.get`.
 
 ## CLI V2 Client
@@ -159,26 +160,10 @@ cliamp remote events runtime.state runtime.job
 `remote call` prints the full V2 response as JSON and can submit every listed
 operation. It is intended for scripts and for validating a GUI integration.
 
-## Legacy V1
-
-Existing scripts can continue sending unversioned messages:
-
-```json
-{"cmd":"status"}
-{"cmd":"next"}
-{"cmd":"volume","value":-5}
-{"cmd":"seek","value":30}
-{"cmd":"load","playlist":"Star Wars OT"}
-```
-
-V1 `volume` sets an absolute dB value. V1 `seek` is relative to the current
-position. V1 success responses retain their historical meaning: basic controls
-are accepted immediately, while commands such as loading, provider access, and
-downloads wait for their legacy reply timeout.
-
-V1 plugin subscriptions remain available with
-`{"cmd":"subscribe","topics":["plugin.example.event"]}`. V2 subscriptions
-can consume the same `plugin.*` topics alongside runtime events.
+Named CLI commands such as `cliamp volume`, `cliamp seek`, `cliamp load`, and
+`cliamp plugins call` use V2 jobs internally. `volume` sets an absolute dB
+value and `seek` is relative to the current position. V2 subscriptions consume
+`plugin.*` topics alongside runtime events.
 
 ## Headless Mode
 
@@ -188,14 +173,15 @@ cliamp --daemon --auto-play --playlist Lofi
 
 The daemon exposes the same playback, queue, provider, saved-playlist, job,
 snapshot, and event APIs. It has no TUI theme or visualizer selection, and Lua
-plugins are not loaded. Use `capabilities` and structured `unavailable` errors
-instead of assuming every interactive-only operation is available.
+plugins are not loaded. Use `capabilities` instead of assuming every
+interactive-only operation is available.
 
 ## Errors And Limits
 
 V2 errors use stable codes: `invalid_version`, `invalid_request`,
 `invalid_params`, `unknown_operation`, `not_found`, `conflict`, `unavailable`,
-`canceled`, and `internal_error`.
+`canceled`, and `internal_error`. Runtime failures include an optional `detail`
+string with the provider, device, or plugin diagnostic.
 
 Frames are limited to 1 MiB. Use paging for large provider or playlist results.
 Jobs are process-local, bounded, and retained for 15 minutes after completion.

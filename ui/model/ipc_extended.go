@@ -331,11 +331,12 @@ func (m *Model) handleIPCLibrary(request ipc.LibraryRequestMsg) tea.Cmd {
 			if limit <= 0 || limit > 100 {
 				limit = 25
 			}
-			tracks, err := ipcSearchProvider(requestContext(request.Context), entry.Provider, request.Query, limit)
+			tracks, err := ipcSearchProvider(requestContext(request.Context), entry.Provider, request.Query, min(100, request.Offset+limit))
 			if err != nil {
 				request.Reply <- ipc.Response{OK: false, Error: err.Error()}
 			} else {
-				request.Reply <- ipc.Response{OK: true, Tracks: ipcTrackInfos(tracks), Total: len(tracks)}
+				page, total := ipcPage(tracks, request.Offset, limit, 100)
+				request.Reply <- ipc.Response{OK: true, Tracks: ipcTrackInfos(page), Total: total}
 			}
 			return nil
 		}
@@ -516,7 +517,7 @@ func (m *Model) handleIPCProviderLoad(result ipcProviderLoadResult) tea.Cmd {
 	m.setHeaderStateFromTracks(result.tracks)
 	m.playlist.SetIndex(0)
 	m.plCursor = 0
-	result.request.Reply <- ipc.Response{OK: true, Tracks: ipcTrackInfos(result.tracks), Total: len(result.tracks)}
+	result.request.Reply <- ipc.Response{OK: true, Tracks: ipcTrackInfos(result.tracks), Playlist: result.request.Playlist, Total: len(result.tracks)}
 	return m.playCurrentTrack()
 }
 

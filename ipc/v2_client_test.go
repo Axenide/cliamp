@@ -11,7 +11,7 @@ import (
 func TestSendV2AndSubscribeV2(t *testing.T) {
 	broker := NewBroker()
 	sock := filepath.Join(shortTempDir(t), "cliamp.sock")
-	server, err := NewServerWithBroker(sock, &captureDispatcher{}, broker)
+	server, err := NewServerWithBroker(sock, broker)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,11 +28,21 @@ func TestSendV2AndSubscribeV2(t *testing.T) {
 		t.Fatalf("response = %#v", response)
 	}
 
+	if err := broker.Publish("runtime.state", json.RawMessage(`{"revision":1}`), true); err != nil {
+		t.Fatal(err)
+	}
 	stream, err := SubscribeV2(sock, json.RawMessage(`"events"`), []string{"runtime.state"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = stream.Close() })
+	retained, err := stream.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !retained.Retained || string(retained.Data) != `{"revision":1}` {
+		t.Fatalf("retained event = %#v", retained)
+	}
 	if err := broker.Publish("runtime.state", json.RawMessage(`{"revision":2}`), true); err != nil {
 		t.Fatal(err)
 	}

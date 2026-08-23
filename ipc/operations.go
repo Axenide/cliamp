@@ -100,7 +100,7 @@ func (r *OperationRegistry) Validate(operation string, params json.RawMessage) *
 // V2 foundation. These names are behavior-free until a V2Dispatcher is wired.
 func DefaultOperationRegistry() *OperationRegistry {
 	operations := []Operation{
-		{Name: "runtime.snapshot", Description: "read the runtime snapshot"},
+		{Name: "runtime.snapshot", Description: "read the complete runtime snapshot"},
 		{Name: "runtime.status", Description: "read the runtime status"},
 		{Name: "runtime.play", Description: "start playback"},
 		{Name: "runtime.pause", Description: "pause playback"},
@@ -112,14 +112,13 @@ func DefaultOperationRegistry() *OperationRegistry {
 		{Name: "runtime.seek", Description: "seek playback", Parameters: []string{"value"}},
 		{Name: "runtime.speed", Description: "change playback speed", Parameters: []string{"value"}},
 		{Name: "runtime.queue.list", Description: "list the live playlist", Parameters: []string{"offset", "limit"}},
-		{Name: "runtime.queue.play", Description: "play a live playlist track", Async: true, Parameters: []string{"index"}},
-		{Name: "runtime.queue.enqueue", Description: "add a live track to play-next", Parameters: []string{"index", "batch"}},
-		{Name: "runtime.queue.remove", Description: "remove a live playlist track", Parameters: []string{"index"}},
-		{Name: "runtime.queue.move", Description: "move a live playlist track", Parameters: []string{"index", "to"}},
-		{Name: "runtime.queue.clear", Description: "clear the live playlist"},
-		{Name: "runtime.library.search", Description: "search a provider", Async: true, Parameters: []string{"offset", "limit"}},
-		{Name: "runtime.library.batch", Description: "apply a library batch mutation", Async: true, Parameters: []string{"batch"}},
-		{Name: "runtime.history", Description: "read playback history", Async: true, Parameters: []string{"offset", "limit"}},
+		{Name: "runtime.queue.play", Description: "play a live playlist track", Parameters: []string{"index", "if_revision"}},
+		{Name: "runtime.queue.enqueue", Description: "add a live track to play-next", Parameters: []string{"index", "if_revision"}},
+		{Name: "runtime.queue.remove", Description: "remove a live playlist track", Parameters: []string{"index", "if_revision"}},
+		{Name: "runtime.queue.move", Description: "move a live playlist track", Parameters: []string{"index", "to", "if_revision"}},
+		{Name: "runtime.queue.clear", Description: "clear the live playlist", Parameters: []string{"if_revision"}},
+		{Name: "runtime.library.search", Description: "search a provider", Parameters: []string{"provider", "query", "offset", "limit"}},
+		{Name: "runtime.history", Description: "read playback history", Parameters: []string{"limit"}},
 		{Name: "play", Description: "start or resume playback"},
 		{Name: "pause", Description: "pause playback"},
 		{Name: "toggle", Description: "toggle playback"},
@@ -140,21 +139,21 @@ func DefaultOperationRegistry() *OperationRegistry {
 		{Name: "theme", Description: "list or change themes", Parameters: []string{"name"}},
 		{Name: "vis", Description: "list or change visualizers", Parameters: []string{"name"}},
 		{Name: "load", Description: "load a local playlist", Async: true, Parameters: []string{"playlist"}},
-		{Name: "queue", Description: "append one path to the live playlist", Parameters: []string{"path"}},
+		{Name: "queue", Description: "append one path to the live playlist", Parameters: []string{"path", "if_revision"}},
 		{Name: "url.load", Description: "resolve and append a URL", Async: true, Parameters: []string{"path"}},
 		{Name: "save", Description: "download the current track", Async: true},
 		{Name: "queue.list", Description: "list the live playlist", Parameters: []string{"offset", "limit"}},
-		{Name: "queue.play", Description: "play a live playlist track", Async: true, Parameters: []string{"index"}},
-		{Name: "queue.enqueue", Description: "add a live track to play-next", Parameters: []string{"index"}},
-		{Name: "queue.remove", Description: "remove a live playlist track", Parameters: []string{"index"}},
-		{Name: "queue.move", Description: "move a live playlist track", Parameters: []string{"index", "to"}},
-		{Name: "queue.clear", Description: "clear the live playlist"},
-		{Name: "track.play", Description: "play a supplied track", Async: true, Parameters: []string{"track"}},
-		{Name: "track.queue", Description: "queue a supplied track next", Parameters: []string{"track"}},
+		{Name: "queue.play", Description: "play a live playlist track", Async: true, Parameters: []string{"index", "if_revision"}},
+		{Name: "queue.enqueue", Description: "add a live track to play-next", Parameters: []string{"index", "if_revision"}},
+		{Name: "queue.remove", Description: "remove a live playlist track", Parameters: []string{"index", "if_revision"}},
+		{Name: "queue.move", Description: "move a live playlist track", Parameters: []string{"index", "to", "if_revision"}},
+		{Name: "queue.clear", Description: "clear the live playlist", Parameters: []string{"if_revision"}},
+		{Name: "track.play", Description: "play a supplied track", Async: true, Parameters: []string{"track", "if_revision"}},
+		{Name: "track.queue", Description: "queue a supplied track next", Parameters: []string{"track", "if_revision"}},
 		{Name: "playnext.list", Description: "list play-next entries", Parameters: []string{"offset", "limit"}},
-		{Name: "playnext.remove", Description: "remove a play-next entry", Parameters: []string{"index"}},
-		{Name: "playnext.move", Description: "move a play-next entry", Parameters: []string{"index", "to"}},
-		{Name: "playnext.clear", Description: "clear play-next entries"},
+		{Name: "playnext.remove", Description: "remove a play-next entry", Parameters: []string{"index", "if_revision"}},
+		{Name: "playnext.move", Description: "move a play-next entry", Parameters: []string{"index", "to", "if_revision"}},
+		{Name: "playnext.clear", Description: "clear play-next entries", Parameters: []string{"if_revision"}},
 		{Name: "provider.list", Description: "list configured providers"},
 		{Name: "provider.playlists", Description: "list provider playlists", Async: true, Parameters: []string{"provider", "offset", "limit"}},
 		{Name: "provider.tracks", Description: "list provider tracks", Async: true, Parameters: []string{"provider", "playlist", "offset", "limit"}},
@@ -182,9 +181,12 @@ func DefaultOperationRegistry() *OperationRegistry {
 		{Name: "plugin.commands", Description: "list plugin commands"},
 	}
 	// Operations are submitted as jobs, including fast reads, so callers have a
-	// single completion and cancellation model. Direct snapshots use state.get.
+	// single completion and cancellation model. Direct V2 methods are documented
+	// separately from this operation registry.
 	for i := range operations {
-		operations[i].Async = true
+		if operations[i].Name != "runtime.snapshot" && operations[i].Name != "runtime.status" {
+			operations[i].Async = true
+		}
 	}
 	return NewOperationRegistry(operations...)
 }

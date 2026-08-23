@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bjarneo/cliamp/internal/playback"
 	"github.com/bjarneo/cliamp/ipc"
 	"github.com/bjarneo/cliamp/player"
 	"github.com/bjarneo/cliamp/playlist"
@@ -182,8 +183,8 @@ func TestDaemonSendUsesControlQueueInOrder(t *testing.T) {
 	d, engine := newDaemonV2TestDaemon()
 	d.control = make(chan any, 2)
 
-	d.Send(ipc.VolumeMsg{DB: -10})
-	d.Send(ipc.VolumeMsg{DB: -20})
+	d.Send(playback.SetVolumeMsg{VolumeDB: -10})
+	d.Send(playback.SetVolumeMsg{VolumeDB: -20})
 	if engine.volume != -6 {
 		t.Fatalf("volume changed before control loop handled messages: %v", engine.volume)
 	}

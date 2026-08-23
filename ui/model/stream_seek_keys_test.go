@@ -7,7 +7,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/bjarneo/cliamp/internal/playback"
-	"github.com/bjarneo/cliamp/ipc"
 )
 
 type fakeEngine struct {
@@ -168,7 +167,7 @@ func TestImmediateHTTPStreamSeek(t *testing.T) {
 			name: "ipc seek",
 			want: 4 * time.Second,
 			invoke: func(m *Model) tea.Cmd {
-				_, cmd := m.Update(ipc.SeekMsg{Offset: 4 * time.Second})
+				_, cmd := m.Update(playback.SeekMsg{Offset: 4 * time.Second})
 				return cmd
 			},
 		},

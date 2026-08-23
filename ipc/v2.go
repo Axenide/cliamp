@@ -48,8 +48,7 @@ type V2Request struct {
 	Topics    []string        `json:"topics,omitempty"`
 }
 
-// MarshalJSON always writes the v2 envelope version. A V2Request cannot
-// accidentally be serialized as an unversioned V1 request.
+// MarshalJSON always writes the required v2 envelope version.
 func (r V2Request) MarshalJSON() ([]byte, error) {
 	type request V2Request
 	r.Version = protocolVersion2
@@ -79,6 +78,7 @@ func (r V2Response) MarshalJSON() ([]byte, error) {
 type V2Error struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+	Detail  string `json:"detail,omitempty"`
 }
 
 // Error implements error.
@@ -162,7 +162,7 @@ func cloneV2Error(err *V2Error) *V2Error {
 	if err == nil {
 		return nil
 	}
-	return &V2Error{Code: err.Code, Message: err.Message}
+	return &V2Error{Code: err.Code, Message: err.Message, Detail: err.Detail}
 }
 
 func cloneSnapshot(snapshot *RuntimeSnapshot) *RuntimeSnapshot {

@@ -118,3 +118,31 @@ func TestV2RevisionConflictPreventsMutation(t *testing.T) {
 		t.Fatalf("playlist mutated after conflict: %d tracks", pl.Len())
 	}
 }
+
+func TestV2QueueRemoveStopsActivePlayback(t *testing.T) {
+	engine := &playbackFakeEngine{playing: true}
+	pl := playlist.New()
+	pl.Add(
+		playlist.Track{Path: "/music/one.flac", Title: "One"},
+		playlist.Track{Path: "/music/two.flac", Title: "Two"},
+	)
+	m := Model{player: engine, playlist: pl, vis: ui.NewVisualizer(float64(engine.SampleRate()))}
+	jobs := ipc.NewJobStore()
+	job, err := jobs.Create("queue.remove")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _ = m.Update(V2RequestMsg{
+		Request: ipc.V2Request{Operation: "queue.remove", Params: json.RawMessage(`{"index":0}`)},
+		Jobs:    jobs,
+		JobID:   job.ID,
+	})
+	completed, ok := jobs.Get(job.ID)
+	if !ok || completed.State != ipc.JobSucceeded {
+		t.Fatalf("queue job = %#v", completed)
+	}
+	if engine.stopCalls != 1 || pl.Len() != 1 || pl.Tracks()[0].Title != "Two" {
+		t.Fatalf("stops=%d tracks=%#v", engine.stopCalls, pl.Tracks())
+	}
+}

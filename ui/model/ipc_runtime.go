@@ -113,7 +113,7 @@ func (m *Model) handleV2Request(msg V2RequestMsg) tea.Cmd {
 		return nil
 	}
 
-	request, protocolErr := v2LegacyRequest(msg.Request)
+	request, protocolErr := v2OperationRequest(msg.Request)
 	if protocolErr != nil {
 		m.failV2Job(msg.Jobs, msg.JobID, protocolErr)
 		return nil
@@ -173,13 +173,16 @@ func (m *Model) handleV2Request(msg V2RequestMsg) tea.Cmd {
 		m.completeV2Job(msg.Jobs, msg.JobID, ipc.Response{OK: true, Volume: m.player.Volume()})
 		return nil
 	case "seek":
-		cmd := m.seekRelative(secondsDuration(request.Value), 0)
+		_ = m.player.Seek(secondsDuration(request.Value))
+		m.notifyAll()
 		m.completeV2Job(msg.Jobs, msg.JobID, ipc.Response{OK: true})
-		return cmd
+		return nil
 	case "seek.absolute":
-		cmd := m.seekAbsolute(secondsDuration(request.Value))
+		position, _ := m.player.PositionAndDuration()
+		_ = m.player.Seek(secondsDuration(request.Value) - position)
+		m.notifyAll()
 		m.completeV2Job(msg.Jobs, msg.JobID, ipc.Response{OK: true})
-		return cmd
+		return nil
 	case "speed":
 		if request.Value <= 0 || math.IsNaN(request.Value) || math.IsInf(request.Value, 0) {
 			m.failV2Job(msg.Jobs, msg.JobID, v2InvalidParamsError())
@@ -276,22 +279,33 @@ func (m *Model) handleV2QueueRequest(jobs *ipc.JobStore, jobID string, request i
 		m.playlist.Queue(request.Index)
 		m.normalizeQueueOverlay()
 	case "queue.remove":
-		if request.Index < 0 || request.Index >= m.playlist.Len() || !m.playlist.Remove(request.Index) {
+		if request.Index < 0 || request.Index >= m.playlist.Len() {
 			m.failV2Job(jobs, jobID, v2InvalidParamsError())
 			return nil
 		}
+		if request.Index == m.playlist.Index() {
+			m.player.Stop()
+			m.clearPlaybackTrack()
+		}
+		if !m.playlist.Remove(request.Index) {
+			m.failV2Job(jobs, jobID, v2InvalidParamsError())
+			return nil
+		}
+		m.setHeaderStateFromTracks(m.playlist.Tracks())
 		m.normalizeQueueOverlay()
 	case "queue.move":
 		if !m.playlist.Move(request.Index, request.To) {
 			m.failV2Job(jobs, jobID, v2InvalidParamsError())
 			return nil
 		}
+		m.setHeaderStateFromTracks(m.playlist.Tracks())
 		m.normalizeQueueOverlay()
 	case "queue.clear":
 		m.player.Stop()
 		m.replacePlaylist(nil)
 		m.clearPlaybackTrack()
 		m.loadedPlaylist = ""
+		m.setHeaderStateFromTracks(nil)
 	}
 	m.completeV2Job(jobs, jobID, m.v2PlaylistResponse())
 	return nil
@@ -331,6 +345,7 @@ func (m *Model) handleV2Theme(jobs *ipc.JobStore, jobID string, request ipc.Requ
 		m.completeV2Job(jobs, jobID, ipc.Response{OK: true, Items: items})
 		return nil
 	}
+	m.themes = theme.LoadAll()
 	if !m.SetTheme(request.Name) {
 		m.failV2Job(jobs, jobID, v2NotFoundError())
 		return nil
@@ -352,7 +367,18 @@ func (m *Model) handleV2Visualizer(jobs *ipc.JobStore, jobID string, request ipc
 		m.completeV2Job(jobs, jobID, ipc.Response{OK: true, Items: ui.VisModeNames()})
 		return nil
 	}
-	if m.vis == nil || !m.SetVisualizer(request.Name) {
+	if m.vis == nil {
+		m.failV2Job(jobs, jobID, v2UnavailableError())
+		return nil
+	}
+	if strings.EqualFold(request.Name, "next") {
+		m.vis.CycleMode()
+		m.vis.RequestRefresh()
+		m.refreshChrome()
+		m.completeV2Job(jobs, jobID, ipc.Response{OK: true, Visualizer: m.vis.ModeName()})
+		return nil
+	}
+	if !m.SetVisualizer(request.Name) {
 		m.failV2Job(jobs, jobID, v2NotFoundError())
 		return nil
 	}
@@ -685,7 +711,7 @@ func (m *Model) v2PlayNextResponsePage(offset, limit int) ipc.Response {
 	return ipc.Response{OK: true, Tracks: items, Total: total}
 }
 
-func v2LegacyRequest(request ipc.V2Request) (ipc.Request, *ipc.V2Error) {
+func v2OperationRequest(request ipc.V2Request) (ipc.Request, *ipc.V2Error) {
 	var result ipc.Request
 	if len(request.Params) > 0 {
 		if err := json.Unmarshal(request.Params, &result); err != nil {

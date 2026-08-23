@@ -493,7 +493,7 @@ func run(overrides config.Overrides, positional []string, daemon bool) error {
 		})
 	}
 
-	ipcSrv, ipcErr := ipc.NewServerWithBroker(ipc.DefaultSocketPath(), ipc.DispatcherFunc(func(msg any) { prog.Send(msg) }), pluginBroker)
+	ipcSrv, ipcErr := ipc.NewServerWithBroker(ipc.DefaultSocketPath(), pluginBroker)
 	if ipcErr != nil {
 		fmt.Fprintf(os.Stderr, "ipc: %v\n", ipcErr)
 	} else {
@@ -505,9 +505,6 @@ func run(overrides config.Overrides, positional []string, daemon bool) error {
 			ipcSrv.SetOperationRegistry(operations)
 		}
 		go publishV2JobEvents(ipcSrv.Done(), ipcSrv.JobStore(), pluginBroker)
-		if luaMgr != nil {
-			ipcSrv.SetPluginDispatcher(luaMgr)
-		}
 	}
 
 	finalModel, err := mediactl.Run(prog, svc)
@@ -591,7 +588,7 @@ func runV2PluginJob(jobs *ipc.JobStore, jobID string, request ipc.V2Request, plu
 	}
 	output, err := plugins.EmitCommand(params.Name, params.Sub, params.Args)
 	if err != nil {
-		_ = jobs.Fail(jobID, ipc.V2Error{Code: ipc.V2ErrorCodeInternal, Message: ipc.V2MessageInternal})
+		_ = jobs.Fail(jobID, ipc.V2Error{Code: ipc.V2ErrorCodeInternal, Message: ipc.V2MessageInternal, Detail: err.Error()})
 		return
 	}
 	data, err := json.Marshal(ipc.Response{OK: true, Output: output})
@@ -655,28 +652,89 @@ func userIPCError(err error) error {
 	return err
 }
 
-func ipcSend(req ipc.Request) (ipc.Response, error) {
-	resp, err := ipc.Send(ipc.DefaultSocketPath(), req)
-	if err != nil {
-		return resp, userIPCError(err)
-	}
-	if !resp.OK {
-		return resp, fmt.Errorf("%s", resp.Error)
-	}
-	return resp, nil
+func ipcSend(operation string, params ipc.Request) (ipc.Response, error) {
+	return ipcSendWithContext(context.Background(), operation, params)
 }
 
-// ipcSendLong is like ipcSend with a caller-chosen deadline, for plugin
-// commands that can legitimately run for minutes (e.g. yt-dlp downloads).
-func ipcSendLong(req ipc.Request, deadline time.Duration) (ipc.Response, error) {
-	resp, err := ipc.SendWithDeadline(ipc.DefaultSocketPath(), req, deadline)
+// ipcSendLong waits for a V2 job under the supplied deadline. Plugin commands
+// can legitimately run for minutes (for example, yt-dlp downloads).
+func ipcSendLong(operation string, params ipc.Request, deadline time.Duration) (ipc.Response, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), deadline)
+	defer cancel()
+	return ipcSendWithContext(ctx, operation, params)
+}
+
+func ipcSendWithContext(ctx context.Context, operation string, params ipc.Request) (ipc.Response, error) {
+	raw, err := json.Marshal(params)
 	if err != nil {
-		return resp, userIPCError(err)
+		return ipc.Response{}, fmt.Errorf("marshal %s parameters: %w", operation, err)
 	}
-	if !resp.OK {
-		return resp, fmt.Errorf("%s", resp.Error)
+	response, err := ipc.SendV2(ipc.DefaultSocketPath(), ipc.V2Request{
+		ID:        json.RawMessage(`"cliamp"`),
+		Method:    "operation.submit",
+		Operation: operation,
+		Params:    raw,
+	})
+	if err != nil {
+		return ipc.Response{}, userIPCError(err)
 	}
-	return resp, nil
+	if err := v2ResponseError(response); err != nil {
+		return ipc.Response{}, err
+	}
+	if response.Job == nil {
+		return ipc.Response{}, fmt.Errorf("%s returned no job", operation)
+	}
+	response, err = waitForV2Job(ctx, response.Job.ID)
+	if err != nil {
+		return ipc.Response{}, err
+	}
+	if response.Job == nil {
+		return ipc.Response{}, fmt.Errorf("%s completed without a job", operation)
+	}
+	var result ipc.Response
+	if err := json.Unmarshal(response.Job.Result, &result); err != nil {
+		return ipc.Response{}, fmt.Errorf("decode %s result: %w", operation, err)
+	}
+	if !result.OK {
+		return result, fmt.Errorf("%s", result.Error)
+	}
+	return result, nil
+}
+
+func ipcState() (ipc.RuntimeSnapshot, error) {
+	response, err := ipc.SendV2(ipc.DefaultSocketPath(), ipc.V2Request{ID: json.RawMessage(`"cliamp"`), Method: "state.get"})
+	if err != nil {
+		return ipc.RuntimeSnapshot{}, userIPCError(err)
+	}
+	if err := v2ResponseError(response); err != nil {
+		return ipc.RuntimeSnapshot{}, err
+	}
+	if response.Snapshot == nil {
+		return ipc.RuntimeSnapshot{}, fmt.Errorf("state response has no snapshot")
+	}
+	return *response.Snapshot, nil
+}
+
+func stateResult(snapshot ipc.RuntimeSnapshot) ipc.Response {
+	return ipc.Response{
+		OK:         true,
+		State:      snapshot.State,
+		Track:      snapshot.Track,
+		Position:   snapshot.Position,
+		Duration:   snapshot.Duration,
+		Volume:     snapshot.Volume,
+		Playlist:   snapshot.Playlist,
+		Index:      snapshot.Index,
+		Total:      snapshot.Total,
+		Visualizer: snapshot.Visualizer,
+		Shuffle:    snapshot.Shuffle,
+		Repeat:     snapshot.Repeat,
+		Mono:       snapshot.Mono,
+		Speed:      snapshot.Speed,
+		EQPreset:   snapshot.EQPreset,
+		Theme:      snapshot.Theme,
+		EQBands:    snapshot.EQBands,
+	}
 }
 
 func main() {

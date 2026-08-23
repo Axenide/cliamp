@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bjarneo/cliamp/ipc"
+	"github.com/bjarneo/cliamp/internal/playback"
 	"github.com/bjarneo/cliamp/player"
 	"github.com/bjarneo/cliamp/playlist"
 )
@@ -70,7 +70,7 @@ func TestDaemonResumeRestartsLiveStation(t *testing.T) {
 	pl.SetIndex(0)
 	d := &daemon{player: fake, playlist: pl}
 
-	d.Send(ipc.PlayMsg{})
+	d.Send(playback.PlayMsg{})
 
 	if got := pl.Index(); got != 0 {
 		t.Fatalf("playlist index = %d, want current station 0", got)

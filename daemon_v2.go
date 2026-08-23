@@ -63,6 +63,10 @@ func newDaemonV2Dispatcher(d *daemon, jobs *ipc.JobStore) ipc.V2Dispatcher {
 		if d == nil || jobs == nil {
 			return ipc.V2Result{}, daemonV2UnavailableError()
 		}
+		if request.Operation == "runtime.snapshot" || request.Operation == "runtime.status" {
+			request.Method = "state.get"
+			request.Operation = ""
+		}
 		switch strings.ToLower(strings.TrimSpace(request.Method)) {
 		case "state.get", "spectrum.get":
 			return d.dispatchV2Read(ctx, request)
@@ -122,11 +126,9 @@ func (d *daemon) handleV2ReadRequest(msg daemonV2ReadRequest) {
 		snapshot := d.runtimeSnapshot()
 		msg.reply <- daemonV2ReadResult{result: ipc.V2Result{Snapshot: &snapshot}}
 	case "spectrum.get":
-		reply := make(chan ipc.Response, 1)
 		d.mu.Lock()
-		d.handleBands(ipc.BandsRequestMsg{Reply: reply})
+		response := d.bandsResponse()
 		d.mu.Unlock()
-		response := <-reply
 		if !response.OK {
 			msg.reply <- daemonV2ReadResult{err: daemonV2UnavailableError()}
 			return
@@ -165,7 +167,9 @@ func (d *daemon) handleV2JobRequest(msg daemonV2JobRequest) {
 		return
 	}
 	if !response.OK {
-		_ = msg.jobs.Fail(msg.jobID, *daemonV2InternalError())
+		protocolErr := daemonV2InternalError()
+		protocolErr.Detail = response.Error
+		_ = msg.jobs.Fail(msg.jobID, *protocolErr)
 		return
 	}
 	result, err := json.Marshal(response)
@@ -186,27 +190,22 @@ func (d *daemon) handleV2JobRequest(msg daemonV2JobRequest) {
 }
 
 func (d *daemon) executeV2Operation(ctx context.Context, request ipc.V2Request) (ipc.Response, *ipc.V2Error) {
-	legacy, protocolErr := daemonV2LegacyRequest(request)
+	params, protocolErr := daemonV2OperationRequest(request)
 	if protocolErr != nil {
 		return ipc.Response{}, protocolErr
 	}
 	if ctx.Err() != nil {
 		return ipc.Response{}, daemonV2CanceledError()
 	}
-	if legacy.Revision != 0 && d.playlist != nil && legacy.Revision != d.playlist.Revision() && daemonV2MutatesLivePlaylist(legacy.Cmd) {
+	if params.Revision != 0 && d.playlist != nil && params.Revision != d.playlist.Revision() && daemonV2MutatesLivePlaylist(params.Cmd) {
 		return ipc.Response{}, &ipc.V2Error{Code: ipc.V2ErrorCodeConflict, Message: ipc.V2MessageConflict}
 	}
 
-	switch legacy.Cmd {
-	case "status":
-		d.mu.Lock()
-		response := d.statusResponse()
-		d.mu.Unlock()
-		return response, nil
+	switch params.Cmd {
 	case "play":
-		d.handleMessage(ipc.PlayMsg{})
+		d.handleMessage(playback.PlayMsg{})
 	case "pause":
-		d.handleMessage(ipc.PauseMsg{})
+		d.handleMessage(playback.PauseMsg{})
 	case "toggle":
 		d.handleMessage(playback.PlayPauseMsg{})
 	case "stop":
@@ -216,76 +215,76 @@ func (d *daemon) executeV2Operation(ctx context.Context, request ipc.V2Request) 
 	case "prev":
 		d.handleMessage(playback.PrevMsg{})
 	case "volume":
-		d.handleMessage(playback.SetVolumeMsg{VolumeDB: legacy.Value})
+		d.handleMessage(playback.SetVolumeMsg{VolumeDB: params.Value})
 		return ipc.Response{OK: true, Volume: d.player.Volume()}, nil
 	case "volume.adjust":
-		d.handleMessage(playback.SetVolumeMsg{VolumeDB: d.player.Volume() + legacy.Value})
+		d.handleMessage(playback.SetVolumeMsg{VolumeDB: d.player.Volume() + params.Value})
 		return ipc.Response{OK: true, Volume: d.player.Volume()}, nil
 	case "seek":
-		d.handleMessage(ipc.SeekMsg{Offset: secondsToDuration(legacy.Value)})
+		d.handleMessage(playback.SeekMsg{Offset: secondsToDuration(params.Value)})
 	case "seek.absolute":
-		d.handleMessage(playback.SetPositionMsg{Position: secondsToDuration(legacy.Value)})
+		d.handleMessage(playback.SetPositionMsg{Position: secondsToDuration(params.Value)})
 	case "speed":
-		if !validDaemonV2Speed(legacy.Value) {
+		if !validDaemonV2Speed(params.Value) {
 			return ipc.Response{}, daemonV2InvalidParamsError()
 		}
-		return d.v2Reply(ipc.SpeedMsg{Speed: legacy.Value})
+		return d.v2Reply(ipc.SpeedMsg{Speed: params.Value})
 	case "speed.adjust":
-		return d.v2Reply(ipc.SpeedMsg{Speed: d.player.Speed() + legacy.Value})
+		return d.v2Reply(ipc.SpeedMsg{Speed: d.player.Speed() + params.Value})
 	case "shuffle":
-		return d.v2Reply(ipc.ShuffleMsg{Name: legacy.Name})
+		return d.v2Reply(ipc.ShuffleMsg{Name: params.Name})
 	case "repeat":
-		return d.v2Reply(ipc.RepeatMsg{Name: legacy.Name})
+		return d.v2Reply(ipc.RepeatMsg{Name: params.Name})
 	case "mono":
-		return d.v2Reply(ipc.MonoMsg{Name: legacy.Name})
+		return d.v2Reply(ipc.MonoMsg{Name: params.Name})
 	case "eq":
-		return d.v2Reply(ipc.EQMsg{Name: legacy.Name, Band: legacy.Band, Value: legacy.Value})
+		return d.v2Reply(ipc.EQMsg{Name: params.Name, Band: params.Band, Value: params.Value})
 	case "device":
-		if legacy.Name == "" {
+		if params.Name == "" {
 			return ipc.Response{}, daemonV2InvalidParamsError()
 		}
-		return d.v2Reply(ipc.DeviceMsg{Name: legacy.Name})
+		return d.v2Reply(ipc.DeviceMsg{Name: params.Name})
 	case "theme":
 		return ipc.Response{}, daemonV2UnavailableError()
 	case "vis":
 		return ipc.Response{}, daemonV2UnavailableError()
 	case "load":
-		if legacy.Playlist == "" {
+		if params.Playlist == "" {
 			return ipc.Response{}, daemonV2InvalidParamsError()
 		}
-		return d.v2Reply(ipc.LoadMsg{Playlist: legacy.Playlist})
+		return d.v2Reply(ipc.LoadMsg{Playlist: params.Playlist})
 	case "queue":
-		if legacy.Path == "" {
+		if params.Path == "" {
 			return ipc.Response{}, daemonV2InvalidParamsError()
 		}
-		d.handleMessage(ipc.QueueMsg{Path: legacy.Path})
+		d.handleMessage(ipc.QueueMsg{Path: params.Path})
 		return d.queueResponse(), nil
 	case "queue.list", "queue.play", "queue.enqueue", "queue.remove", "queue.move", "queue.clear", "track.play", "track.queue":
-		if legacy.Cmd == "queue.list" {
-			return d.queueResponsePage(legacy.Offset, legacy.Limit), nil
+		if params.Cmd == "queue.list" {
+			return d.queueResponsePage(params.Offset, params.Limit), nil
 		}
-		return d.v2Reply(ipc.QueueRequestMsg{Op: legacy.Cmd, Index: legacy.Index, To: legacy.To, Track: legacy.Track})
+		return d.v2Reply(ipc.QueueRequestMsg{Op: params.Cmd, Index: params.Index, To: params.To, Track: params.Track})
 	case "playnext.list", "playnext.remove", "playnext.move", "playnext.clear":
-		return d.handleV2PlayNext(legacy)
+		return d.handleV2PlayNext(params)
 	case "url.load":
-		if legacy.Path == "" {
+		if params.Path == "" {
 			return ipc.Response{}, daemonV2InvalidParamsError()
 		}
-		return d.v2Reply(ipc.URLRequestMsg{URL: legacy.Path})
+		return d.v2Reply(ipc.URLRequestMsg{URL: params.Path})
 	case "save":
 		return d.v2Reply(ipc.SaveRequestMsg{})
 	case "lyrics":
 		return d.v2Reply(ipc.LyricsRequestMsg{})
 	case "history", "history.clear":
-		return d.v2Reply(ipc.HistoryRequestMsg{Op: legacy.Cmd, Limit: legacy.Limit})
+		return d.v2Reply(ipc.HistoryRequestMsg{Op: params.Cmd, Limit: params.Limit})
 	case "provider.list", "provider.playlists", "provider.tracks", "provider.load", "provider.search",
 		"provider.artists", "provider.artist_albums", "provider.albums", "provider.album_tracks", "provider.load_album",
 		"provider.favorite", "provider.catalog",
 		"playlist.create", "playlist.rename", "playlist.delete", "playlist.add", "playlist.add_many", "playlist.replace", "playlist.remove", "playlist.bookmark":
 		return d.v2Reply(ipc.LibraryRequestMsg{
-			Op: legacy.Cmd, Provider: legacy.Provider, Playlist: legacy.Playlist, Query: legacy.Query,
-			Artist: legacy.Artist, Album: legacy.Album, Sort: legacy.Sort, Offset: legacy.Offset,
-			Limit: legacy.Limit, Index: legacy.Index, NewName: legacy.NewName, Track: legacy.Track, Tracks: legacy.Tracks,
+			Op: params.Cmd, Provider: params.Provider, Playlist: params.Playlist, Query: params.Query,
+			Artist: params.Artist, Album: params.Album, Sort: params.Sort, Offset: params.Offset,
+			Limit: params.Limit, Index: params.Index, NewName: params.NewName, Track: params.Track, Tracks: params.Tracks,
 		})
 	default:
 		return ipc.Response{}, daemonV2UnavailableError()
@@ -413,18 +412,18 @@ func (d *daemon) queueResponsePage(offset, limit int) ipc.Response {
 	return ipc.Response{OK: true, Tracks: items, Index: d.playlist.Index(), Total: total}
 }
 
-func daemonV2LegacyRequest(request ipc.V2Request) (ipc.Request, *ipc.V2Error) {
-	var legacy ipc.Request
+func daemonV2OperationRequest(request ipc.V2Request) (ipc.Request, *ipc.V2Error) {
+	var params ipc.Request
 	if len(request.Params) > 0 {
-		if err := json.Unmarshal(request.Params, &legacy); err != nil {
+		if err := json.Unmarshal(request.Params, &params); err != nil {
 			return ipc.Request{}, daemonV2InvalidParamsError()
 		}
 	}
-	legacy.Cmd = daemonV2Operation(request)
-	if legacy.Cmd == "" {
+	params.Cmd = daemonV2Operation(request)
+	if params.Cmd == "" {
 		return ipc.Request{}, daemonV2InvalidParamsError()
 	}
-	return legacy, nil
+	return params, nil
 }
 
 func daemonV2Operation(request ipc.V2Request) string {
@@ -457,8 +456,6 @@ func daemonV2Operation(request ipc.V2Request) string {
 		return "speed"
 	case "player.speed.adjust":
 		return "speed.adjust"
-	case "runtime.snapshot", "runtime.status":
-		return "status"
 	case "runtime.queue.list", "runtime.playlist.get":
 		return "queue.list"
 	case "runtime.queue.play", "runtime.playlist.play":
@@ -473,6 +470,8 @@ func daemonV2Operation(request ipc.V2Request) string {
 		return "queue.clear"
 	case "runtime.library.search":
 		return "provider.search"
+	case "runtime.history":
+		return "history"
 	default:
 		return operation
 	}

@@ -899,7 +899,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 
 	case playback.SeekMsg:
-		return m, m.seekRelative(msg.Offset, 0)
+		_ = m.player.Seek(msg.Offset)
+		m.notifyAll()
+		return m, nil
 
 	case playback.SetPositionMsg:
 		return m, m.seekAbsolute(msg.Position)
@@ -951,31 +953,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.status.Show(msg.Text, ttl)
 		return m, nil
 
-	// IPC-specific messages (PlayMsg, PauseMsg have different semantics from toggle).
-	// Shared types (NextMsg, PrevMsg, StopMsg, PlayPauseMsg) are handled above via
-	// playback.* types.
-	case ipc.PlayMsg:
-		if m.player.IsPaused() {
-			cmd := m.togglePlayPause()
-			m.notifyAll()
-			return m, cmd
-		}
-		return m, nil
-	case ipc.PauseMsg:
-		if m.player.IsPlaying() && !m.player.IsPaused() {
-			cmd := m.togglePlayPause()
-			m.notifyAll()
-			return m, cmd
-		}
-		return m, nil
-	case ipc.VolumeMsg:
-		m.player.SetVolume(msg.DB)
-		m.notifyAll()
-		return m, nil
-	case ipc.SeekMsg:
-		_ = m.player.Seek(msg.Offset)
-		m.notifyAll()
-		return m, nil
 	case ipc.LoadMsg:
 		tracks, err := m.localProvider.Tracks(msg.Playlist)
 		if err != nil {
@@ -1181,65 +1158,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case ipc.StatusRequestMsg:
-		resp := ipc.Response{OK: true}
-		switch {
-		case m.player.IsPlaying() && !m.player.IsPaused():
-			resp.State = "playing"
-		case m.player.IsPaused():
-			resp.State = "paused"
-		default:
-			resp.State = "stopped"
-		}
-		if cur, _ := m.currentPlaybackTrack(); cur.Path != "" {
-			info := ipcTrackInfo(cur, m.playlist.Index(), m.playlist.QueuePosition(m.playlist.Index()))
-			if artist, title := m.resolveTrackDisplay(cur); title != "" {
-				if cur.Stream && title != cur.Title {
-					info.Station = cur.Title
-				}
-				info.Artist, info.Title = artist, title
-			}
-			if cur.Stream {
-				info.StreamTitle = m.streamTitle
-			}
-			resp.Track = &info
-		}
-		resp.Position = m.player.Position().Seconds()
-		resp.Duration = m.player.Duration().Seconds()
-		resp.Volume = m.player.Volume()
-		resp.Index = m.playlist.Index()
-		resp.Total = m.playlist.Len()
-		resp.Playlist = m.loadedPlaylist
-		resp.Visualizer = m.vis.ModeName()
-		shuffled := m.playlist.Shuffled()
-		resp.Shuffle = &shuffled
-		resp.Repeat = m.playlist.Repeat().String()
-		mono := m.player.Mono()
-		resp.Mono = &mono
-		resp.Speed = m.player.Speed()
-		resp.EQPreset = m.EQPresetName()
-		bands := m.player.EQBands()
-		resp.EQBands = append([]float64(nil), bands[:]...)
-		if m.themeIdx >= 0 && m.themeIdx < len(m.themes) {
-			t := m.themes[m.themeIdx]
-			resp.Theme = &ipc.ThemeInfo{
-				Name:     t.Name,
-				BG:       t.BG,
-				Accent:   t.Accent,
-				Fg:       t.FG,
-				BrightFg: t.BrightFG,
-				Green:    t.Green,
-				Yellow:   t.Yellow,
-				Red:      t.Red,
-			}
-		} else {
-			resp.Theme = &ipc.ThemeInfo{Name: theme.DefaultName}
-		}
-		if msg.Reply != nil {
-			msg.Reply <- resp
-		}
-		return m, nil
-
 	case ipc.QueueRequestMsg:
 		return m, m.handleIPCQueue(msg)
 
@@ -1275,25 +1193,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.completeV2Job(msg.Jobs, msg.JobID, msg.Response)
 		} else {
-			m.failV2Job(msg.Jobs, msg.JobID, v2InternalError())
+			err := v2InternalError()
+			err.Detail = msg.Response.Error
+			m.failV2Job(msg.Jobs, msg.JobID, err)
 		}
 		return m, nil
 
-	case ipc.BandsRequestMsg:
-		resp := ipc.Response{OK: true}
-		if m.vis != nil {
-			resp.Visualizer = m.vis.ModeName()
-			b := m.vis.SmoothedBands()
-			if len(b) > 0 {
-				out := make([]float64, len(b))
-				copy(out, b)
-				resp.Bands = out
-			}
-		}
-		if msg.Reply != nil {
-			msg.Reply <- resp
-		}
-		return m, nil
 	}
 
 	return m, nil

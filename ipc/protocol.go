@@ -4,15 +4,13 @@ package ipc
 
 import (
 	"context"
-	"time"
 )
 
-// Compile-time interface check.
-var _ Dispatcher = DispatcherFunc(nil)
-
-// Request is the JSON command sent by the client.
+// Request is the parameter object decoded from a V2 operation's params field.
+// It is an in-process adapter while runtime owners migrate to narrower typed
+// operation structs; it is never sent as a top-level protocol envelope.
 type Request struct {
-	Cmd      string      `json:"cmd"`
+	Cmd      string      `json:"-"`
 	Value    float64     `json:"value,omitempty"`
 	Playlist string      `json:"playlist,omitempty"`
 	Path     string      `json:"path,omitempty"`
@@ -36,7 +34,8 @@ type Request struct {
 	Topics   []string    `json:"topics,omitempty"`
 }
 
-// Response is the JSON response sent by the server.
+// Response is the operation-specific data embedded in a successful V2 job.
+// V2Response and Job carry protocol success and failure state.
 type Response struct {
 	OK         bool           `json:"ok"`
 	Error      string         `json:"error,omitempty"`
@@ -82,14 +81,6 @@ type ThemeInfo struct {
 	Green    string `json:"green,omitempty"`
 	Yellow   string `json:"yellow,omitempty"`
 	Red      string `json:"red,omitempty"`
-}
-
-// PluginDispatcher is the hook the IPC server calls to forward plugin.call and
-// plugin.commands requests to the Lua plugin manager. Optional — if nil, those
-// subcommands return an error.
-type PluginDispatcher interface {
-	EmitCommand(plugin, command string, args []string) (string, error)
-	CommandList() []string
 }
 
 // TrackInfo is the track metadata in a status response.
@@ -172,27 +163,6 @@ type DeviceInfo struct {
 	Active bool   `json:"active"`
 }
 
-// DispatcherFunc adapts a plain function to the Dispatcher interface.
-type DispatcherFunc func(msg any)
-
-// Send implements Dispatcher.
-func (f DispatcherFunc) Send(msg any) { f(msg) }
-
-// IPC-specific messages sent to the TUI via prog.Send().
-// For shared types (NextMsg, PrevMsg, StopMsg, PlayPauseMsg), see internal/playback.
-
-// PlayMsg requests playback to start (unpause only, not toggle).
-type PlayMsg struct{}
-
-// PauseMsg requests playback to pause (pause only, not toggle).
-type PauseMsg struct{}
-
-// VolumeMsg requests a relative volume change in dB.
-type VolumeMsg struct{ DB float64 }
-
-// SeekMsg requests a relative seek.
-type SeekMsg struct{ Offset time.Duration }
-
 // LoadMsg requests loading a playlist by name.
 // Reply receives the result so the client can report errors.
 type LoadMsg struct {
@@ -258,19 +228,6 @@ type EQMsg struct {
 // If Name is "list", returns available devices. Otherwise switches to named device.
 type DeviceMsg struct {
 	Name  string
-	Reply chan Response
-}
-
-// StatusRequestMsg asks the TUI for current state.
-// The TUI writes the response to Reply and closes the channel.
-type StatusRequestMsg struct {
-	Reply chan Response
-}
-
-// BandsRequestMsg asks the TUI for the current visualizer band values
-// (smoothed) and the active visualizer mode name. Lightweight compared to
-// StatusRequestMsg — intended for high-rate polling from external widgets.
-type BandsRequestMsg struct {
 	Reply chan Response
 }
 
