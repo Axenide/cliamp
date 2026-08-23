@@ -358,7 +358,26 @@ func qobuzCommand() *cli.Command {
 }
 
 func tidalCommand() *cli.Command {
-	return providerCredsCommand("tidal", "Tidal", tidal.CredsPath, tidal.DeleteCreds)
+	cmd := providerCredsCommand("tidal", "Tidal", tidal.CredsPath, tidal.DeleteCreds)
+	cmd.Commands = append(cmd.Commands, &cli.Command{
+		Name:      "probe",
+		Usage:     "print sanitized playback diagnostics for each quality tier (no tokens or signed URLs)",
+		ArgsUsage: "[search query]",
+		Action: func(ctx context.Context, c *cli.Command) error {
+			query := strings.Join(c.Args().Slice(), " ")
+			if query == "" {
+				query = "Random Access Memories Get Lucky"
+			}
+			cfg, err := config.Load()
+			if err != nil {
+				return fmt.Errorf("config: %w", err)
+			}
+			probeCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+			defer cancel()
+			return tidal.Probe(probeCtx, os.Stdout, query, cfg.Tidal.ClientID, cfg.Tidal.ClientSecret)
+		},
+	})
+	return cmd
 }
 
 // providerCredsCommand builds the `cliamp <provider> reset` subcommand shared

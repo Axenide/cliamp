@@ -53,8 +53,13 @@ type apiFavoriteItem[T any] struct {
 
 // apiPlaybackInfo is the tracks/{id}/playbackinfopostpaywall response. The
 // manifest is base64-encoded; its format depends on manifestMimeType (see
-// manifest.go).
+// manifest.go). AudioQuality is the quality the server actually delivered,
+// which may be lower than requested; BitDepth/SampleRate are present on newer
+// API responses only.
 type apiPlaybackInfo struct {
+	AudioQuality     string `json:"audioQuality"`
 	ManifestMimeType string `json:"manifestMimeType"`
 	Manifest         string `json:"manifest"`
+	BitDepth         int    `json:"bitDepth"`
+	SampleRate       int    `json:"sampleRate"`
 }

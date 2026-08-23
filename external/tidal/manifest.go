@@ -45,6 +45,8 @@ var errDASHManifest = errors.New("tidal: DASH manifest not supported")
 // direct CDN URLs, delivered base64-encoded in the playbackinfo response for
 // LOW/HIGH/LOSSLESS qualities.
 type btsManifest struct {
+	MimeType       string   `json:"mimeType"`
+	Codecs         string   `json:"codecs"`
 	EncryptionType string   `json:"encryptionType"`
 	URLs           []string `json:"urls"`
 }
