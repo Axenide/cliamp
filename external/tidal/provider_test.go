@@ -115,3 +115,48 @@ func TestAlbumInfo(t *testing.T) {
 		t.Errorf("albumInfo = %+v", got)
 	}
 }
+
+func TestTrackFromAPI(t *testing.T) {
+	tr := trackFromAPI(apiTrack{
+		ID:             json.Number("42"),
+		Title:          "Song",
+		Duration:       200,
+		AllowStreaming: true,
+		StreamReady:    true,
+		Artist:         apiArtist{Name: "Artist"},
+	}, nil)
+	if tr.Path != "tidal://track/42" {
+		t.Errorf("Path = %q", tr.Path)
+	}
+	if !tr.Stream || tr.Unplayable {
+		t.Errorf("Stream=%v Unplayable=%v", tr.Stream, tr.Unplayable)
+	}
+	if tr.ProviderMeta["tidal.id"] != "42" {
+		t.Errorf("meta = %v", tr.ProviderMeta)
+	}
+
+	blocked := trackFromAPI(apiTrack{ID: json.Number("7"), StreamReady: true}, nil)
+	if !blocked.Unplayable {
+		t.Error("allowStreaming=false must be unplayable")
+	}
+}
+
+func TestNoteDowngradeOncePerSession(t *testing.T) {
+	p := New("lossless", "", "")
+	p.noteDowngrade(qualityHigh) // should latch
+	if !p.downgradeNoticed.Load() {
+		t.Fatal("downgrade not latched")
+	}
+
+	aac := New("high", "", "")
+	aac.noteDowngrade(qualityHigh) // AAC requested: not a downgrade
+	if aac.downgradeNoticed.Load() {
+		t.Error("AAC quality setting must not warn")
+	}
+
+	flac := New("hires", "", "")
+	flac.noteDowngrade(qualityHiRes) // FLAC delivered: no warning
+	if flac.downgradeNoticed.Load() {
+		t.Error("delivered FLAC must not warn")
+	}
+}

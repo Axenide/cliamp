@@ -40,6 +40,11 @@ type apiPlaylist struct {
 	Duration       int    `json:"duration"`
 }
 
+// apiPlaylistItem wraps an entry in a playlistsAndFavoritePlaylists response.
+type apiPlaylistItem struct {
+	Playlist apiPlaylist `json:"playlist"`
+}
+
 // apiList is a paginated Tidal list response.
 type apiList[T any] struct {
 	Items              []T `json:"items"`

@@ -132,10 +132,15 @@ func (c *client) ensureToken(ctx context.Context, staleToken string) error {
 	return nil
 }
 
+// rateLimitRetries is how many times a 429 response is retried (honoring
+// Retry-After) before giving up.
+const rateLimitRetries = 2
+
 // doGet performs an authenticated GET against the private API and decodes the
-// JSON response into out. A 401 triggers one forced token refresh and retry.
+// JSON response into out. A 401 triggers one forced token refresh and retry;
+// a 429 is retried with backoff.
 func (c *client) doGet(ctx context.Context, path string, params url.Values, out any) error {
-	body, err := c.doRequest(ctx, path, params, false)
+	body, err := c.doRequest(ctx, path, params)
 	if err != nil {
 		return err
 	}
@@ -148,55 +153,79 @@ func (c *client) doGet(ctx context.Context, path string, params url.Values, out 
 	return nil
 }
 
-func (c *client) doRequest(ctx context.Context, path string, params url.Values, retried bool) ([]byte, error) {
-	if err := c.ensureToken(ctx, ""); err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
-	if err != nil {
-		return nil, fmt.Errorf("tidal: %s: build request: %w", path, err)
-	}
-
-	q := url.Values{}
-	for k, vs := range params {
-		q[k] = vs
-	}
-	c.mu.Lock()
-	if c.countryCode != "" {
-		q.Set("countryCode", c.countryCode)
-	}
-	if c.sessionID != "" {
-		q.Set("sessionId", c.sessionID)
-	}
-	token := c.accessToken
-	auth := c.tokenType + " " + token
-	c.mu.Unlock()
-	req.URL.RawQuery = q.Encode()
-	req.Header.Set("User-Agent", apiUA)
-	req.Header.Set("x-tidal-client-version", clientVersion)
-	req.Header.Set("Authorization", auth)
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("tidal: %s: request: %w", path, err)
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
-	if err != nil {
-		return nil, fmt.Errorf("tidal: %s: read response: %w", path, err)
-	}
-
-	if resp.StatusCode == http.StatusUnauthorized && !retried {
-		if err := c.ensureToken(ctx, token); err != nil {
+func (c *client) doRequest(ctx context.Context, path string, params url.Values) ([]byte, error) {
+	refreshed := false
+	rateRetries := 0
+	for {
+		if err := c.ensureToken(ctx, ""); err != nil {
 			return nil, err
 		}
-		return c.doRequest(ctx, path, params, true)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
+		if err != nil {
+			return nil, fmt.Errorf("tidal: %s: build request: %w", path, err)
+		}
+
+		q := url.Values{}
+		for k, vs := range params {
+			q[k] = vs
+		}
+		c.mu.Lock()
+		if c.countryCode != "" {
+			q.Set("countryCode", c.countryCode)
+		}
+		if c.sessionID != "" {
+			q.Set("sessionId", c.sessionID)
+		}
+		token := c.accessToken
+		auth := c.tokenType + " " + token
+		c.mu.Unlock()
+		req.URL.RawQuery = q.Encode()
+		req.Header.Set("User-Agent", apiUA)
+		req.Header.Set("x-tidal-client-version", clientVersion)
+		req.Header.Set("Authorization", auth)
+
+		resp, err := c.http.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("tidal: %s: request: %w", path, err)
+		}
+		body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
+		resp.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("tidal: %s: read response: %w", path, err)
+		}
+
+		switch {
+		case resp.StatusCode == http.StatusUnauthorized && !refreshed:
+			if err := c.ensureToken(ctx, token); err != nil {
+				return nil, err
+			}
+			refreshed = true
+			continue
+		case resp.StatusCode == http.StatusTooManyRequests && rateRetries < rateLimitRetries:
+			rateRetries++
+			select {
+			case <-time.After(retryAfter(resp, rateRetries)):
+				continue
+			case <-ctx.Done():
+				return nil, fmt.Errorf("tidal: %s: %w", path, ctx.Err())
+			}
+		case resp.StatusCode >= 400:
+			return nil, fmt.Errorf("tidal: %s: HTTP %d: %s", path, resp.StatusCode, strings.TrimSpace(string(body)))
+		}
+		return body, nil
 	}
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("tidal: %s: HTTP %d: %s", path, resp.StatusCode, strings.TrimSpace(string(body)))
+}
+
+// retryAfter returns the server-requested backoff for a 429 response, or an
+// attempt-scaled default when the header is absent or unparseable.
+func retryAfter(resp *http.Response, attempt int) time.Duration {
+	if v := resp.Header.Get("Retry-After"); v != "" {
+		if secs, err := strconv.Atoi(v); err == nil && secs > 0 && secs <= 60 {
+			return time.Duration(secs) * time.Second
+		}
 	}
-	return body, nil
+	return time.Duration(attempt) * time.Second
 }
 
 // loadSession fetches the current session (validating the token) and stores
@@ -266,9 +295,18 @@ func unwrapFavorites[T any](in []apiFavoriteItem[T]) []T {
 	return out
 }
 
-// userPlaylists returns the authenticated user's playlists.
+// userPlaylists returns the user's own playlists plus playlists they have
+// favorited ("subscribed to"), which the plain /playlists endpoint omits.
 func (c *client) userPlaylists(ctx context.Context) ([]apiPlaylist, error) {
-	return fetchList[apiPlaylist](ctx, c, "users/"+c.user()+"/playlists", 0)
+	items, err := fetchList[apiPlaylistItem](ctx, c, "users/"+c.user()+"/playlistsAndFavoritePlaylists", 0)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]apiPlaylist, len(items))
+	for i, it := range items {
+		out[i] = it.Playlist
+	}
+	return out, nil
 }
 
 // playlistTracks returns the tracks of a playlist, following pagination.

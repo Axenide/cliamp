@@ -2,25 +2,43 @@ package tidal
 
 import "sync"
 
-// streamURLs records the signed CDN URLs that the provider has resolved via
-// playbackinfopostpaywall. The player consults IsStreamURL through a
-// registered buffered-URL matcher so Tidal FLAC/AAC streams are routed through
-// the buffer-while-playing + ffmpeg pipeline (which auto-detects the codec and
-// supports seeking), exactly like Qobuz streams.
-var streamURLs sync.Map // map[string]struct{}
+// urlRegistry maps resolved track IDs to their latest signed CDN URL so the
+// player's buffered-URL matcher recognizes Tidal streams. Re-resolving a
+// track (every play, since resolution happens at play time) replaces its
+// previous entry, so the registry stays bounded by the tracks played this
+// session instead of growing with every resolution.
+type urlRegistry struct {
+	mu      sync.Mutex
+	byTrack map[string]string
+	urls    map[string]struct{}
+}
 
-// registerStreamURL marks u as a Tidal stream URL.
-func registerStreamURL(u string) {
+var streamURLs = urlRegistry{
+	byTrack: make(map[string]string),
+	urls:    make(map[string]struct{}),
+}
+
+// register records u as trackID's current stream URL, evicting the track's
+// previous URL.
+func (r *urlRegistry) register(trackID, u string) {
 	if u == "" {
 		return
 	}
-	streamURLs.Store(u, struct{}{})
+	r.mu.Lock()
+	if old, ok := r.byTrack[trackID]; ok {
+		delete(r.urls, old)
+	}
+	r.byTrack[trackID] = u
+	r.urls[u] = struct{}{}
+	r.mu.Unlock()
 }
 
-// IsStreamURL reports whether u is a Tidal signed stream URL previously
+// IsStreamURL reports whether u is a live Tidal stream URL previously
 // resolved by the provider. It is registered with the player's buffered-URL
 // matcher in main.go.
 func IsStreamURL(u string) bool {
-	_, ok := streamURLs.Load(u)
+	streamURLs.mu.Lock()
+	defer streamURLs.mu.Unlock()
+	_, ok := streamURLs.urls[u]
 	return ok
 }

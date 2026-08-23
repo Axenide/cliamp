@@ -90,10 +90,14 @@ func postForm(ctx context.Context, httpc *http.Client, endpoint string, form url
 	return nil
 }
 
-// Sentinel errors for the device-flow poll loop (RFC 8628 error codes).
+// Sentinel errors for OAuth-level failures. errAuthPending and errSlowDown
+// drive the device-flow poll loop (RFC 8628 error codes); errAuthRevoked
+// means the refresh token was revoked or expired and the user must sign in
+// again interactively.
 var (
 	errAuthPending = errors.New("tidal: authorization pending")
 	errSlowDown    = errors.New("tidal: polling too fast")
+	errAuthRevoked = errors.New("tidal: authorization revoked")
 )
 
 // requestToken calls the token endpoint. authorization_pending and slow_down
@@ -110,6 +114,8 @@ func requestToken(ctx context.Context, httpc *http.Client, endpoint string, form
 		return tokenResponse{}, errAuthPending
 	case "slow_down":
 		return tokenResponse{}, errSlowDown
+	case "invalid_grant", "expired_token":
+		return tokenResponse{}, fmt.Errorf("%w: %s: %s", errAuthRevoked, tok.Error, tok.ErrorDesc)
 	default:
 		return tokenResponse{}, fmt.Errorf("tidal: %s: %s", tok.Error, tok.ErrorDesc)
 	}

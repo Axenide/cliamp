@@ -386,8 +386,8 @@ func providers() []providerSpec {
 				key:   keyTidalQuality,
 				label: "Stream quality",
 				options: []pickerOption{
-					{value: "lossless", label: "FLAC 16-bit/44.1kHz (CD) - recommended"},
-					{value: "hires", label: "FLAC 24-bit Hi-Res (falls back to CD for now)"},
+					{value: "lossless", label: "FLAC (hi-res masters; AAC 320 otherwise) - recommended"},
+					{value: "hires", label: "FLAC hi-res (same delivery as lossless)"},
 					{value: "high", label: "AAC 320kbps"},
 					{value: "low", label: "AAC 96kbps"},
 				},

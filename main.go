@@ -312,6 +312,15 @@ func run(overrides config.Overrides, positional []string, daemon bool) error {
 		p.RegisterStreamerFactory("spotify:", spotifyProv.NewStreamer)
 	}
 
+	if tidalProv != nil {
+		// Tidal tracks carry tidal:// URIs; the provider resolves them to a
+		// fresh signed URL or DASH segment list when playback starts.
+		p.RegisterSourceResolver(tidal.TrackURIPrefix, func(uri string) (player.ResolvedSource, error) {
+			u, segments, err := tidalProv.ResolveSource(uri)
+			return player.ResolvedSource{URL: u, Segments: segments}, err
+		})
+	}
+
 	p.RegisterBufferedURLMatcher(func(u string) bool {
 		return navidrome.IsSubsonicStreamURL(u) || jellyfin.IsStreamURL(u) || emby.IsStreamURL(u) || plex.IsStreamURL(u) || qobuz.IsStreamURL(u) || tidal.IsStreamURL(u) || audiobookshelf.IsStreamURL(u)
 	})

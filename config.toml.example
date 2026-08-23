@@ -117,9 +117,11 @@ eq = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 # Stream quality. Default "lossless".
 #   "low"      = 96 kbps AAC
 #   "high"     = 320 kbps AAC
-#   "lossless" = FLAC 16-bit/44.1kHz (CD)
-#   "hires"    = FLAC 24-bit (currently falls back to lossless: Tidal ships
-#                hi-res as segmented DASH, which cliamp cannot stream yet)
+#   "lossless" = FLAC up to 24-bit/192kHz where available (see note)
+#   "hires"    = same delivery as "lossless"
+# Note: Tidal serves FLAC to this client type only for tracks with a hi-res
+# ("Max") master; other tracks are downgraded to AAC 320 server-side. cliamp
+# shows a footer notice when that happens. See docs/tidal.md.
 # quality = "lossless"
 #
 # cliamp uses built-in fallback OAuth client credentials. Tidal revokes leaked

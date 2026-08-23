@@ -28,10 +28,9 @@ Run `cliamp`, select Tidal as a provider, and press `Enter` to sign in. cliamp s
 |---|---|
 | `"low"` | AAC 96 kbps |
 | `"high"` | AAC 320 kbps |
-| `"lossless"` | FLAC 16-bit / 44.1 kHz (CD) |
-| `"hires"` | FLAC 24-bit up to 192 kHz (see note) |
+| `"lossless"` / `"hires"` | FLAC up to 24-bit / 192 kHz where available (see note) |
 
-> **Hi-Res note:** Tidal delivers `hires` as a segmented MPEG-DASH stream, which cliamp's player cannot consume yet. When a track comes back as DASH, cliamp automatically falls back to `lossless` (CD-quality FLAC) for that track. Native hi-res playback is planned.
+> **FLAC availability note:** Tidal only serves FLAC to third-party clients of cliamp's type for tracks that have a hi-res ("Max") master, delivered as unencrypted MPEG-DASH — which cliamp plays natively, at full hi-res quality. For tracks without a hi-res master, Tidal downgrades this client to AAC 320 server-side (the same limitation the python-tidal ecosystem reports). cliamp shows a one-time notice in the footer when that happens. Sign-in via Tidal's Android-type (PKCE) client, which unlocks FLAC for the whole catalog, is planned.
 
 Any other value falls back to `"lossless"`.
 
@@ -89,8 +88,8 @@ After loading a playlist or album you return to the standard playlist view with 
 - **Device code expired**: the `link.tidal.com` code is valid for about 5 minutes. Press `Enter` on the Tidal provider again to get a fresh code.
 - **Re-authenticate**: run `cliamp tidal reset` to clear stored credentials, then relaunch cliamp and select Tidal to sign in again. (Equivalent to deleting `~/.config/cliamp/tidal_credentials.json` manually.)
 - **Track is unplayable / skipped**: the track may not be streamable in your region, or its stream may be encrypted for your client type. cliamp marks such tracks unplayable and moves on.
-- **Hi-Res delivered as CD quality**: expected for now — see the Hi-Res note above.
-- **Stalls after a long idle session**: signed stream URLs expire over time. Press `Ctrl+R` to refresh, which re-resolves the URLs.
+- **"delivered as HIGH (AAC)" notice**: the track has no hi-res master, so Tidal refuses FLAC to this client type — see the FLAC availability note above. Playback continues at AAC 320.
+- **Long-idle sessions**: stream URLs are resolved fresh each time a track starts, so queued tracks keep playing after any idle period without a manual refresh. `Ctrl+R` re-fetches the playlist lists themselves.
 
 ## Requirements
 

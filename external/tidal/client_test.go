@@ -3,6 +3,7 @@ package tidal
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/bjarneo/cliamp/playlist"
 )
 
 // testClient returns a client with a valid-looking token pointed at srv.
@@ -124,5 +127,56 @@ func TestDoRequestRefreshesOn401(t *testing.T) {
 	}
 	if c.countryCode != "NO" {
 		t.Errorf("countryCode = %q, want NO", c.countryCode)
+	}
+}
+
+func TestRevokedRefreshTokenDropsClientAndAsksForAuth(t *testing.T) {
+	t.Setenv("CLIAMP_CONFIG_DIR", t.TempDir())
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, `{"error":"invalid_grant","error_description":"revoked"}`)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	c := testClient(srv)
+	c.tokenURL = srv.URL + "/token"
+	c.expiresAt = time.Now().Add(-time.Hour) // force a refresh attempt
+
+	p := New("lossless", "", "")
+	p.client = c
+
+	_, err := p.Tracks(favoriteTracksID)
+	if !errors.Is(err, playlist.ErrNeedsAuth) {
+		t.Fatalf("err = %v, want playlist.ErrNeedsAuth", err)
+	}
+	p.mu.Lock()
+	dropped := p.client == nil
+	p.mu.Unlock()
+	if !dropped {
+		t.Error("client not dropped after revoked refresh token")
+	}
+}
+
+func TestDoRequestRetriesOn429(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		fmt.Fprint(w, `{"sessionId":"s","countryCode":"NO","userId":7}`)
+	}))
+	defer srv.Close()
+
+	c := testClient(srv)
+	if err := c.loadSession(context.Background()); err != nil {
+		t.Fatalf("loadSession after 429: %v", err)
+	}
+	if got := calls.Load(); got != 2 {
+		t.Errorf("calls = %d, want 2 (429 then success)", got)
 	}
 }

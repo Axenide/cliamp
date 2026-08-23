@@ -2,8 +2,8 @@ package tidal
 
 import (
 	"encoding/base64"
-	"errors"
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -37,151 +37,118 @@ func TestNormalizeQuality(t *testing.T) {
 	}
 }
 
+func TestRequestQuality(t *testing.T) {
+	// The device client never receives LOSSLESS via BTS (downgrades to HIGH
+	// AAC — verified live), so both FLAC settings must request HI_RES_LOSSLESS.
+	tests := []struct{ in, want string }{
+		{qualityLow, qualityLow},
+		{qualityHigh, qualityHigh},
+		{qualityLossless, qualityHiRes},
+		{qualityHiRes, qualityHiRes},
+	}
+	for _, tt := range tests {
+		if got := requestQuality(tt.in); got != tt.want {
+			t.Errorf("requestQuality(%s) = %s, want %s", tt.in, got, tt.want)
+		}
+	}
+}
+
 func btsBase64(jsonBody string) string {
 	return base64.StdEncoding.EncodeToString([]byte(jsonBody))
 }
 
-func TestStreamURLFromManifest(t *testing.T) {
-	tests := []struct {
-		name    string
-		pi      apiPlaybackInfo
-		want    string // expected URL; empty (with nil wantErr) = any error
-		wantErr error  // sentinel to match
-	}{
-		{
-			name: "bts flac",
-			pi: apiPlaybackInfo{
-				ManifestMimeType: "application/vnd.tidal.bts",
-				Manifest:         btsBase64(`{"mimeType":"audio/flac","codecs":"flac","encryptionType":"NONE","urls":["https://cdn.tidal.com/x.flac"]}`),
-			},
-			want: "https://cdn.tidal.com/x.flac",
-		},
-		{
-			name: "bts empty encryption type",
-			pi: apiPlaybackInfo{
-				ManifestMimeType: "application/vnd.tidal.bts",
-				Manifest:         btsBase64(`{"urls":["https://cdn.tidal.com/y.m4a"]}`),
-			},
-			want: "https://cdn.tidal.com/y.m4a",
-		},
-		{
-			name: "dash manifest",
-			pi: apiPlaybackInfo{
-				ManifestMimeType: "application/dash+xml",
-				Manifest:         btsBase64(`<MPD></MPD>`),
-			},
-			wantErr: errDASHManifest,
-		},
-		{
-			name: "encrypted stream",
-			pi: apiPlaybackInfo{
-				ManifestMimeType: "application/vnd.tidal.bts",
-				Manifest:         btsBase64(`{"encryptionType":"OLD_AES","urls":["https://cdn.tidal.com/z"]}`),
-			},
-		},
-		{
-			name: "unknown mime type",
-			pi:   apiPlaybackInfo{ManifestMimeType: "application/vnd.tidal.emu"},
-		},
-		{
-			name: "invalid base64",
-			pi: apiPlaybackInfo{
-				ManifestMimeType: "application/vnd.tidal.bts",
-				Manifest:         "!!!not-base64!!!",
-			},
-		},
-		{
-			name: "no urls",
-			pi: apiPlaybackInfo{
-				ManifestMimeType: "application/vnd.tidal.bts",
-				Manifest:         btsBase64(`{"encryptionType":"NONE","urls":[]}`),
-			},
-		},
+// btsPlaybackInfo mirrors the sanitized live captures: BTS manifests carry
+// AAC with encryptionType NONE.
+func btsPlaybackInfo(quality, codecs, u string) apiPlaybackInfo {
+	return apiPlaybackInfo{
+		AudioQuality:     quality,
+		ManifestMimeType: "application/vnd.tidal.bts",
+		Manifest: btsBase64(fmt.Sprintf(
+			`{"mimeType":"audio/mp4","codecs":%q,"encryptionType":"NONE","urls":[%q]}`, codecs, u)),
 	}
-	for _, tt := range tests {
+}
+
+func TestStreamSourceFromManifestBTS(t *testing.T) {
+	t.Run("delivered quality and url", func(t *testing.T) {
+		// Live capture shape: requested LOSSLESS, delivered HIGH AAC.
+		src, err := streamSourceFromManifest(btsPlaybackInfo(qualityHigh, "mp4a.40.2", "https://cdn.tidal.com/x.mp4"))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if src.url != "https://cdn.tidal.com/x.mp4" || len(src.segments) != 0 {
+			t.Errorf("src = %+v", src)
+		}
+		if src.quality != qualityHigh {
+			t.Errorf("delivered quality = %q, want %q", src.quality, qualityHigh)
+		}
+	})
+
+	t.Run("empty encryption type accepted", func(t *testing.T) {
+		pi := apiPlaybackInfo{
+			ManifestMimeType: "application/vnd.tidal.bts",
+			Manifest:         btsBase64(`{"urls":["https://cdn.tidal.com/y.m4a"]}`),
+		}
+		if _, err := streamSourceFromManifest(pi); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	errCases := []struct {
+		name string
+		pi   apiPlaybackInfo
+	}{
+		{"encrypted stream", apiPlaybackInfo{
+			ManifestMimeType: "application/vnd.tidal.bts",
+			Manifest:         btsBase64(`{"encryptionType":"OLD_AES","urls":["https://cdn.tidal.com/z"]}`),
+		}},
+		{"unknown mime type", apiPlaybackInfo{ManifestMimeType: "application/vnd.tidal.emu"}},
+		{"invalid base64", apiPlaybackInfo{
+			ManifestMimeType: "application/vnd.tidal.bts",
+			Manifest:         "!!!not-base64!!!",
+		}},
+		{"no urls", apiPlaybackInfo{
+			ManifestMimeType: "application/vnd.tidal.bts",
+			Manifest:         btsBase64(`{"encryptionType":"NONE","urls":[]}`),
+		}},
+	}
+	for _, tt := range errCases {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := streamURLFromManifest(tt.pi)
-			switch {
-			case tt.wantErr != nil:
-				if !errors.Is(err, tt.wantErr) {
-					t.Errorf("err = %v, want %v", err, tt.wantErr)
-				}
-			case tt.want == "":
-				if err == nil {
-					t.Errorf("expected error, got url %q", got)
-				}
-			default:
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				if got != tt.want {
-					t.Errorf("url = %q, want %q", got, tt.want)
-				}
+			if src, err := streamSourceFromManifest(tt.pi); err == nil {
+				t.Errorf("expected error, got %+v", src)
 			}
 		})
 	}
 }
 
-func TestResolveStreamURL(t *testing.T) {
-	bts := func(u string) apiPlaybackInfo {
-		return apiPlaybackInfo{
-			ManifestMimeType: "application/vnd.tidal.bts",
-			Manifest:         btsBase64(fmt.Sprintf(`{"encryptionType":"NONE","urls":[%q]}`, u)),
+func TestStreamSourceFromManifestDASH(t *testing.T) {
+	// Structure of a live hi-res capture: single FLAC representation,
+	// absolute URLs, SegmentTimeline with a repeat.
+	src, err := streamSourceFromManifest(apiPlaybackInfo{
+		AudioQuality:     qualityHiRes,
+		ManifestMimeType: "application/dash+xml",
+		Manifest:         base64.StdEncoding.EncodeToString([]byte(sampleMPD)),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if src.quality != qualityHiRes {
+		t.Errorf("delivered quality = %q", src.quality)
+	}
+	want := []string{
+		"https://cdn.tidal.com/init.mp4?token=t&x=1",
+		"https://cdn.tidal.com/seg1.m4s",
+		"https://cdn.tidal.com/seg2.m4s",
+		"https://cdn.tidal.com/seg3.m4s",
+	}
+	if len(src.segments) != len(want) {
+		t.Fatalf("segments = %v, want %v", src.segments, want)
+	}
+	for i := range want {
+		if src.segments[i] != want[i] {
+			t.Errorf("segment[%d] = %q, want %q", i, src.segments[i], want[i])
 		}
 	}
-	dash := apiPlaybackInfo{ManifestMimeType: "application/dash+xml", Manifest: btsBase64(`<MPD/>`)}
-
-	t.Run("lossless direct", func(t *testing.T) {
-		var qualities []string
-		u, used, err := resolveStreamURL(qualityLossless, func(q string) (apiPlaybackInfo, error) {
-			qualities = append(qualities, q)
-			return bts("https://cdn/a.flac"), nil
-		})
-		if err != nil || u != "https://cdn/a.flac" || used != qualityLossless {
-			t.Fatalf("got (%q, %q, %v)", u, used, err)
-		}
-		if len(qualities) != 1 || qualities[0] != qualityLossless {
-			t.Errorf("fetched qualities = %v", qualities)
-		}
-	})
-
-	t.Run("hires falls back to lossless on dash", func(t *testing.T) {
-		var qualities []string
-		u, used, err := resolveStreamURL(qualityHiRes, func(q string) (apiPlaybackInfo, error) {
-			qualities = append(qualities, q)
-			if q == qualityHiRes {
-				return dash, nil
-			}
-			return bts("https://cdn/cd.flac"), nil
-		})
-		if err != nil || u != "https://cdn/cd.flac" {
-			t.Fatalf("got (%q, %v)", u, err)
-		}
-		if used != qualityLossless {
-			t.Errorf("used quality = %q, want %q", used, qualityLossless)
-		}
-		want := []string{qualityHiRes, qualityLossless}
-		if len(qualities) != 2 || qualities[0] != want[0] || qualities[1] != want[1] {
-			t.Errorf("fetched qualities = %v, want %v", qualities, want)
-		}
-	})
-
-	t.Run("lossless dash does not fall back", func(t *testing.T) {
-		_, _, err := resolveStreamURL(qualityLossless, func(q string) (apiPlaybackInfo, error) {
-			return dash, nil
-		})
-		if !errors.Is(err, errDASHManifest) {
-			t.Errorf("err = %v, want errDASHManifest", err)
-		}
-	})
-
-	t.Run("fetch error propagates", func(t *testing.T) {
-		wantErr := errors.New("boom")
-		_, _, err := resolveStreamURL(qualityHiRes, func(q string) (apiPlaybackInfo, error) {
-			return apiPlaybackInfo{}, wantErr
-		})
-		if !errors.Is(err, wantErr) {
-			t.Errorf("err = %v, want %v", err, wantErr)
-		}
-	})
+	if strings.Contains(src.segments[0], "&amp;") {
+		t.Error("XML entities were not decoded in segment URLs")
+	}
 }
