@@ -37,16 +37,12 @@ func (m *Model) recomputeLayout() {
 		height = 24
 	}
 
-	frameWidth := width
-	if m.compact {
-		frameWidth = min(frameWidth, 80)
-	}
-	paddingH := min(ui.PaddingH, max(0, (frameWidth-1)/2))
+	paddingH := min(ui.PaddingH, max(0, (width-1)/2))
 	paddingV := min(ui.VerticalPadding(), max(0, (height-1)/2))
 
 	layout := frameLayout{
-		frameWidth: frameWidth,
-		panelWidth: max(1, frameWidth-2*paddingH),
+		frameWidth: width,
+		panelWidth: max(1, width-2*paddingH),
 		paddingH:   paddingH,
 		paddingV:   paddingV,
 		footerRows: 1,
@@ -97,7 +93,7 @@ func (m *Model) recomputeLayout() {
 	}
 
 	m.layout = layout
-	ui.FrameStyle = ui.FrameStyle.Padding(paddingV, paddingH).Width(frameWidth)
+	ui.FrameStyle = ui.FrameStyle.Padding(paddingV, paddingH).Width(width)
 	ui.PanelWidth = layout.panelWidth
 	if m.vis != nil {
 		m.vis.Cols = layout.panelWidth

@@ -15,7 +15,6 @@ type Overrides struct {
 	ResampleQuality *int
 	BitDepth        *int
 	Play            *bool
-	Compact         *bool
 	Simplified      *bool
 	AudioDevice     *string
 	Playlist        *string
@@ -61,9 +60,6 @@ func (o Overrides) Apply(cfg *Config) {
 	}
 	if o.BitDepth != nil {
 		cfg.BitDepth = *o.BitDepth
-	}
-	if o.Compact != nil {
-		cfg.Compact = *o.Compact
 	}
 	if o.Simplified != nil {
 		cfg.Simplified = *o.Simplified

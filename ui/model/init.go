@@ -99,12 +99,6 @@ func (m *Model) SetLowPower(v bool) { m.lowPower = v }
 // SetVisualizer60FPS enables the 60 FPS visualizer cadence while it is active.
 func (m *Model) SetVisualizer60FPS(v bool) { m.visualizer60FPS = v }
 
-// SetCompact enables compact mode which caps the frame width at 80 columns.
-func (m *Model) SetCompact(v bool) {
-	m.compact = v
-	m.refreshChrome()
-}
-
 // SetSimplified enables the sparse playback view without a visualizer.
 func (m *Model) SetSimplified(v bool) {
 	m.simplified = v

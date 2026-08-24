@@ -46,9 +46,6 @@ eq = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 # Default provider on startup: "radio", "navidrome", "spotify", "qobuz", "tidal", "plex", "jellyfin", "emby", "soundcloud", "netease", "audiobookshelf", or a YouTube provider
 # provider = "radio"
 
-# Compact mode: cap UI width at 80 columns (default: fluid/full-width)
-# compact = true
-
 # Simplified mode: artist/title and time strip without a visualizer or playlist.
 # No visualizer or playback controls are shown.
 # simplified = true

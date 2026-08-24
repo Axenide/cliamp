@@ -441,9 +441,6 @@ func run(overrides config.Overrides, positional []string, daemon, visualizer60FP
 	if cfg.LowPower {
 		m.SetLowPower(true)
 	}
-	if cfg.Compact {
-		m.SetCompact(true)
-	}
 	if cfg.Simplified {
 		m.SetSimplified(true)
 	}

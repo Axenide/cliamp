@@ -33,7 +33,6 @@ func buildApp() *cli.Command {
 		&cli.BoolFlag{Name: "mono", Usage: "mono output"},
 		&cli.BoolFlag{Name: "no-mono", Usage: "disable mono output"},
 		&cli.BoolFlag{Name: "auto-play", Usage: "start playback immediately"},
-		&cli.BoolFlag{Name: "compact", Usage: "compact mode (80 columns)"},
 		&cli.BoolFlag{Name: "simplified", Usage: "simplified playback view (no visualizer or playlist)"},
 		&cli.StringFlag{Name: "provider", Usage: "default provider: radio, navidrome, plex, jellyfin, emby, spotify, qobuz, tidal, soundcloud, netease, audiobookshelf, abs, yt, youtube, ytmusic"},
 		&cli.StringFlag{Name: "start-theme", Usage: "UI theme name"},
@@ -152,10 +151,6 @@ func overridesFromFlags(c *cli.Command) (config.Overrides, error) {
 	if c.IsSet("auto-play") {
 		v := true
 		ov.Play = &v
-	}
-	if c.IsSet("compact") {
-		v := true
-		ov.Compact = &v
 	}
 	if c.IsSet("simplified") {
 		v := true

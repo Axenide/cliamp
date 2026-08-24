@@ -78,9 +78,6 @@ vis_volume_linked = true
 # This has the same effect as starting with --low-power.
 low_power = false
 
-# Compact mode: cap UI width at 80 columns (default: fluid/full-width)
-compact = false
-
 # Simplified mode: artist/title and time strip without a visualizer or playlist.
 # No visualizer or playback controls are shown.
 simplified = false
@@ -106,9 +103,6 @@ cliamp adapts its playback screen to the available terminal rectangle:
 | At least `56x16` | Compact controls and a three-row visualizer |
 | At least `40x10` | Minimal playback, list, seek bar, and help layout |
 | Smaller than `40x10` | A resize message only |
-
-`compact = true` caps the frame at 80 columns on wide terminals. It does not
-change the minimum supported terminal size.
 
 `simplified = true` replaces the main playback view with the current track's
 artist/title and time and seek-progress strip. It hides the visualizer,

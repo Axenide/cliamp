@@ -400,7 +400,6 @@ type Model struct {
 	autoPlay        bool // start playing immediately on launch
 	lowPower        bool // lower UI/render cadences in low-power mode
 	visualizer60FPS bool // render a visible visualizer at the animation cadence
-	compact         bool // compact mode: cap frame width at 80 columns
 	simplified      bool // simplified playback view: track summary and time strip
 	heightExpanded  bool // tracks whether manual 'x' expansion is active
 
