@@ -49,6 +49,10 @@ eq = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 # Compact mode: cap UI width at 80 columns (default: fluid/full-width)
 # compact = true
 
+# Simplified mode: artist/title and time strip without a visualizer or playlist.
+# No visualizer or playback controls are shown.
+# simplified = true
+
 # UI theme name (check ~/.config/cliamp/themes/ for available themes)
 # theme = "Tokyo Night"
 

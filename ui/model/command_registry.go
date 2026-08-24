@@ -84,11 +84,11 @@ var commandRegistry = []commandSpec{
 	{Mode: commandModeMain, Keys: []string{"z"}, KeyLabel: "z", Label: "Toggle shuffle", Keymap: true},
 	{Mode: commandModeMain, Keys: []string{"r"}, KeyLabel: "r", Label: "Cycle repeat", Keymap: true},
 	{Mode: commandModeMain, Keys: []string{"m"}, KeyLabel: "m", Label: "Toggle mono", Keymap: true},
-	{Mode: commandModeMain, Keys: []string{"e"}, KeyLabel: "e", Label: "Cycle EQ preset", Keymap: true},
+	{Mode: commandModeMain, Keys: []string{"e"}, KeyLabel: "e", Label: "Cycle EQ preset", Enabled: func(m Model) bool { return !m.simplified }, Keymap: true},
 	{Mode: commandModeMain, Keys: []string{"t"}, KeyLabel: "t", Label: "Choose theme", Keymap: true},
-	{Mode: commandModeMain, Keys: []string{"v"}, KeyLabel: "v", Label: "Cycle visualizer", Keymap: true},
-	{Mode: commandModeMain, Keys: []string{"ctrl+v"}, KeyLabel: "Ctrl+V", Label: "Choose visualizer", Keymap: true},
-	{Mode: commandModeMain, Keys: []string{"V"}, KeyLabel: "V", Label: "Full-screen visualizer", Keymap: true},
+	{Mode: commandModeMain, Keys: []string{"v"}, KeyLabel: "v", Label: "Cycle visualizer", Enabled: func(m Model) bool { return !m.simplified }, Keymap: true},
+	{Mode: commandModeMain, Keys: []string{"ctrl+v"}, KeyLabel: "Ctrl+V", Label: "Choose visualizer", Enabled: func(m Model) bool { return !m.simplified }, Keymap: true},
+	{Mode: commandModeMain, Keys: []string{"V"}, KeyLabel: "V", Label: "Full-screen visualizer", Enabled: func(m Model) bool { return !m.simplified }, Keymap: true},
 	{Mode: commandModeMain, Keys: []string{"up", "down", "k", "j"}, KeyLabel: "Up Down", Label: "Playlist scroll / EQ adjust (wraps around)", Keymap: true},
 	{Mode: commandModeMain, Keys: []string{"pgup", "pgdown", "ctrl+u", "ctrl+d"}, KeyLabel: "PgUp PgDn / Ctrl+U D", Label: "Scroll playlist/browser by page", Keymap: true},
 	{Mode: commandModeMain, Keys: []string{"home", "end", "g", "G"}, KeyLabel: "Home End / g G", Label: "Go to top/end of playlist/browser", Keymap: true},
@@ -118,9 +118,9 @@ var commandRegistry = []commandSpec{
 	{Mode: commandModeMain, Keys: []string{"ctrl+h"}, KeyLabel: "Ctrl+H", Label: "Toggle album headers", Keymap: true},
 	{Mode: commandModeMain, Keys: []string{"i"}, KeyLabel: "i", Label: "Track info / metadata", Keymap: true, ContextHelp: true},
 	{Mode: commandModeMain, Keys: []string{"ctrl+s"}, KeyLabel: "Ctrl+S", Label: "Save/download track to ~/Music/cliamp", Keymap: true},
-	{Mode: commandModeMain, Keys: []string{"ctrl+x"}, KeyLabel: "Ctrl+X", Label: "Expand/collapse view", Keymap: true},
+	{Mode: commandModeMain, Keys: []string{"ctrl+x"}, KeyLabel: "Ctrl+X", Label: "Expand/collapse view", Enabled: func(m Model) bool { return !m.simplified }, Keymap: true},
 	{Mode: commandModeMain, Keys: []string{"ctrl+x"}, KeyLabel: "Ctrl+X", Label: "Expand", Enabled: func(m Model) bool {
-		return !m.heightExpanded && m.layout.bodyRows > m.plVisible
+		return !m.simplified && !m.heightExpanded && m.layout.bodyRows > m.plVisible
 	}},
 	{Mode: commandModeMain, Keys: []string{"/"}, KeyLabel: "/", Label: "Filter/search list", Keymap: true, ContextHelp: true},
 	{Mode: commandModeMain, Keys: []string{"f"}, KeyLabel: "f", Label: "Toggle bookmark/favorite", Keymap: true},

@@ -81,6 +81,10 @@ low_power = false
 # Compact mode: cap UI width at 80 columns (default: fluid/full-width)
 compact = false
 
+# Simplified mode: artist/title and time strip without a visualizer or playlist.
+# No visualizer or playback controls are shown.
+simplified = false
+
 # UI theme name (see available themes in ~/.config/cliamp/themes/)
 theme = "Tokyo Night"
 
@@ -105,6 +109,11 @@ cliamp adapts its playback screen to the available terminal rectangle:
 
 `compact = true` caps the frame at 80 columns on wide terminals. It does not
 change the minimum supported terminal size.
+
+`simplified = true` replaces the main playback view with the current track's
+artist/title and time and seek-progress strip. It hides the visualizer,
+playback controls, and playlist; provider browsing and overlays keep their
+normal list-focused layout. Start one session with `cliamp --simplified`.
 
 List-heavy views such as provider browsing, file selection, queues, playlists,
 search results, themes, and keybindings use a content-first layout. It replaces

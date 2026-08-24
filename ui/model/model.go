@@ -57,7 +57,7 @@ func (f focusArea) label() string {
 // main playback screen and the provider playlist pane.
 func (m Model) mainFocusAreas() []focusArea {
 	areas := []focusArea{focusPlaylist}
-	if m.layout.tier == layoutMinimal || m.layout.tier == layoutTooSmall {
+	if m.simplified || m.layout.tier == layoutMinimal || m.layout.tier == layoutTooSmall {
 		return areas
 	}
 	areas = append(areas, focusEQ)
@@ -401,6 +401,7 @@ type Model struct {
 	lowPower        bool // lower UI/render cadences in low-power mode
 	visualizer60FPS bool // render a visible visualizer at the animation cadence
 	compact         bool // compact mode: cap frame width at 80 columns
+	simplified      bool // simplified playback view: track summary and time strip
 	heightExpanded  bool // tracks whether manual 'x' expansion is active
 
 	// Cached per-tick to avoid repeated speaker.Lock() calls in View().
@@ -482,6 +483,12 @@ func (m Model) usesContentFirstLayout() bool {
 		return true
 	}
 	return m.netSearch.active && m.netSearch.screen == netSearchResults
+}
+
+// usesSimplifiedLayout applies the sparse playback chrome only to the main
+// playlist view. Provider browsing and overlays retain their normal space.
+func (m Model) usesSimplifiedLayout() bool {
+	return m.simplified && m.activeScreen() == screenMain && m.focus != focusProvider
 }
 
 func (m Model) isPlaying() bool {

@@ -16,6 +16,7 @@ type Overrides struct {
 	BitDepth        *int
 	Play            *bool
 	Compact         *bool
+	Simplified      *bool
 	AudioDevice     *string
 	Playlist        *string
 	LogLevel        *string
@@ -63,6 +64,9 @@ func (o Overrides) Apply(cfg *Config) {
 	}
 	if o.Compact != nil {
 		cfg.Compact = *o.Compact
+	}
+	if o.Simplified != nil {
+		cfg.Simplified = *o.Simplified
 	}
 	if o.Play != nil {
 		cfg.AutoPlay = *o.Play

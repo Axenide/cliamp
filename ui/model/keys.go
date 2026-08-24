@@ -692,7 +692,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 
 	case "e":
-		if m.layout.tier == layoutMinimal {
+		if m.simplified || m.layout.tier == layoutMinimal {
 			break
 		}
 		m.cycleEQPreset()
@@ -805,6 +805,9 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.adjustScroll()
 
 	case "v":
+		if m.simplified {
+			break
+		}
 		m.vis.CycleMode()
 		m.vis.RequestRefresh()
 		m.refreshChrome()
@@ -815,14 +818,20 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 
 	case "ctrl+v":
+		if m.simplified {
+			break
+		}
 		m.openVisPicker()
 
 	case "V":
+		if m.simplified {
+			break
+		}
 		m.fullVis = !m.fullVis
 		m.recomputeLayout()
 
 	case "ctrl+x":
-		if m.focus == focusPlaylist {
+		if !m.simplified && m.focus == focusPlaylist {
 			m.toggleExpandedView()
 		}
 

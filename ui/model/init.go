@@ -105,6 +105,16 @@ func (m *Model) SetCompact(v bool) {
 	m.refreshChrome()
 }
 
+// SetSimplified enables the sparse playback view without a visualizer.
+func (m *Model) SetSimplified(v bool) {
+	m.simplified = v
+	if v {
+		m.fullVis = false
+	}
+	m.refreshChrome()
+	m.normalizeMainFocus()
+}
+
 // SetInitialDirectory sets the initial directory for the file browser.
 func (m *Model) SetInitialDirectory(dir string) { m.initialDir = dir }
 

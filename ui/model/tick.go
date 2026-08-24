@@ -25,7 +25,7 @@ func tickCmdAt(d time.Duration) tea.Cmd {
 }
 
 func (m Model) visualizerVisible() bool {
-	if m.vis == nil || m.vis.Mode == ui.VisNone || m.vis.Rows <= 0 || m.vis.Cols <= 0 || m.layout.tooSmall() {
+	if m.simplified || m.vis == nil || m.vis.Mode == ui.VisNone || m.vis.Rows <= 0 || m.vis.Cols <= 0 || m.layout.tooSmall() {
 		return false
 	}
 	if m.fullVis {

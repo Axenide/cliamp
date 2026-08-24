@@ -444,6 +444,9 @@ func run(overrides config.Overrides, positional []string, daemon, visualizer60FP
 	if cfg.Compact {
 		m.SetCompact(true)
 	}
+	if cfg.Simplified {
+		m.SetSimplified(true)
+	}
 
 	if !defaultRadio && len(positional) > 0 {
 		if rs := resume.Load(); rs.Path != "" && rs.PositionSec > 0 {

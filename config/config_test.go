@@ -671,6 +671,7 @@ func TestOverridesApply(t *testing.T) {
 	mono := true
 	theme := "dark"
 	compact := true
+	simplified := true
 	sr := 48000
 	play := true
 
@@ -681,6 +682,7 @@ func TestOverridesApply(t *testing.T) {
 		Mono:       &mono,
 		Theme:      &theme,
 		Compact:    &compact,
+		Simplified: &simplified,
 		SampleRate: &sr,
 		Play:       &play,
 	}
@@ -704,6 +706,9 @@ func TestOverridesApply(t *testing.T) {
 	}
 	if !cfg.Compact {
 		t.Error("Compact should be true")
+	}
+	if !cfg.Simplified {
+		t.Error("Simplified should be true")
 	}
 	if cfg.SampleRate != 48000 {
 		t.Errorf("SampleRate = %d, want 48000", cfg.SampleRate)

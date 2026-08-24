@@ -292,6 +292,7 @@ type Config struct {
 	ResampleQuality  int                          // beep resample quality factor (1–4)
 	BitDepth         int                          // PCM bit depth for FFmpeg output: 16 or 32
 	Compact          bool                         // compact mode: cap frame width at 80 columns
+	Simplified       bool                         // simplified playback view: track summary and time strip
 	PaddingH         int                          // horizontal padding for the UI frame (default 3)
 	PaddingV         int                          // vertical padding for the UI frame (default 1)
 	AudioDevice      string                       // preferred audio output device name (empty = system default)
@@ -604,6 +605,8 @@ func Load() (Config, error) {
 				}
 			case "compact":
 				cfg.Compact = val == "true"
+			case "simplified":
+				cfg.Simplified = val == "true"
 			case "audio_device":
 				cfg.AudioDevice = parseString(val)
 			case "initial_directory":

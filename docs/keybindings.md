@@ -37,9 +37,9 @@ and library commands.
 | `o` | Open file browser |
 | `b` `Esc` | Back to provider |
 
-At the minimal `40x10` layout, `Tab` keeps playback focus on the playlist, so
-EQ, source, and speed settings cannot be changed accidentally. `Esc` still
-opens the separate, visible provider-list view.
+At the minimal `40x10` and simplified layouts, `Tab` keeps playback focus on
+the playlist, so EQ, source, and speed settings cannot be changed accidentally.
+`Esc` still opens the separate, visible provider-list view.
 
 ## Text Input
 
