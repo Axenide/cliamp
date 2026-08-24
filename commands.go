@@ -16,6 +16,7 @@ import (
 	"github.com/bjarneo/cliamp/config"
 	"github.com/bjarneo/cliamp/external/qobuz"
 	"github.com/bjarneo/cliamp/external/spotify"
+	"github.com/bjarneo/cliamp/external/tidal"
 	"github.com/bjarneo/cliamp/ipc"
 	"github.com/bjarneo/cliamp/player"
 	"github.com/bjarneo/cliamp/pluginmgr"
@@ -33,7 +34,7 @@ func buildApp() *cli.Command {
 		&cli.BoolFlag{Name: "no-mono", Usage: "disable mono output"},
 		&cli.BoolFlag{Name: "auto-play", Usage: "start playback immediately"},
 		&cli.BoolFlag{Name: "compact", Usage: "compact mode (80 columns)"},
-		&cli.StringFlag{Name: "provider", Usage: "default provider: radio, navidrome, plex, jellyfin, emby, spotify, qobuz, soundcloud, netease, audiobookshelf, abs, yt, youtube, ytmusic"},
+		&cli.StringFlag{Name: "provider", Usage: "default provider: radio, navidrome, plex, jellyfin, emby, spotify, qobuz, tidal, soundcloud, netease, audiobookshelf, abs, yt, youtube, ytmusic"},
 		&cli.StringFlag{Name: "start-theme", Usage: "UI theme name"},
 		&cli.StringFlag{Name: "visualizer", Usage: "visualizer mode"},
 		&cli.BoolFlag{Name: "visualizer-60fps", Usage: "render visualizer at 60 FPS (higher CPU use)"},
@@ -75,6 +76,7 @@ func buildApp() *cli.Command {
 			setupCommand(),
 			spotifyCommand(),
 			qobuzCommand(),
+			tidalCommand(),
 			ipcSimpleCommand("play", "resume playback"),
 			ipcSimpleCommand("pause", "pause playback"),
 			ipcSimpleCommand("toggle", "play/pause toggle"),
@@ -160,10 +162,10 @@ func overridesFromFlags(c *cli.Command) (config.Overrides, error) {
 			v = "audiobookshelf"
 		}
 		switch v {
-		case "radio", "navidrome", "spotify", "qobuz", "plex", "jellyfin", "emby", "audiobookshelf", "soundcloud", "netease", "yt", "youtube", "ytmusic":
+		case "radio", "navidrome", "spotify", "qobuz", "tidal", "plex", "jellyfin", "emby", "audiobookshelf", "soundcloud", "netease", "yt", "youtube", "ytmusic":
 			ov.Provider = &v
 		default:
-			return ov, fmt.Errorf("--provider must be radio, navidrome, spotify, qobuz, plex, jellyfin, emby, audiobookshelf, soundcloud, netease, yt, youtube, or ytmusic (got %q)", v)
+			return ov, fmt.Errorf("--provider must be radio, navidrome, spotify, qobuz, tidal, plex, jellyfin, emby, audiobookshelf, soundcloud, netease, yt, youtube, or ytmusic (got %q)", v)
 		}
 	}
 	if c.IsSet("start-theme") {
@@ -338,8 +340,9 @@ func setupCommand() *cli.Command {
 		Name:  "setup",
 		Usage: "interactive wizard to configure remote providers",
 		Description: "Walks through configuring Navidrome, Plex, Jellyfin, Spotify,\n" +
-			"Qobuz, NetEase, Audiobookshelf, and YouTube Music. Validates connections\n" +
-			"and writes ~/.config/cliamp/config.toml.",
+			"Qobuz, Tidal, NetEase, Audiobookshelf, and YouTube Music. Validates\n" +
+			"connections and writes ~/.config/cliamp/config.toml.",
+
 		Action: func(ctx context.Context, c *cli.Command) error {
 			return cmd.Setup()
 		},
@@ -347,58 +350,61 @@ func setupCommand() *cli.Command {
 }
 
 func spotifyCommand() *cli.Command {
-	return &cli.Command{
-		Name:  "spotify",
-		Usage: "manage Spotify integration",
-		Commands: []*cli.Command{
-			{
-				Name:  "reset",
-				Usage: "clear stored Spotify credentials and force re-authentication",
-				Action: func(ctx context.Context, c *cli.Command) error {
-					path, err := spotify.CredsPath()
-					if err != nil {
-						return fmt.Errorf("locate credentials: %w", err)
-					}
-					removed, err := spotify.DeleteCreds()
-					if err != nil {
-						return fmt.Errorf("remove credentials: %w", err)
-					}
-					if !removed {
-						fmt.Println("No stored Spotify credentials to remove.")
-						return nil
-					}
-					fmt.Printf("Removed %s\n", path)
-					fmt.Println("Restart cliamp and select Spotify to sign in again.")
-					return nil
-				},
-			},
-		},
-	}
+	return providerCredsCommand("spotify", "Spotify", spotify.CredsPath, spotify.DeleteCreds)
 }
 
 func qobuzCommand() *cli.Command {
+	return providerCredsCommand("qobuz", "Qobuz", qobuz.CredsPath, qobuz.DeleteCreds)
+}
+
+func tidalCommand() *cli.Command {
+	cmd := providerCredsCommand("tidal", "Tidal", tidal.CredsPath, tidal.DeleteCreds)
+	cmd.Commands = append(cmd.Commands, &cli.Command{
+		Name:      "probe",
+		Usage:     "print sanitized playback diagnostics for each quality tier (no tokens or signed URLs)",
+		ArgsUsage: "[search query]",
+		Action: func(ctx context.Context, c *cli.Command) error {
+			query := strings.Join(c.Args().Slice(), " ")
+			if query == "" {
+				query = "Random Access Memories Get Lucky"
+			}
+			cfg, err := config.Load()
+			if err != nil {
+				return fmt.Errorf("config: %w", err)
+			}
+			probeCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+			defer cancel()
+			return tidal.Probe(probeCtx, os.Stdout, query, cfg.Tidal.ClientID, cfg.Tidal.ClientSecret)
+		},
+	})
+	return cmd
+}
+
+// providerCredsCommand builds the `cliamp <provider> reset` subcommand shared
+// by providers that cache OAuth credentials on disk.
+func providerCredsCommand(key, display string, credsPath func() (string, error), deleteCreds func() (bool, error)) *cli.Command {
 	return &cli.Command{
-		Name:  "qobuz",
-		Usage: "manage Qobuz integration",
+		Name:  key,
+		Usage: "manage " + display + " integration",
 		Commands: []*cli.Command{
 			{
 				Name:  "reset",
-				Usage: "clear stored Qobuz credentials and force re-authentication",
+				Usage: "clear stored " + display + " credentials and force re-authentication",
 				Action: func(ctx context.Context, c *cli.Command) error {
-					path, err := qobuz.CredsPath()
+					path, err := credsPath()
 					if err != nil {
 						return fmt.Errorf("locate credentials: %w", err)
 					}
-					removed, err := qobuz.DeleteCreds()
+					removed, err := deleteCreds()
 					if err != nil {
 						return fmt.Errorf("remove credentials: %w", err)
 					}
 					if !removed {
-						fmt.Println("No stored Qobuz credentials to remove.")
+						fmt.Printf("No stored %s credentials to remove.\n", display)
 						return nil
 					}
 					fmt.Printf("Removed %s\n", path)
-					fmt.Println("Restart cliamp and select Qobuz to sign in again.")
+					fmt.Printf("Restart cliamp and select %s to sign in again.\n", display)
 					return nil
 				},
 			},

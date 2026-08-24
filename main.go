@@ -26,6 +26,7 @@ import (
 	"github.com/bjarneo/cliamp/external/radiometa"
 	"github.com/bjarneo/cliamp/external/soundcloud"
 	"github.com/bjarneo/cliamp/external/spotify"
+	"github.com/bjarneo/cliamp/external/tidal"
 	"github.com/bjarneo/cliamp/external/ytmusic"
 	"github.com/bjarneo/cliamp/internal/appdir"
 	"github.com/bjarneo/cliamp/internal/appmeta"
@@ -113,6 +114,12 @@ func run(overrides config.Overrides, positional []string, daemon, visualizer60FP
 	if cfg.Qobuz.IsSet() {
 		qobuzProv = qobuz.New(cfg.Qobuz.Quality)
 		providers = append(providers, model.ProviderEntry{Key: "qobuz", Name: "Qobuz", Provider: qobuzProv})
+	}
+
+	var tidalProv *tidal.TidalProvider
+	if cfg.Tidal.IsSet() {
+		tidalProv = tidal.New(cfg.Tidal.Quality, cfg.Tidal.ClientID, cfg.Tidal.ClientSecret)
+		providers = append(providers, model.ProviderEntry{Key: "tidal", Name: "Tidal", Provider: tidalProv})
 	}
 
 	if scProv := soundcloud.NewFromConfig(soundcloud.Config{
@@ -205,6 +212,9 @@ func run(overrides config.Overrides, positional []string, daemon, visualizer60FP
 	}
 	if qobuzProv != nil {
 		defer qobuzProv.Close()
+	}
+	if tidalProv != nil {
+		defer tidalProv.Close()
 	}
 	if closeYouTube != nil {
 		defer closeYouTube()
@@ -302,8 +312,17 @@ func run(overrides config.Overrides, positional []string, daemon, visualizer60FP
 		p.RegisterStreamerFactory("spotify:", spotifyProv.NewStreamer)
 	}
 
+	if tidalProv != nil {
+		// Tidal tracks carry tidal:// URIs; the provider resolves them to a
+		// fresh signed URL or DASH segment list when playback starts.
+		p.RegisterSourceResolver(tidal.TrackURIPrefix, func(uri string) (player.ResolvedSource, error) {
+			u, segments, err := tidalProv.ResolveSource(uri)
+			return player.ResolvedSource{URL: u, Segments: segments}, err
+		})
+	}
+
 	p.RegisterBufferedURLMatcher(func(u string) bool {
-		return navidrome.IsSubsonicStreamURL(u) || jellyfin.IsStreamURL(u) || emby.IsStreamURL(u) || plex.IsStreamURL(u) || qobuz.IsStreamURL(u) || audiobookshelf.IsStreamURL(u)
+		return navidrome.IsSubsonicStreamURL(u) || jellyfin.IsStreamURL(u) || emby.IsStreamURL(u) || plex.IsStreamURL(u) || qobuz.IsStreamURL(u) || tidal.IsStreamURL(u) || audiobookshelf.IsStreamURL(u)
 	})
 
 	// Pull now-playing for stations that carry no inline ICY metadata (NTS, FIP).
@@ -449,6 +468,12 @@ func run(overrides config.Overrides, positional []string, daemon, visualizer60FP
 			prog.Send(model.ProvAuthURLMsg{ProviderName: qobuzProv.Name(), URL: u})
 		})
 		defer qobuz.SetAuthURLObserver(nil)
+	}
+	if tidalProv != nil {
+		tidal.SetAuthURLObserver(func(u string) {
+			prog.Send(model.ProvAuthURLMsg{ProviderName: tidalProv.Name(), URL: u})
+		})
+		defer tidal.SetAuthURLObserver(nil)
 	}
 
 	svc, svcErr := wireMediaCtl(prog)

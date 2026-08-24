@@ -429,6 +429,8 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 			return m.switchToProvider("netease")
 		case "Q":
 			return m.switchToProvider("qobuz")
+		case "T":
+			return m.switchToProvider("tidal")
 		case "L":
 			return m.switchToProvider("local")
 		case "R":
@@ -795,6 +797,8 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return m.switchToProvider("netease")
 	case "Q":
 		return m.switchToProvider("qobuz")
+	case "T":
+		return m.switchToProvider("tidal")
 
 	case "ctrl+h":
 		m.toggleAlbumHeadersManual()

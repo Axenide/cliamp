@@ -165,6 +165,8 @@ func providerKeyForShortcut(key string) string {
 		return "netease"
 	case "Q":
 		return "qobuz"
+	case "T":
+		return "tidal"
 	case "L":
 		return "local"
 	case "R":

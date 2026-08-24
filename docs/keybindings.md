@@ -75,7 +75,7 @@ active when the picker opened. While typing a filter, `Enter` finishes it and
 | Key | Action |
 |---|---|
 | `f` | Toggle bookmark ★ on selected track (or favorite radio station in radio browser) |
-| `Ctrl+F` | Search — active provider's native search (Spotify, Qobuz, Navidrome, Jellyfin, Emby, Plex, Audiobookshelf, NetEase, Local) or YouTube fallback. Available from playlist and provider-browser views. |
+| `Ctrl+F` | Search — active provider's native search (Spotify, Qobuz, Tidal, Navidrome, Jellyfin, Emby, Plex, Audiobookshelf, NetEase, Local) or YouTube fallback. Available from playlist and provider-browser views. |
 | `u` | Load URL (stream/playlist) |
 | `y` | Show or close lyrics |
 | `r` | Retry lyrics lookup while lyrics are open |
@@ -93,6 +93,7 @@ active when the picker opened. While typing a filter, `Enter` finishes it and
 | `C` | Open SoundCloud provider |
 | `M` | Open NetEase provider |
 | `Q` | Open Qobuz provider |
+| `T` | Open Tidal provider |
 | `B` | Open Audiobookshelf provider |
 
 ## Playlist and Queue
@@ -144,7 +145,7 @@ Shift-letter keys are reserved for provider switching, so playlist-manager track
 
 ## Provider browser (`N` key)
 
-When you press `N` to drill into a provider (Navidrome, Plex, Jellyfin, Emby, Audiobookshelf, Spotify, Qobuz, YouTube Music), the album/artist/track screens use:
+When you press `N` to drill into a provider (Navidrome, Plex, Jellyfin, Emby, Audiobookshelf, Spotify, Qobuz, Tidal, YouTube Music), the album/artist/track screens use:
 
 | Key | Action |
 |---|---|
@@ -156,7 +157,7 @@ When you press `N` to drill into a provider (Navidrome, Plex, Jellyfin, Emby, Au
 | `a` | Append all visible tracks to the queue |
 | `q` | Queue the highlighted track to play next |
 | `s` | Cycle album sort (album list only) |
-| `S` `N` `P` `J` `E` `Y` `C` `M` `Q` `L` | Quick-switch to that provider without going back through the main pane. `R` replaces the queue on the track screen. |
+| `S` `N` `P` `J` `E` `Y` `C` `M` `Q` `T` `L` | Quick-switch to that provider without going back through the main pane. `R` replaces the queue on the track screen. |
 | `Esc` `b` | Walk back one level / close the browser |
 
 The header shows a source breadcrumb such as `Navidrome / Miles Davis / Kind of Blue / Tracks`, so the current provider and drill-down location remain visible. Track rows show right-aligned durations when the provider returns them.
@@ -203,7 +204,7 @@ This applies to:
 - `/` file browser filter
 - `Ctrl+F` when the active provider is Local (your saved playlists)
 
-Other `Ctrl+F` providers (Spotify, Qobuz, Navidrome, Jellyfin, Emby, Plex, Audiobookshelf, NetEase, YouTube) send your query to their own search API, so matching there follows each service's rules.
+Other `Ctrl+F` providers (Spotify, Qobuz, Tidal, Navidrome, Jellyfin, Emby, Plex, Audiobookshelf, NetEase, YouTube) send your query to their own search API, so matching there follows each service's rules.
 
 ## General
 

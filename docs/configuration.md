@@ -1,12 +1,12 @@
 # Configuration
 
-For remote providers (Navidrome, Plex, Jellyfin, Emby, Spotify, Qobuz, NetEase, Audiobookshelf, YouTube Music), the fastest path is the interactive wizard:
+For remote providers (Navidrome, Plex, Jellyfin, Emby, Spotify, Qobuz, Tidal, NetEase, Audiobookshelf, YouTube Music), the fastest path is the interactive wizard:
 
 ```sh
 cliamp setup
 ```
 
-It validates your credentials live and writes the right TOML block without touching the rest of your config. See [cli.md](cli.md#setup-wizard) for details.
+It writes the right TOML block without touching the rest of your config, and validates server credentials live where the provider supports it (Navidrome, Plex, Jellyfin, Emby). OAuth providers such as Spotify, Qobuz, and Tidal sign in later, interactively in the player — Tidal via a `link.tidal.com` device code. See [cli.md](cli.md#setup-wizard) for details.
 
 ## Config directory
 
@@ -160,7 +160,7 @@ Set which provider to start with:
 provider = "radio"
 ```
 
-Valid values: `radio` (default), `navidrome`, `spotify`, `plex`, `jellyfin`, `emby`, `qobuz`, `soundcloud`, `netease`, `audiobookshelf`, `yt`, `youtube`, `ytmusic`.
+Valid values: `radio` (default), `navidrome`, `spotify`, `plex`, `jellyfin`, `emby`, `qobuz`, `tidal`, `soundcloud`, `netease`, `audiobookshelf`, `yt`, `youtube`, `ytmusic`.
 
 You can also override from the CLI: `cliamp --provider jellyfin`.
 

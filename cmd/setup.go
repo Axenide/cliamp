@@ -1,7 +1,7 @@
 // Package cmd implements interactive subcommands invoked from the CLI.
 // setup.go contains the provider onboarding wizard reachable via
 // `cliamp setup`. It walks the user through configuring each remote
-// provider (Navidrome, Plex, Jellyfin, Spotify, Qobuz, NetEase, YouTube Music),
+// provider (Navidrome, Plex, Jellyfin, Spotify, Qobuz, Tidal, NetEase, YouTube Music),
 // validates the connection where possible, and writes the resulting
 // TOML section to ~/.config/cliamp/config.toml.
 //
@@ -95,6 +95,7 @@ const (
 	keyYTMusicMode    = "_mode"
 	keySpotifyMode    = "_spotify_mode"
 	keyQobuzQuality   = "_qobuz_quality"
+	keyTidalQuality   = "_tidal_quality"
 )
 
 func providers() []providerSpec {
@@ -366,6 +367,39 @@ func providers() []providerSpec {
 				return strings.Join([]string{
 					"enabled = true",
 					fmt.Sprintf("quality = %s", q),
+				}, "\n")
+			},
+		},
+		{
+			key:     "tidal",
+			name:    "Tidal",
+			section: "tidal",
+			intro: []string{
+				"Lossless streaming. Requires a paid Tidal subscription",
+				"(every paid plan includes lossless FLAC).",
+				"",
+				"No API credentials needed - cliamp uses built-in ones.",
+				"After setup, launch cliamp, select Tidal, and press Enter to",
+				"sign in: approve the link.tidal.com device code in a browser.",
+			},
+			picker: &pickerSpec{
+				key:   keyTidalQuality,
+				label: "Stream quality",
+				options: []pickerOption{
+					{value: "lossless", label: "FLAC (hi-res masters; AAC 320 otherwise) - recommended"},
+					{value: "hires", label: "FLAC hi-res (same delivery as lossless)"},
+					{value: "high", label: "AAC 320kbps"},
+					{value: "low", label: "AAC 96kbps"},
+				},
+			},
+			body: func(v map[string]string) string {
+				q := v[keyTidalQuality]
+				if q == "" {
+					q = "lossless"
+				}
+				return strings.Join([]string{
+					"enabled = true",
+					fmt.Sprintf("quality = %q", q),
 				}, "\n")
 			},
 		},
