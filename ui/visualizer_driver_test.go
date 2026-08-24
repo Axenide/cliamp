@@ -459,6 +459,33 @@ func TestRawSampleModesRefreshWaveBufAtZeroBandCount(t *testing.T) {
 	}
 }
 
+func TestRawSampleModesAnalyzeEveryTick(t *testing.T) {
+	for _, mode := range []VisMode{VisWave, VisScope, VisHeartbeat} {
+		t.Run(visModes[mode].name, func(t *testing.T) {
+			v := NewVisualizer(44100)
+			v.Cols = 80
+			activateMode(t, v, mode)
+
+			calls := 0
+			ctx := VisTickContext{
+				Now:     time.Unix(1, 0),
+				Playing: true,
+				Analyze: func(spec VisAnalysisSpec) []float64 {
+					calls++
+					return v.Analyze([]float64{float64(calls)}, spec)
+				},
+			}
+			v.Tick(ctx)
+			ctx.Now = ctx.Now.Add(TickWave)
+			v.Tick(ctx)
+
+			if calls != 2 {
+				t.Fatalf("Analyze calls = %d, want 2", calls)
+			}
+		})
+	}
+}
+
 func TestRawSampleModesClearSpectrumHistoryOnModeSwitch(t *testing.T) {
 	v := NewVisualizer(44100)
 	barsSpec := spectrumAnalysisSpec(DefaultSpectrumBands)

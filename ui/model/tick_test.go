@@ -156,6 +156,50 @@ func TestTickIntervalClampsFastVisualizerCadence(t *testing.T) {
 	}
 }
 
+func TestTickIntervalVisualizer60FPS(t *testing.T) {
+	p := &playbackFakeEngine{playing: true}
+	m := Model{
+		player:   p,
+		vis:      ui.NewVisualizer(float64(p.SampleRate())),
+		playlist: playlist.New(),
+		width:    80,
+		height:   24,
+	}
+	m.recomputeLayout()
+	m.SetVisualizer60FPS(true)
+
+	if got := m.tickInterval(); got != ui.TickAnim {
+		t.Fatalf("tickInterval() = %v, want %v", got, ui.TickAnim)
+	}
+
+	m.SetLowPower(true)
+	if got := m.tickInterval(); got != ui.TickLowPowerPlaying {
+		t.Fatalf("tickInterval() with low-power = %v, want %v", got, ui.TickLowPowerPlaying)
+	}
+}
+
+func TestTickIntervalRawSampleVisualizerUsesWaveCadence(t *testing.T) {
+	p := &playbackFakeEngine{playing: true}
+	m := Model{
+		player:   p,
+		vis:      ui.NewVisualizer(float64(p.SampleRate())),
+		playlist: playlist.New(),
+		width:    80,
+		height:   24,
+	}
+	m.recomputeLayout()
+	m.SetVisualizer("Wave")
+
+	if got := m.tickInterval(); got != ui.TickWave {
+		t.Fatalf("Wave tickInterval() = %v, want %v", got, ui.TickWave)
+	}
+
+	m.SetVisualizer("Heartbeat")
+	if got := m.tickInterval(); got != ui.TickWave {
+		t.Fatalf("Heartbeat tickInterval() = %v, want %v", got, ui.TickWave)
+	}
+}
+
 func TestTickIntervalLowPowerPlayingUsesLowPowerCadence(t *testing.T) {
 	p := &playbackFakeEngine{playing: true}
 	m := Model{

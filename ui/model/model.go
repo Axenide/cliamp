@@ -397,10 +397,11 @@ type Model struct {
 	// Full-screen visualizer mode (Shift+V)
 	fullVis bool
 
-	autoPlay       bool // start playing immediately on launch
-	lowPower       bool // lower UI/render cadences in low-power mode
-	compact        bool // compact mode: cap frame width at 80 columns
-	heightExpanded bool // tracks whether manual 'x' expansion is active
+	autoPlay        bool // start playing immediately on launch
+	lowPower        bool // lower UI/render cadences in low-power mode
+	visualizer60FPS bool // render a visible visualizer at the animation cadence
+	compact         bool // compact mode: cap frame width at 80 columns
+	heightExpanded  bool // tracks whether manual 'x' expansion is active
 
 	// Cached per-tick to avoid repeated speaker.Lock() calls in View().
 	cachedPos  time.Duration

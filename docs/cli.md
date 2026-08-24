@@ -28,7 +28,10 @@ cliamp --bit-depth 32 track.m4a           # PCM bit depth: 16 (default) or 32 (l
 ```sh
 cliamp --compact ~/Music                     # cap width at 80 columns
 cliamp --eq-preset "Bass Boost" ~/Music
+cliamp --visualizer-60fps ~/Music            # smoother visualizer animation (higher CPU use)
 ```
+
+`--visualizer-60fps` renders a visible visualizer at roughly 60 FPS while audio plays. `Wave`, `Scope`, and `Heartbeat` already use this cadence because they draw directly from audio samples. The flag does not affect overlays or low-power mode.
 
 ## Diagnostics
 
@@ -123,6 +126,7 @@ cliamp track.mp3 --repeat all --mono ~/Music
 | `--mono` / `--no-mono` | bool | false | |
 | `--auto-play` | bool | false | |
 | `--compact` | bool | false | |
+| `--visualizer-60fps` | bool | false | render a visible visualizer at roughly 60 FPS |
 | `--start-theme` | string | | theme name |
 | `--eq-preset` | string | | preset name |
 | `--sample-rate` | int | 44100 | 22050, 44100, 48000, 96000, 192000 |

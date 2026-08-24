@@ -36,6 +36,7 @@ func buildApp() *cli.Command {
 		&cli.StringFlag{Name: "provider", Usage: "default provider: radio, navidrome, plex, jellyfin, emby, spotify, qobuz, soundcloud, netease, audiobookshelf, abs, yt, youtube, ytmusic"},
 		&cli.StringFlag{Name: "start-theme", Usage: "UI theme name"},
 		&cli.StringFlag{Name: "visualizer", Usage: "visualizer mode"},
+		&cli.BoolFlag{Name: "visualizer-60fps", Usage: "render visualizer at 60 FPS (higher CPU use)"},
 		&cli.StringFlag{Name: "eq-preset", Usage: "EQ preset name"},
 		&cli.IntFlag{Name: "sample-rate", Usage: "output sample rate in Hz (0=auto)", HideDefault: true},
 		&cli.IntFlag{Name: "buffer-ms", Usage: "speaker buffer in milliseconds (50-5000)", HideDefault: true},
@@ -64,7 +65,7 @@ func buildApp() *cli.Command {
 			if err != nil {
 				return err
 			}
-			return run(ov, c.Args().Slice(), c.Bool("daemon"))
+			return run(ov, c.Args().Slice(), c.Bool("daemon"), c.Bool("visualizer-60fps"))
 		},
 		Commands: []*cli.Command{
 			upgradeCommand(),

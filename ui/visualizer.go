@@ -356,9 +356,9 @@ func defaultDriverTick(v *Visualizer, ctx VisTickContext, spec VisAnalysisSpec) 
 	}
 	spec = NormalizeAnalysisSpec(spec)
 	if ctx.Analyze != nil {
-		// Decouple FFT cadence from animation cadence: skip Analyze if we ran
-		// it recently. Animation still advances every tick via advanceSmoothing.
-		due := v.lastAnalyzeAt.IsZero() || ctx.Now.IsZero() ||
+		// Decouple FFT cadence from animation cadence. Raw-sample modes have no
+		// FFT work, so refresh their waveform on every render tick.
+		due := spec.BandCount == 0 || v.lastAnalyzeAt.IsZero() || ctx.Now.IsZero() ||
 			ctx.Now.Sub(v.lastAnalyzeAt) >= TickAnalyze
 		if due {
 			bands := ctx.Analyze(spec)
@@ -863,6 +863,12 @@ func (v *Visualizer) TickInterval(ctx VisTickContext) time.Duration {
 		return TickSlow
 	}
 	return driver.TickInterval(v, ctx)
+}
+
+// UsesRawSamples reports whether the active visualizer draws directly from audio samples.
+func (v *Visualizer) UsesRawSamples() bool {
+	driver := v.syncDriverMode()
+	return driver != nil && NormalizeAnalysisSpec(driver.AnalysisSpec(v)).BandCount == 0
 }
 
 func (v *Visualizer) Tick(ctx VisTickContext) {

@@ -50,7 +50,7 @@ const (
 	lowPowerUIFPS = 5
 )
 
-func run(overrides config.Overrides, positional []string, daemon bool) error {
+func run(overrides config.Overrides, positional []string, daemon, visualizer60FPS bool) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("config: %w", err)
@@ -342,6 +342,7 @@ func run(overrides config.Overrides, positional []string, daemon bool) error {
 	m.SetIPCBroker(pluginBroker)
 	m.SetCustomEQBands(cfg.EQ)
 	m.SetVisVolumeLinked(cfg.VisVolumeLinked)
+	m.SetVisualizer60FPS(visualizer60FPS)
 
 	if luaMgr != nil {
 		luaMgr.SetStateProvider(luaplugin.StateProvider{
