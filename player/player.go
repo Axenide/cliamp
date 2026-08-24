@@ -52,6 +52,7 @@ type Player struct {
 	mono            atomic.Bool
 	resampleQuality int
 	bitDepth        int // 16 or 32
+	tapBufferFrames int
 
 	gaplessAdvance atomic.Bool  // set when gapless transition fires
 	seekGen        atomic.Int64 // generation counter for yt-dlp seeks; incremented to cancel stale seeks
@@ -84,7 +85,12 @@ func New(q Quality) (*Player, error) {
 	if bitDepth != 32 {
 		bitDepth = 16
 	}
-	p := &Player{sr: sr, resampleQuality: q.ResampleQuality, bitDepth: bitDepth}
+	p := &Player{
+		sr:              sr,
+		resampleQuality: q.ResampleQuality,
+		bitDepth:        bitDepth,
+		tapBufferFrames: max(4096, sr.N(time.Duration(q.BufferMs)*time.Millisecond)),
+	}
 	p.volMin.Store(math.Float64bits(-50))
 	p.speed.Store(math.Float64bits(1.0))
 	p.gapless = &gaplessStreamer{}
@@ -218,7 +224,7 @@ func (p *Player) playPipeline(tp *trackPipeline) error {
 			s = newBiquad(s, eqFreqs[i], 1.4, &p.eqBands[i], float64(p.sr))
 		}
 
-		p.tap = newTap(s, 4096)
+		p.tap = newTap(s, p.tapBufferFrames, int(p.sr))
 		s = &volumeStreamer{s: p.tap, vol: &p.volume, mono: &p.mono, cachedDB: math.NaN()}
 		p.ctrl = &beep.Ctrl{Streamer: s}
 		p.started = true
@@ -863,6 +869,18 @@ func (p *Player) SamplesInto(dst []float64) int {
 		return 0
 	}
 	return tap.SamplesInto(dst)
+}
+
+// WaveformSamplesInto copies audio samples at the current position within the
+// output buffer for smooth raw visualizer rendering.
+func (p *Player) WaveformSamplesInto(dst []float64) int {
+	p.mu.Lock()
+	tap := p.tap
+	p.mu.Unlock()
+	if tap == nil {
+		return 0
+	}
+	return tap.WaveformSamplesInto(dst)
 }
 
 // StereoSamplesInto copies the latest stereo audio frames into dst.

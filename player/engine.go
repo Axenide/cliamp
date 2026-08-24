@@ -60,6 +60,7 @@ type Engine interface {
 
 	// Audio samples for visualizer
 	SamplesInto(dst []float64) int
+	WaveformSamplesInto(dst []float64) int
 	StereoSamplesInto(dst [][2]float64) int
 	SampleRate() int
 }
