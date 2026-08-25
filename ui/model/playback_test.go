@@ -21,6 +21,7 @@ type playbackFakeEngine struct {
 	duration          time.Duration
 	playCalls         []string
 	seekYTDLCalls     []time.Duration
+	playAtOffsets     []time.Duration
 	preloadCalls      []string
 	clearPreloadCalls int
 	stopCalls         int
@@ -32,6 +33,10 @@ func (f *playbackFakeEngine) Play(path string, _ time.Duration) error {
 	f.paused = false
 	f.playCalls = append(f.playCalls, path)
 	return nil
+}
+func (f *playbackFakeEngine) PlayAt(path string, dur, offset time.Duration) error {
+	f.playAtOffsets = append(f.playAtOffsets, offset)
+	return f.Play(path, dur)
 }
 func (f *playbackFakeEngine) PlayYTDL(string, time.Duration) error { return nil }
 func (f *playbackFakeEngine) Preload(path string, _ time.Duration) error {
