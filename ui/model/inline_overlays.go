@@ -93,10 +93,13 @@ func (m Model) renderSpotSearchResults(budget int) string {
 			break
 		}
 		if row.Index < 0 {
+			if budget == 1 {
+				continue
+			}
 			lines = append(lines, dimStyle.Render(labeledSeparator("", row.Section)))
 			continue
 		}
-		label := truncate(fmt.Sprintf("%s - %s", row.Track.Artist, row.Track.Title), ui.PanelWidth-8)
+		label := truncate(trackViewName(row.Track), ui.PanelWidth-8)
 		lines = append(lines, cursorLine(label, row.Index == m.spotSearch.cursor))
 	}
 	return strings.Join(padLines(lines, budget, len(lines)), "\n")
@@ -116,7 +119,7 @@ func (m Model) renderTrackRowsBody(tracks []playlist.Track, cursor, scroll, budg
 			continue
 		}
 		i, t := row.Index, row.Track
-		label := formatTrackRow(i+1, t.DisplayName()+trackAlbumSuffix(t, m.showAlbumHeaders), t.DurationSecs)
+		label := formatTrackRow(i+1, trackViewName(t)+trackAlbumSuffix(t, m.showAlbumHeaders), t.DurationSecs)
 		lines = append(lines, cursorLine(label, i == cursor))
 	}
 	return bodyLines(lines, budget)
@@ -164,6 +167,11 @@ func (m Model) activeOverlay() (overlayView, bool) {
 		return overlayView{
 			func(m *Model) string { return sepHeaderN("Queue", m.queue.cursor+1, m.playlist.QueueLen()) },
 			(*Model).queueHelpLine, (*Model).renderQueueBody}, true
+	case m.radioStats.visible:
+		return overlayView{
+			func(*Model) string { return sepHeader("Radio Stats") },
+			func(m *Model) string { return m.commandHelp(commandModeRadioStats) },
+			(*Model).renderRadioStatsBody}, true
 	case m.showInfo:
 		return overlayView{
 			func(*Model) string { return sepHeader("Track Info") },
@@ -284,7 +292,7 @@ func (m Model) renderQueueBody() string {
 	tracks := m.playlist.QueueWindow(start, budget)
 	items := make([]string, len(tracks))
 	for i, t := range tracks {
-		items[i] = fmt.Sprintf("%d. %s", start+i+1, truncate(t.DisplayName(), ui.PanelWidth-8))
+		items[i] = fmt.Sprintf("%d. %s", start+i+1, truncate(trackViewName(t), ui.PanelWidth-8))
 	}
 	return windowList(items, m.queue.cursor-start, 0, budget)
 }
@@ -477,7 +485,7 @@ func (m Model) renderNetSearchBody() string {
 	}
 	items := make([]string, len(m.netSearch.results))
 	for i, t := range m.netSearch.results {
-		items[i] = truncate(t.DisplayName(), ui.PanelWidth-8)
+		items[i] = truncate(trackViewName(t), ui.PanelWidth-8)
 	}
 	return windowList(items, m.netSearch.cursor, m.netSearch.scroll, budget)
 }
@@ -512,16 +520,21 @@ func (m Model) spotSearchHelpLine() string {
 
 func (m Model) renderSpotSearchBody() string {
 	budget := m.effectivePlaylistVisible()
+	showError := m.spotSearch.err != "" && m.spotSearch.screen != spotSearchPlaylist
+	bodyBudget := budget
+	if showError {
+		bodyBudget = max(0, bodyBudget-1)
+	}
 	var body string
 	switch m.spotSearch.screen {
 	case spotSearchResults:
 		switch {
 		case m.spotSearch.albumLoading:
-			body = bodyLines([]string{loadingLine("Loading album…")}, budget)
+			body = bodyLines([]string{loadingLine("Loading album…")}, bodyBudget)
 		case len(m.spotSearch.results) == 0:
-			body = bodyMessage("No results", budget)
+			body = bodyMessage("No results", bodyBudget)
 		default:
-			body = m.renderSpotSearchResults(budget)
+			body = m.renderSpotSearchResults(bodyBudget)
 		}
 	case spotSearchPlaylist:
 		if m.spotSearch.loading {
@@ -542,7 +555,7 @@ func (m Model) renderSpotSearchBody() string {
 		list := windowList(items, m.spotSearch.cursor, m.spotSearch.scroll, max(0, budget-1))
 		body = strings.Join([]string{head, list}, "\n")
 	case spotSearchNewName:
-		body = bodyMessage("Enter a name for the new playlist above.", budget)
+		body = bodyMessage("Enter a name for the new playlist above.", bodyBudget)
 	default:
 		var lines []string
 		if m.spotSearch.loading {
@@ -550,10 +563,14 @@ func (m Model) renderSpotSearchBody() string {
 		} else {
 			lines = append(lines, dimStyle.Render("  Type a query and press Enter to search."))
 		}
-		body = bodyLines(lines, budget)
+		body = bodyLines(lines, bodyBudget)
 	}
-	if m.spotSearch.err != "" && m.spotSearch.screen != spotSearchPlaylist {
-		return strings.Join([]string{body, errorStyle.Render("  " + m.spotSearch.err)}, "\n")
+	if showError {
+		errLine := errorStyle.Render("  " + m.spotSearch.err)
+		if body == "" {
+			return errLine
+		}
+		return strings.Join([]string{body, errLine}, "\n")
 	}
 	return body
 }

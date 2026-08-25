@@ -31,12 +31,22 @@ func (f *stereoFakeEngine) Mono() bool      { return f.mono }
 
 type samplingFakeEngine struct {
 	*playbackFakeEngine
-	sampleCalls       int
-	stereoSampleCalls int
+	sampleCalls         int
+	waveformSampleCalls int
+	stereoSampleCalls   int
 }
 
 func (f *samplingFakeEngine) SamplesInto(dst []float64) int {
 	f.sampleCalls++
+	return f.fillSamples(dst)
+}
+
+func (f *samplingFakeEngine) WaveformSamplesInto(dst []float64) int {
+	f.waveformSampleCalls++
+	return f.fillSamples(dst)
+}
+
+func (f *samplingFakeEngine) fillSamples(dst []float64) int {
 	if len(dst) == 0 {
 		return 0
 	}
@@ -153,6 +163,71 @@ func TestTickIntervalClampsFastVisualizerCadence(t *testing.T) {
 	}
 	if got := m.tickInterval(); got != ui.TickFast {
 		t.Fatalf("tickInterval() = %v, want %v", got, ui.TickFast)
+	}
+}
+
+func TestTickIntervalVisualizer60FPS(t *testing.T) {
+	p := &playbackFakeEngine{playing: true}
+	m := Model{
+		player:   p,
+		vis:      ui.NewVisualizer(float64(p.SampleRate())),
+		playlist: playlist.New(),
+		width:    80,
+		height:   24,
+	}
+	m.recomputeLayout()
+	m.SetVisualizer60FPS(true)
+
+	if got := m.tickInterval(); got != ui.TickAnim {
+		t.Fatalf("tickInterval() = %v, want %v", got, ui.TickAnim)
+	}
+
+	m.SetLowPower(true)
+	if got := m.tickInterval(); got != ui.TickLowPowerPlaying {
+		t.Fatalf("tickInterval() with low-power = %v, want %v", got, ui.TickLowPowerPlaying)
+	}
+}
+
+func TestTickIntervalRawSampleVisualizerUsesWaveCadence(t *testing.T) {
+	p := &playbackFakeEngine{playing: true}
+	m := Model{
+		player:   p,
+		vis:      ui.NewVisualizer(float64(p.SampleRate())),
+		playlist: playlist.New(),
+		width:    80,
+		height:   24,
+	}
+	m.recomputeLayout()
+	m.SetVisualizer("Wave")
+
+	if got := m.tickInterval(); got != ui.TickWave {
+		t.Fatalf("Wave tickInterval() = %v, want %v", got, ui.TickWave)
+	}
+
+	m.SetVisualizer("Heartbeat")
+	if got := m.tickInterval(); got != ui.TickWave {
+		t.Fatalf("Heartbeat tickInterval() = %v, want %v", got, ui.TickWave)
+	}
+}
+
+func TestRawSampleVisualizerUsesWaveformTap(t *testing.T) {
+	p := &samplingFakeEngine{playbackFakeEngine: &playbackFakeEngine{playing: true}}
+	m := Model{
+		player:   p,
+		vis:      ui.NewVisualizer(float64(p.SampleRate())),
+		playlist: playlist.New(),
+		width:    80,
+		height:   24,
+	}
+	m.recomputeLayout()
+	m.SetVisualizer("Wave")
+	m.tickVisualizer(time.Unix(1, 0))
+
+	if p.waveformSampleCalls != 1 {
+		t.Fatalf("WaveformSamplesInto calls = %d, want 1", p.waveformSampleCalls)
+	}
+	if p.sampleCalls != 0 {
+		t.Fatalf("SamplesInto calls = %d, want 0", p.sampleCalls)
 	}
 }
 

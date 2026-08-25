@@ -3,11 +3,14 @@ package ytmusic
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bjarneo/cliamp/playlist"
 	"github.com/bjarneo/cliamp/provider"
@@ -213,15 +216,12 @@ func TestCookieProviderTracksCaching(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	base := newCookieBase("chrome")
 
-	// Pre-populate disk cache with tracks using resolved target URL
-	dc := base.ensureDiskCache()
 	mockTracks := []playlist.Track{
 		{Path: "https://music.youtube.com/watch?v=123", Title: "Song 1", Artist: "Artist 1", DurationSecs: 200},
 		{Path: "https://music.youtube.com/watch?v=456", Title: "Song 2", Artist: "Artist 2", DurationSecs: 180},
 	}
 	musicTarget := formatPlaylistURL("PL123", true)
-	dc.setTracks(musicTarget, mockTracks)
-	saveSnapshot(dc.snapshot())
+	base.trackCache[musicTarget] = mockTracks
 
 	prov := &CookieProvider{base: base, kind: KindMusic}
 	tracks, err := prov.Tracks("PL123")
@@ -240,8 +240,7 @@ func TestCookieProviderTracksCaching(t *testing.T) {
 	videoTracks := []playlist.Track{
 		{Path: "https://www.youtube.com/watch?v=789", Title: "Video 1", Artist: "Channel 1", DurationSecs: 300},
 	}
-	dc.setTracks(videoTarget, videoTracks)
-	saveSnapshot(dc.snapshot())
+	base.trackCache[videoTarget] = videoTracks
 
 	videoProv := &CookieProvider{base: base, kind: KindVideo}
 	vTracks, err := videoProv.Tracks("PL123")
@@ -253,11 +252,167 @@ func TestCookieProviderTracksCaching(t *testing.T) {
 	}
 }
 
-func TestNewCookieProvidersDoesNotMutateGlobalCookies(t *testing.T) {
+func TestCookieProviderTracksLoadsInBatches(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	base := newCookieBase("firefox")
+	var starts []int
+	base.resolveFn = func(_ context.Context, _ string, start, count int, browser ...string) ([]playlist.Track, int, error) {
+		starts = append(starts, start)
+		if count != cookiePlaylistBatchSize {
+			t.Fatalf("count = %d, want %d", count, cookiePlaylistBatchSize)
+		}
+		if len(browser) != 1 || browser[0] != "firefox" {
+			t.Fatalf("browser = %v, want firefox", browser)
+		}
+		n := cookiePlaylistBatchSize
+		if start > 0 {
+			n = 20
+		} else {
+			n-- // One malformed source entry was omitted from the parsed tracks.
+		}
+		tracks := make([]playlist.Track, n)
+		for i := range tracks {
+			tracks[i].Title = fmt.Sprintf("Track %d", start+i)
+		}
+		entries := n
+		if start == 0 {
+			entries = cookiePlaylistBatchSize
+		}
+		return tracks, entries, nil
+	}
+
+	tracks, err := (&CookieProvider{base: base, kind: KindMusic}).Tracks("PL123")
+	if err != nil {
+		t.Fatalf("Tracks() error: %v", err)
+	}
+	if len(tracks) != 119 {
+		t.Fatalf("tracks = %d, want 119", len(tracks))
+	}
+	if !slices.Equal(starts, []int{0, cookiePlaylistBatchSize}) {
+		t.Fatalf("batch starts = %v, want [0 %d]", starts, cookiePlaylistBatchSize)
+	}
+	if _, err := os.Stat(ytCachePath()); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("cookie provider persisted account cache: %v", err)
+	}
+}
+
+func TestCookieProviderStopsTrackLoad(t *testing.T) {
+	tests := []struct {
+		name string
+		stop func(*CookieProvider)
+	}{
+		{name: "refresh", stop: func(p *CookieProvider) { p.Refresh() }},
+		{name: "close", stop: func(p *CookieProvider) { p.Close() }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			base := newCookieBase("firefox")
+			started := make(chan struct{})
+			base.resolveFn = func(ctx context.Context, _ string, _, _ int, _ ...string) ([]playlist.Track, int, error) {
+				close(started)
+				<-ctx.Done()
+				return nil, 0, ctx.Err()
+			}
+			prov := &CookieProvider{base: base, kind: KindMusic}
+			done := make(chan error, 1)
+			go func() {
+				_, err := prov.Tracks("PL123")
+				done <- err
+			}()
+
+			<-started
+			tt.stop(prov)
+			select {
+			case err := <-done:
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("Tracks() error = %v, want context.Canceled", err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("track load did not stop")
+			}
+		})
+	}
+}
+
+func TestCookieProviderRefreshRejectsStaleResults(t *testing.T) {
+	t.Run("playlists", func(t *testing.T) {
+		base := newCookieBase("firefox")
+		started := make(chan struct{})
+		release := make(chan struct{})
+		base.fetchFn = func(string) ([]playlist.PlaylistInfo, error) {
+			close(started)
+			<-release
+			return []playlist.PlaylistInfo{{ID: "private"}}, nil
+		}
+		done := make(chan struct{})
+		go func() {
+			_, _ = base.fetchPlaylists()
+			close(done)
+		}()
+
+		<-started
+		base.refresh()
+		close(release)
+		<-done
+		base.mu.Lock()
+		defer base.mu.Unlock()
+		if base.playlists != nil {
+			t.Fatalf("stale playlists cached after refresh: %v", base.playlists)
+		}
+	})
+
+	t.Run("tracks", func(t *testing.T) {
+		base := newCookieBase("firefox")
+		started := make(chan struct{})
+		release := make(chan struct{})
+		base.resolveFn = func(context.Context, string, int, int, ...string) ([]playlist.Track, int, error) {
+			close(started)
+			<-release
+			return []playlist.Track{{Title: "Private"}}, 1, nil
+		}
+		done := make(chan struct{})
+		go func() {
+			_, _ = base.fetchTracks("private")
+			close(done)
+		}()
+
+		<-started
+		base.refresh()
+		close(release)
+		<-done
+		base.mu.Lock()
+		defer base.mu.Unlock()
+		if _, ok := base.trackCache["private"]; ok {
+			t.Fatal("stale tracks cached after refresh")
+		}
+	})
+}
+
+func TestCookieProviderSearchTracksHonorsCancellation(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping Unix shell script test on Windows")
 	}
-	t.Cleanup(func() { resolve.SetYTDLCookiesFrom("") })
+	tmpDir := t.TempDir()
+	fakeYTDL := filepath.Join(tmpDir, "yt-dlp")
+	if err := os.WriteFile(fakeYTDL, []byte("#!/bin/sh\nexec sleep 10\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", tmpDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := NewCookieProvider("chrome", KindMusic).SearchTracks(ctx, "query", 10)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("SearchTracks() error = %v, want context.Canceled", err)
+	}
+}
+
+func TestNewCookieProvidersDoesNotMutateOtherHostCookies(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping Unix shell script test on Windows")
+	}
+	t.Cleanup(func() { resolve.SetYTDLCookiesForHost("soundcloud.com", "") })
 
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "ytdlp_args.log")
@@ -270,23 +425,22 @@ func TestNewCookieProvidersDoesNotMutateGlobalCookies(t *testing.T) {
 
 	t.Setenv("PATH", tmpDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	// Baseline global cookie configured by another provider (e.g. SoundCloud)
-	resolve.SetYTDLCookiesFrom("firefox")
+	// Configure a cookie source for another provider.
+	resolve.SetYTDLCookiesForHost("soundcloud.com", "firefox")
 
-	// Initializing YouTube Music cookie providers should NOT overwrite global cookies
+	// Initializing YouTube Music cookie providers must not affect SoundCloud.
 	_ = NewCookieProviders("chrome")
 	_ = NewCookieProvider("chrome", KindMusic)
 
-	// Caller relying on global cookies (e.g. SoundCloud) should still get firefox
 	_, _ = resolve.ResolveYTDLBatch("https://soundcloud.com/user/tracks", 0, 0)
 	logged, err := os.ReadFile(logFile)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(logged), "--cookies-from-browser firefox") {
-		t.Errorf("expected global cookies 'firefox' to remain unchanged, got: %s", string(logged))
+		t.Errorf("expected SoundCloud cookies 'firefox' to remain unchanged, got: %s", string(logged))
 	}
 	if strings.Contains(string(logged), "--cookies-from-browser chrome") {
-		t.Errorf("global cookies was corrupted with 'chrome': %s", string(logged))
+		t.Errorf("SoundCloud cookies were replaced with 'chrome': %s", string(logged))
 	}
 }

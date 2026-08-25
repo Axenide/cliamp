@@ -496,6 +496,47 @@ func TestLoadQobuz(t *testing.T) {
 	}
 }
 
+func TestLoadTidal(t *testing.T) {
+	tests := []struct {
+		name      string
+		body      string
+		wantIsSet bool
+		wantCfg   TidalConfig
+	}{
+		{"section enables", "[tidal]\n", true, TidalConfig{Enabled: true}},
+		{
+			"full config",
+			"[tidal]\nquality = \"hires\"\nclient_id = \"id\"\nclient_secret = \"sec\"\n",
+			true,
+			TidalConfig{Enabled: true, Quality: "hires", ClientID: "id", ClientSecret: "sec"},
+		},
+		{"disabled", "[tidal]\nenabled = false\n", false, TidalConfig{Enabled: true, Disabled: true}},
+		{"absent", "", false, TidalConfig{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			path := filepath.Join(os.Getenv("HOME"), ".config", "cliamp", "config.toml")
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatalf("MkdirAll: %v", err)
+			}
+			if err := os.WriteFile(path, []byte(tt.body), 0o644); err != nil {
+				t.Fatalf("WriteFile: %v", err)
+			}
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if got := cfg.Tidal.IsSet(); got != tt.wantIsSet {
+				t.Errorf("Tidal.IsSet() = %v, want %v", got, tt.wantIsSet)
+			}
+			if cfg.Tidal != tt.wantCfg {
+				t.Errorf("Tidal = %+v, want %+v", cfg.Tidal, tt.wantCfg)
+			}
+		})
+	}
+}
+
 func TestPlexIsSet(t *testing.T) {
 	tests := []struct {
 		name string
@@ -629,7 +670,7 @@ func TestOverridesApply(t *testing.T) {
 	repeat := "all"
 	mono := true
 	theme := "dark"
-	compact := true
+	simplified := true
 	sr := 48000
 	play := true
 
@@ -639,7 +680,7 @@ func TestOverridesApply(t *testing.T) {
 		Repeat:     &repeat,
 		Mono:       &mono,
 		Theme:      &theme,
-		Compact:    &compact,
+		Simplified: &simplified,
 		SampleRate: &sr,
 		Play:       &play,
 	}
@@ -661,8 +702,8 @@ func TestOverridesApply(t *testing.T) {
 	if cfg.Theme != "dark" {
 		t.Errorf("Theme = %q, want dark", cfg.Theme)
 	}
-	if !cfg.Compact {
-		t.Error("Compact should be true")
+	if !cfg.Simplified {
+		t.Error("Simplified should be true")
 	}
 	if cfg.SampleRate != 48000 {
 		t.Errorf("SampleRate = %d, want 48000", cfg.SampleRate)

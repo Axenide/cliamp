@@ -1,6 +1,8 @@
 package model
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/bjarneo/cliamp/playlist"
@@ -13,6 +15,72 @@ func albumResult(name string) playlist.Track {
 			playlist.MetaKind:    playlist.MetaKindAlbum,
 			playlist.MetaAlbumID: name,
 		},
+	}
+}
+
+func TestSpotSearchResultVisibleWithOneBodyRow(t *testing.T) {
+	m := newLayoutTestModel(40, 10)
+	m.spotSearch = spotSearchState{
+		visible: true,
+		screen:  spotSearchResults,
+		results: []playlist.Track{albumResult("Selected Album")},
+	}
+	m.recomputeLayout()
+	if got := m.effectivePlaylistVisible(); got != 1 {
+		t.Fatalf("body rows = %d, want 1", got)
+	}
+
+	body := stripAnsi(m.renderSpotSearchBody())
+	if !strings.Contains(body, "Selected Album") {
+		t.Fatalf("body = %q, want selected result", body)
+	}
+}
+
+func TestSpotSearchErrorFitsBodyBudget(t *testing.T) {
+	m := newLayoutTestModel(80, 24)
+	m.spotSearch = spotSearchState{
+		visible: true,
+		screen:  spotSearchResults,
+		results: []playlist.Track{albumResult("Album")},
+		err:     "Album cannot be added to a playlist",
+	}
+	m.recomputeLayout()
+
+	body := stripAnsi(m.renderSpotSearchBody())
+	if !strings.Contains(body, m.spotSearch.err) {
+		t.Fatalf("body = %q, want visible error", body)
+	}
+	if got, want := len(strings.Split(body, "\n")), m.effectivePlaylistVisible(); got != want {
+		t.Fatalf("body rows = %d, want %d", got, want)
+	}
+}
+
+func TestSpotSearchErrorKeepsCursorVisible(t *testing.T) {
+	m := newLayoutTestModel(80, 18)
+	m.spotSearch.visible = true
+	m.spotSearch.screen = spotSearchResults
+	m.recomputeLayout()
+	visible := m.effectivePlaylistVisible()
+	if visible < 3 {
+		t.Fatalf("body rows = %d, want at least 3", visible)
+	}
+	for i := range visible - 1 {
+		m.spotSearch.results = append(m.spotSearch.results, trackResult(fmt.Sprintf("Track %d", i)))
+	}
+	m.spotSearch.cursor = len(m.spotSearch.results) - 1
+
+	m.setSpotSearchError("Search failed")
+
+	resultRows := m.spotSearchResultsVisible()
+	if resultRows != visible-1 {
+		t.Fatalf("result rows = %d, want %d", resultRows, visible-1)
+	}
+	if rows := spotSearchRowsToCursor(m.spotSearch.results, m.spotSearch.scroll, m.spotSearch.cursor); rows > resultRows {
+		t.Fatalf("cursor sits %d rows below scroll %d, result window is %d", rows, m.spotSearch.scroll, resultRows)
+	}
+	selected := m.spotSearch.results[m.spotSearch.cursor].Title
+	if body := stripAnsi(m.renderSpotSearchBody()); !strings.Contains(body, selected) {
+		t.Fatalf("body = %q, want selected result %q", body, selected)
 	}
 }
 

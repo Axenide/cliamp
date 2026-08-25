@@ -174,7 +174,9 @@ const pageSize = 300
 func (c *Client) Albums(sectionKey string) ([]Album, error) {
 	type albumPage struct {
 		MediaContainer struct {
-			TotalSize int `json:"totalSize"`
+			// TotalSize is a pointer so a server that omits it is
+			// distinguishable from one that reports zero.
+			TotalSize *int `json:"totalSize"`
 			Metadata  []struct {
 				RatingKey   string `json:"ratingKey"`
 				Title       string `json:"title"`
@@ -186,7 +188,7 @@ func (c *Client) Albums(sectionKey string) ([]Album, error) {
 	}
 
 	var albums []Album
-	for offset := 0; ; offset += pageSize {
+	for offset := 0; ; {
 		params := url.Values{
 			"type":                   {"9"}, // 9 = album
 			"X-Plex-Container-Start": {fmt.Sprintf("%d", offset)},
@@ -205,8 +207,14 @@ func (c *Client) Albums(sectionKey string) ([]Album, error) {
 				TrackCount: m.LeafCount,
 			})
 		}
-		// Stop when we've fetched everything.
-		if offset+pageSize >= page.MediaContainer.TotalSize {
+		// Advance by what the server actually returned, not by what was
+		// asked for: Plex may answer with fewer items than pageSize.
+		count := len(page.MediaContainer.Metadata)
+		if count == 0 {
+			break
+		}
+		offset += count
+		if page.MediaContainer.TotalSize != nil && offset >= *page.MediaContainer.TotalSize {
 			break
 		}
 	}
@@ -261,13 +269,13 @@ const playlistPageSize = 1000
 func (c *Client) PlaylistTracks(playlistRatingKey string) ([]Track, error) {
 	type trackPage struct {
 		MediaContainer struct {
-			TotalSize int         `json:"totalSize"`
+			TotalSize *int        `json:"totalSize"`
 			Metadata  []trackJSON `json:"Metadata"`
 		} `json:"MediaContainer"`
 	}
 
 	var tracks []Track
-	for offset := 0; ; offset += playlistPageSize {
+	for offset := 0; ; {
 		params := url.Values{
 			"X-Plex-Container-Start": {fmt.Sprintf("%d", offset)},
 			"X-Plex-Container-Size":  {fmt.Sprintf("%d", playlistPageSize)},
@@ -279,7 +287,12 @@ func (c *Client) PlaylistTracks(playlistRatingKey string) ([]Track, error) {
 		for _, m := range page.MediaContainer.Metadata {
 			tracks = append(tracks, trackFromJSON(m))
 		}
-		if offset+playlistPageSize >= page.MediaContainer.TotalSize {
+		count := len(page.MediaContainer.Metadata)
+		if count == 0 {
+			break
+		}
+		offset += count
+		if page.MediaContainer.TotalSize != nil && offset >= *page.MediaContainer.TotalSize {
 			break
 		}
 	}
