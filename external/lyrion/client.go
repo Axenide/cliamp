@@ -56,12 +56,9 @@ var httpClient = &http.Client{Timeout: 30 * time.Second}
 
 // Album sort orders. The IDs are passed to LMS as its `sort:` parameter.
 const (
-	SortByName       = "album"
-	SortByNew        = "new"
-	SortByChanged    = "changed"
-	SortByLastPlayed = "lastplayed"
-	SortByPlayCount  = "playcount"
-	SortByRandom     = "random"
+	SortByName   = "album"
+	SortByNew    = "new"
+	SortByRandom = "random"
 )
 
 // Client talks to one Lyrion Music Server instance.
@@ -275,9 +272,6 @@ func (c *Client) AlbumSortTypes() []provider.SortType {
 	return []provider.SortType{
 		{ID: SortByName, Label: "By Name"},
 		{ID: SortByNew, Label: "Recently Added"},
-		{ID: SortByChanged, Label: "Recently Changed"},
-		{ID: SortByLastPlayed, Label: "Last Played"},
-		{ID: SortByPlayCount, Label: "Most Played"},
 		{ID: SortByRandom, Label: "Random"},
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -326,6 +327,17 @@ func TestAlbumSortTypesIncludeDefault(t *testing.T) {
 		}
 	}
 	t.Errorf("DefaultAlbumSort() = %q is not among AlbumSortTypes()", c.DefaultAlbumSort())
+}
+
+func TestAlbumSortTypesUseSupportedLMSValues(t *testing.T) {
+	got := New("http://nas:9000", "", "").AlbumSortTypes()
+	ids := make([]string, len(got))
+	for i, sortType := range got {
+		ids[i] = sortType.ID
+	}
+	if want := []string{SortByName, SortByNew, SortByRandom}; !slices.Equal(ids, want) {
+		t.Errorf("AlbumSortTypes() = %v, want %v", ids, want)
+	}
 }
 
 func TestAlbumTracksRequestsAlbumOrder(t *testing.T) {
