@@ -79,7 +79,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case seekTickMsg:
-		// Async seek completed.
+		// Async seek completed. A completion from a previous track says nothing
+		// about the current one, so it must not clear its state or report on it.
+		if msg.gen != m.seek.gen {
+			return m, nil
+		}
+		m.seek.inFlight = false
+		if m.seek.pending {
+			// Commit the newer target even when this seek failed: the failure
+			// belongs to a position the user has already moved on from.
+			if msg.resume {
+				// The chained seek carries no resume marker, so spend it here
+				// or a later restart seeks back to the resume position.
+				m.resume.path = ""
+				m.resume.secs = 0
+			}
+			// A newer target arrived while this seek was running; land on it
+			// rather than reporting this now-stale position as final.
+			return m, m.commitPendingSeek()
+		}
+		m.seek.pending = false
 		// Only clear seekActive if no new seek keypresses arrived during loading.
 		if m.seek.timer <= 0 {
 			m.seek.active = false
