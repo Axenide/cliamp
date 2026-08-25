@@ -14,27 +14,28 @@ import (
 )
 
 type playbackFakeEngine struct {
-	playing            bool
-	gaplessAdvanced    bool
-	drained            bool
-	paused             bool
-	ytdlSeek           bool
-	live               bool
-	seekable           bool
-	position           time.Duration
-	duration           time.Duration
-	lastPlayedDuration time.Duration
-	seekYTDLErr        error
-	playCalls          []string
-	seekCalls          []time.Duration
-	seekYTDLCalls      []time.Duration
-	playAtOffsets      []time.Duration
-	preloadCalls       []string
-	clearPreloadCalls  int
-	stopCalls          int
-	playGeneration     uint64
-	preloadGeneration  uint64
-	eqBands            [eqBandCount]float64
+	playing             bool
+	gaplessAdvanced     bool
+	drained             bool
+	paused              bool
+	ytdlSeek            bool
+	live                bool
+	seekable            bool
+	position            time.Duration
+	duration            time.Duration
+	lastPlayedDuration  time.Duration
+	seekYTDLErr         error
+	playCalls           []string
+	seekCalls           []time.Duration
+	seekYTDLCalls       []time.Duration
+	playAtOffsets       []time.Duration
+	preloadCalls        []string
+	clearPreloadCalls   int
+	cancelSeekYTDLCalls int
+	stopCalls           int
+	playGeneration      uint64
+	preloadGeneration   uint64
+	eqBands             [eqBandCount]float64
 }
 
 func (f *playbackFakeEngine) Play(path string, _ time.Duration) error {
@@ -102,7 +103,7 @@ func (f *playbackFakeEngine) SeekYTDL(d time.Duration) error {
 	f.seekYTDLCalls = append(f.seekYTDLCalls, d)
 	return f.seekYTDLErr
 }
-func (f *playbackFakeEngine) CancelSeekYTDL()    {}
+func (f *playbackFakeEngine) CancelSeekYTDL()    { f.cancelSeekYTDLCalls++ }
 func (f *playbackFakeEngine) IsPlaying() bool    { return f.playing }
 func (f *playbackFakeEngine) IsPaused() bool     { return f.paused }
 func (f *playbackFakeEngine) Drained() bool      { return f.drained }
@@ -703,6 +704,15 @@ func TestBeginPlaybackTrackFetchesEmbeddedLyricsWithoutNetworkMetadata(t *testin
 	}
 	if len(msg.lines) != 2 || msg.lines[0].Text != "Line one" || msg.lines[1].Text != "Line two" {
 		t.Fatalf("lyrics lines = %+v, want embedded plain text", msg.lines)
+	}
+}
+
+func TestBeginPlaybackTrackCancelsPendingYTDLSeek(t *testing.T) {
+	player := &playbackFakeEngine{}
+	m := Model{player: player, playlist: playlist.New()}
+	m.beginPlaybackTrack(playlist.Track{Path: "https://example.com/track", Stream: true})
+	if player.cancelSeekYTDLCalls != 1 {
+		t.Fatalf("CancelSeekYTDL calls = %d, want 1", player.cancelSeekYTDLCalls)
 	}
 }
 

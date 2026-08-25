@@ -458,6 +458,7 @@ func (m *Model) backfillLoadedPlaylistDuration(track playlist.Track) {
 func (m *Model) beginPlaybackTrack(track playlist.Track) (playlist.Track, tea.Cmd) {
 	nextRequest(&m.requests.stream)
 	if m.player != nil {
+		m.player.CancelSeekYTDL()
 		m.player.SetPlaybackGeneration(m.requests.stream)
 		m.player.ClearPreload()
 	}
