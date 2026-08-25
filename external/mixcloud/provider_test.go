@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -99,6 +100,40 @@ func TestBrowseEntriesExposeShowsCreatorsAndGenres(t *testing.T) {
 	publicEntries := NewFromConfig(Config{Enabled: true}).BrowseEntries()
 	if len(publicEntries) != 3 || publicEntries[0].ID != browseCreatorsID || !publicEntries[0].OpenInPlaylist {
 		t.Fatalf("public browse capabilities = %+v, want config-independent creator behavior", publicEntries)
+	}
+}
+
+func TestAlbumListFillsShortAPIPage(t *testing.T) {
+	var offsets []int
+	p, server := providerWithServer(t, Config{Enabled: true}, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/discover/all/latest/" {
+			t.Errorf("path = %q", r.URL.Path)
+		}
+		offset, err := strconv.Atoi(r.URL.Query().Get("offset"))
+		if err != nil {
+			t.Fatalf("invalid offset: %v", err)
+		}
+		offsets = append(offsets, offset)
+		page := apiPage[apiCloudcast]{Data: make([]apiCloudcast, 50)}
+		for i := range page.Data {
+			page.Data[i] = apiCloudcast{Key: "/creator/show-" + strconv.Itoa(offset+i) + "/"}
+		}
+		if offset == 0 {
+			page.Paging.Next = "next"
+		}
+		writeJSON(t, w, page)
+	})
+	defer server.Close()
+
+	albums, err := p.AlbumList("latest", 0, 100)
+	if err != nil {
+		t.Fatalf("AlbumList: %v", err)
+	}
+	if len(albums) != 100 {
+		t.Fatalf("albums = %d, want 100", len(albums))
+	}
+	if want := []int{0, 50}; !slices.Equal(offsets, want) {
+		t.Fatalf("offsets = %v, want %v", offsets, want)
 	}
 }
 

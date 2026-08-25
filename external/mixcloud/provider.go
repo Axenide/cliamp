@@ -358,9 +358,21 @@ func (p *Provider) AlbumList(sortType string, offset, size int) ([]provider.Albu
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	shows, _, err := p.client.cloudcastPage(ctx, apiPath, offset, size)
-	if err != nil {
-		return nil, fmt.Errorf("mixcloud: list shows: %w", err)
+	shows := make([]apiCloudcast, 0, size)
+	for pageOffset := max(offset, 0); len(shows) < size; {
+		pageSize := min(size-len(shows), maxAPIPageSize)
+		page, hasNext, err := p.client.cloudcastPage(ctx, apiPath, pageOffset, pageSize)
+		if err != nil {
+			return nil, fmt.Errorf("mixcloud: list shows: %w", err)
+		}
+		shows = append(shows, page...)
+		if len(shows) > size {
+			shows = shows[:size]
+		}
+		if !hasNext || len(page) == 0 {
+			break
+		}
+		pageOffset += len(page)
 	}
 	return albumsFromCloudcasts(shows), nil
 }
