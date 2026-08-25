@@ -174,30 +174,41 @@ func TestListPluginsShowsInstalled(t *testing.T) {
 	}
 }
 
-func TestTrustSingleFilePlugin(t *testing.T) {
-	home := withTempHome(t)
-	pluginDir := filepath.Join(home, ".config", "cliamp", "plugins")
-	if err := os.MkdirAll(pluginDir, 0o755); err != nil {
-		t.Fatalf("MkdirAll: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(pluginDir, "hello.lua"), []byte(`plugin.register({ name = "hello", version = "1.0", type = "hook" })`), 0o644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
+func TestTrustUsesPluginEntryName(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		path string
+	}{
+		{name: "single file", path: "hello.lua"},
+		{name: "directory", path: "hello/init.lua"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			home := withTempHome(t)
+			pluginDir := filepath.Join(home, ".config", "cliamp", "plugins")
+			path := filepath.Join(pluginDir, tt.path)
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatalf("MkdirAll: %v", err)
+			}
+			if err := os.WriteFile(path, []byte(`plugin.register({ name = "registered", version = "1.0", type = "hook" })`), 0o644); err != nil {
+				t.Fatalf("WriteFile: %v", err)
+			}
 
-	var out bytes.Buffer
-	oldOutput := output
-	output = &out
-	t.Cleanup(func() { output = oldOutput })
+			var out bytes.Buffer
+			oldOutput := output
+			output = &out
+			t.Cleanup(func() { output = oldOutput })
 
-	if err := Trust("hello", true); err != nil {
-		t.Fatalf("Trust: %v", err)
-	}
-	out.Reset()
-	if err := List(); err != nil {
-		t.Fatalf("List: %v", err)
-	}
-	if strings.Contains(out.String(), "untrusted") || !strings.Contains(out.String(), "trusted") {
-		t.Errorf("List output = %q, want trusted", out.String())
+			if err := Trust("hello", true); err != nil {
+				t.Fatalf("Trust: %v", err)
+			}
+			out.Reset()
+			if err := List(); err != nil {
+				t.Fatalf("List: %v", err)
+			}
+			if strings.Contains(out.String(), "untrusted") || !strings.Contains(out.String(), "trusted") {
+				t.Errorf("List output = %q, want trusted", out.String())
+			}
+		})
 	}
 }
 
