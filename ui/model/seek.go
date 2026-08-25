@@ -13,8 +13,12 @@ import (
 // before actually executing the yt-dlp seek (restart).
 const seekDebounceTicks = 8 // ~800ms at 100ms tick interval
 
-// seekTickMsg fires when the async seek completes.
-type seekTickMsg struct{}
+// seekTickMsg fires when an async seek completes.
+type seekTickMsg struct {
+	err    error
+	resume bool
+	target time.Duration
+}
 
 type ytdlUnpauseReconnectMsg struct{ err error }
 
@@ -27,16 +31,16 @@ func (m *Model) doSeek(d time.Duration) tea.Cmd {
 func (m *Model) streamSeekRelative(delta time.Duration) tea.Cmd {
 	p := m.player
 	return func() tea.Msg {
-		p.Seek(delta)
-		return seekTickMsg{}
+		err := p.Seek(delta)
+		return seekTickMsg{err: err}
 	}
 }
 
 func (m *Model) streamSeekAbsolute(target time.Duration) tea.Cmd {
 	p := m.player
 	return func() tea.Msg {
-		p.Seek(target - p.Position())
-		return seekTickMsg{}
+		err := p.Seek(target - p.Position())
+		return seekTickMsg{err: err, target: target}
 	}
 }
 
@@ -110,19 +114,24 @@ func (m *Model) finishSeek() {
 }
 
 func (m *Model) commitPendingSeek() tea.Cmd {
-	target := m.seek.targetPos
+	return m.seekCmd(m.seek.targetPos, false)
+}
+
+// seekCmd performs the decoder-restarting seek to target asynchronously.
+func (m *Model) seekCmd(target time.Duration, resume bool) tea.Cmd {
 	curPos := m.player.Position()
 	d := target - curPos
 
 	p := m.player
 	ytdl := p.IsYTDLSeek()
 	return func() tea.Msg {
+		var err error
 		if ytdl {
-			p.SeekYTDL(d)
+			err = p.SeekYTDL(d)
 		} else {
-			p.Seek(d)
+			err = p.Seek(d)
 		}
-		return seekTickMsg{}
+		return seekTickMsg{err: err, resume: resume, target: target}
 	}
 }
 

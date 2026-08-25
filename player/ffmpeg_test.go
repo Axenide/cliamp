@@ -293,6 +293,15 @@ func TestFFmpegPipeLiveEOF(t *testing.T) {
 	}
 }
 
+func TestKnownDurationMakesHTTPFFmpegFinite(t *testing.T) {
+	decoder := &ffmpegPipeStreamer{ffmpegPipe: ffmpegPipe{live: true}}
+	tp := &trackPipeline{decoder: decoder}
+	tp.setKnownDuration(time.Minute)
+	if decoder.live {
+		t.Fatal("ffmpeg decoder remains live after a finite duration was supplied")
+	}
+}
+
 func TestBuildPipelineNativeFallbackStreamsFFmpeg(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("uses POSIX shell fixtures")

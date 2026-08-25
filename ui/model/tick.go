@@ -25,7 +25,7 @@ func tickCmdAt(d time.Duration) tea.Cmd {
 }
 
 func (m Model) visualizerVisible() bool {
-	if m.vis == nil || m.vis.Mode == ui.VisNone || m.vis.Rows <= 0 || m.vis.Cols <= 0 || m.layout.tooSmall() {
+	if m.simplified || m.vis == nil || m.vis.Mode == ui.VisNone || m.vis.Rows <= 0 || m.vis.Cols <= 0 || m.layout.tooSmall() {
 		return false
 	}
 	if m.fullVis {
@@ -107,7 +107,11 @@ func (m *Model) visualizerTickContext(now time.Time) ui.VisTickContext {
 			}
 			buf := m.vis.EnsureSampleBuf(spec.FFTSize)
 			if !sampled || spec.FFTSize > sampledSize {
-				samplesRead = m.player.SamplesInto(buf)
+				if spec.BandCount == 0 {
+					samplesRead = m.player.WaveformSamplesInto(buf)
+				} else {
+					samplesRead = m.player.SamplesInto(buf)
+				}
 				if m.visVolumeLinked {
 					gain := math.Pow(10, m.player.Volume()/20)
 					for i := range samplesRead {
@@ -181,12 +185,18 @@ func (m *Model) tickInterval() time.Duration {
 		if m.lowPower {
 			return ui.TickLowPowerPlaying
 		}
+		if m.visualizerVisible() && (m.visualizer60FPS || m.vis.UsesRawSamples()) {
+			return ui.TickAnim
+		}
 		return ui.TickFast
 	}
 	// Paused visualizer content still easing to rest: run at the fast cadence
 	// so the bars fall smoothly instead of in ~5 fps steps, then drop to idle
 	// once the content has settled.
 	if m.visualizerSettlingPaused() {
+		if m.visualizer60FPS {
+			return ui.TickAnim
+		}
 		return ui.TickFast
 	}
 	return max(d, ui.TickFast)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/bjarneo/cliamp/playlist"
 	"github.com/bjarneo/cliamp/provider"
@@ -29,27 +30,29 @@ const (
 )
 
 type cookieBase struct {
-	browser    string
-	fetchFn    func(browser string) ([]playlist.PlaylistInfo, error)
-	mu         sync.Mutex
-	playlists  []playlist.PlaylistInfo
-	trackCache map[string][]playlist.Track
-	disk       *ytCache
+	browser     string
+	fetchFn     func(browser string) ([]playlist.PlaylistInfo, error)
+	resolveFn   func(ctx context.Context, pageURL string, start, count int, browser ...string) ([]playlist.Track, int, error)
+	mu          sync.Mutex
+	playlists   []playlist.PlaylistInfo
+	trackCache  map[string][]playlist.Track
+	generation  uint64
+	nextLoad    uint64
+	loadCancels map[uint64]context.CancelFunc
 }
+
+const (
+	cookiePlaylistBatchSize   = 100
+	cookiePlaylistLoadTimeout = 5 * time.Minute
+)
 
 func newCookieBase(browser string) *cookieBase {
 	return &cookieBase{
-		browser:    browser,
-		fetchFn:    resolve.FetchUserPlaylists,
-		trackCache: make(map[string][]playlist.Track),
+		browser:     browser,
+		fetchFn:     resolve.FetchUserPlaylists,
+		trackCache:  make(map[string][]playlist.Track),
+		loadCancels: make(map[uint64]context.CancelFunc),
 	}
-}
-
-func (b *cookieBase) ensureDiskCache() *ytCache {
-	if b.disk == nil {
-		b.disk = loadYTCache()
-	}
-	return b.disk
 }
 
 func (b *cookieBase) fetchPlaylists() ([]playlist.PlaylistInfo, error) {
@@ -59,22 +62,8 @@ func (b *cookieBase) fetchPlaylists() ([]playlist.PlaylistInfo, error) {
 		b.mu.Unlock()
 		return res, nil
 	}
+	generation := b.generation
 
-	// Try disk cache first
-	dc := b.ensureDiskCache()
-	if dc.playlistsFresh() {
-		var pls []playlist.PlaylistInfo
-		for _, p := range dc.Playlists {
-			pls = append(pls, playlist.PlaylistInfo{
-				ID:         p.ID,
-				Name:       p.Name,
-				TrackCount: p.TrackCount,
-			})
-		}
-		b.playlists = pls
-		b.mu.Unlock()
-		return pls, nil
-	}
 	b.mu.Unlock()
 
 	fn := b.fetchFn
@@ -90,21 +79,10 @@ func (b *cookieBase) fetchPlaylists() ([]playlist.PlaylistInfo, error) {
 	}
 
 	b.mu.Lock()
-	b.playlists = pls
-	dc = b.ensureDiskCache()
-	var entries []playlistEntry
-	for _, p := range pls {
-		entries = append(entries, playlistEntry{
-			ID:         p.ID,
-			Name:       p.Name,
-			TrackCount: p.TrackCount,
-		})
+	if b.generation == generation {
+		b.playlists = pls
 	}
-	dc.setPlaylists(entries)
-	snap := dc.snapshot()
 	b.mu.Unlock()
-
-	saveSnapshot(snap)
 	return pls, nil
 }
 
@@ -114,41 +92,68 @@ func (b *cookieBase) fetchTracks(target string) ([]playlist.Track, error) {
 		b.mu.Unlock()
 		return cached, nil
 	}
+	generation := b.generation
 
-	dc := b.ensureDiskCache()
-	if tracks, ok := dc.tracksFresh(target); ok {
-		b.trackCache[target] = tracks
-		b.mu.Unlock()
-		return tracks, nil
+	ctx, cancel := context.WithTimeout(context.Background(), cookiePlaylistLoadTimeout)
+	b.nextLoad++
+	loadID := b.nextLoad
+	if b.loadCancels == nil {
+		b.loadCancels = make(map[uint64]context.CancelFunc)
 	}
+	b.loadCancels[loadID] = cancel
 	b.mu.Unlock()
+	defer func() {
+		b.mu.Lock()
+		delete(b.loadCancels, loadID)
+		b.mu.Unlock()
+		cancel()
+	}()
 
-	tracks, err := resolve.ResolveYTDLBatch(target, 0, 0, b.browser)
-	if err != nil {
-		return nil, fmt.Errorf("ytmusic: resolve playlist tracks: %w", err)
+	resolveBatch := b.resolveFn
+	if resolveBatch == nil {
+		resolveBatch = resolve.ResolveYTDLBatchPageContext
+	}
+	var tracks []playlist.Track
+	for start := 0; ; {
+		batch, entries, err := resolveBatch(ctx, target, start, cookiePlaylistBatchSize, b.browser)
+		if err != nil {
+			return nil, fmt.Errorf("ytmusic: resolve playlist tracks: %w", err)
+		}
+		tracks = append(tracks, batch...)
+		if entries < cookiePlaylistBatchSize {
+			break
+		}
+		start += cookiePlaylistBatchSize
 	}
 
 	b.mu.Lock()
-	b.trackCache[target] = tracks
-	dc = b.ensureDiskCache()
-	dc.setTracks(target, tracks)
-	snap := dc.snapshot()
+	if b.generation == generation {
+		b.trackCache[target] = tracks
+	}
 	b.mu.Unlock()
-
-	saveSnapshot(snap)
 	return tracks, nil
 }
 
 func (b *cookieBase) refresh() {
 	b.mu.Lock()
+	b.generation++
+	for _, cancel := range b.loadCancels {
+		cancel()
+	}
+	clear(b.loadCancels)
 	b.playlists = nil
 	clear(b.trackCache)
-	dc := b.ensureDiskCache()
-	dc.clear()
-	snap := dc.snapshot()
 	b.mu.Unlock()
+}
 
-	saveSnapshot(snap)
+func (b *cookieBase) close() {
+	b.mu.Lock()
+	b.generation++
+	for _, cancel := range b.loadCancels {
+		cancel()
+	}
+	clear(b.loadCancels)
+	b.mu.Unlock()
 }
 
 // CookieProvider provides YouTube and YouTube Music playlist access using
@@ -283,7 +288,7 @@ func (p *CookieProvider) Tracks(playlistID string) ([]playlist.Track, error) {
 }
 
 // SearchTracks performs a search query using yt-dlp's ytsearch: protocol.
-func (p *CookieProvider) SearchTracks(_ context.Context, query string, limit int) ([]playlist.Track, error) {
+func (p *CookieProvider) SearchTracks(ctx context.Context, query string, limit int) ([]playlist.Track, error) {
 	q := strings.TrimSpace(query)
 	if q == "" {
 		return nil, nil
@@ -291,7 +296,7 @@ func (p *CookieProvider) SearchTracks(_ context.Context, query string, limit int
 	if limit <= 0 {
 		limit = 10
 	}
-	tracks, err := resolve.ResolveYTDLBatch(fmt.Sprintf("ytsearch%d:%s", limit, q), 0, 0, p.base.browser)
+	tracks, err := resolve.ResolveYTDLBatchContext(ctx, fmt.Sprintf("ytsearch%d:%s", limit, q), 0, 0, p.base.browser)
 	if err != nil {
 		return nil, fmt.Errorf("ytmusic: search tracks: %w", err)
 	}
@@ -304,4 +309,4 @@ func (p *CookieProvider) Refresh() {
 }
 
 // Close releases any held resources.
-func (p *CookieProvider) Close() {}
+func (p *CookieProvider) Close() { p.base.close() }

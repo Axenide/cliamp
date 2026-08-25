@@ -1,6 +1,6 @@
 [![Docs on contextowl.co](https://contextowl.co/uploads/_brand/badge-docs.svg)](https://contextowl.co)
 
-A retro terminal music player inspired by Winamp. Play local files, streams, podcasts, YouTube, YouTube Music, SoundCloud, Bilibili, Spotify, NetEase Cloud Music, Xiaoyuzhou (小宇宙), Navidrome, Plex, Jellyfin, and Audiobookshelf with a spectrum visualizer, parametric EQ, and playlist management.
+A retro terminal music player inspired by Winamp. Play local files, streams, podcasts, YouTube, YouTube Music, SoundCloud, Mixcloud, Bilibili, Spotify, NetEase Cloud Music, Xiaoyuzhou (小宇宙), Navidrome, Lyrion, Plex, Jellyfin, and Audiobookshelf with a spectrum visualizer, parametric EQ, and playlist management.
 
 **[cliamp.stream](https://cliamp.stream)** · **[docs](https://whiterose.org.contextowl.co/docs/cliamp)**
 
@@ -33,6 +33,23 @@ The formula pulls in all required runtime libraries automatically.
 yay -S cliamp
 ```
 
+**Nix**
+
+```sh
+nix run github:bjarneo/cliamp
+```
+
+For a declarative NixOS configuration, add `github:bjarneo/cliamp` as a flake
+input and install its default package:
+
+```nix
+inputs.cliamp.url = "github:bjarneo/cliamp";
+
+environment.systemPackages = [
+  inputs.cliamp.packages.${pkgs.stdenv.hostPlatform.system}.default
+];
+```
+
 **Go**
 
 ```sh
@@ -45,28 +62,29 @@ Linux builds need ALSA development headers installed first. See [Building from s
 
 Download from [GitHub Releases](https://github.com/bjarneo/cliamp/releases/latest).
 
-> **macOS:** the pre-built binaries dynamically link against FLAC, Vorbis, and Ogg
+> **macOS:** the pre-built binaries dynamically link against FLAC, Vorbis, Ogg, and mpg123
 > from Homebrew. If you download directly from Releases (or use the `install.sh`
 > script) you must install them first, otherwise you will see errors like
 > `Library not loaded: /opt/homebrew/opt/libvorbis/lib/libvorbisenc.2.dylib`:
 >
 > ```sh
-> brew install flac libvorbis libogg
+> brew install flac libvorbis libogg mpg123
 > ```
 >
 > Installing via `brew install bjarneo/cliamp/cliamp` does this for you.
 >
-> **Linux:** the pre-built binaries statically link FLAC, Vorbis, and Ogg, so no
+> **Linux:** the pre-built binaries statically link FLAC, Vorbis, Ogg, and mpg123, so no
 > extra codec packages are required. You may still need an ALSA bridge for your
 > sound server — see [Troubleshooting](#troubleshooting).
 >
-> **Windows:** download `cliamp-windows-amd64.exe` from Releases. If `HOME` is not
-> set, cliamp stores its config under `%APPDATA%\cliamp`.
+> **Windows:** download and extract `cliamp-windows-amd64.zip` from Releases. It
+> includes the codec DLLs required by Spotify. If `HOME` is not set, cliamp stores
+> its config under `%APPDATA%\cliamp`.
 
 **Optional runtime dependencies** (all platforms, all install methods):
 
 - [ffmpeg](https://ffmpeg.org/) — for AAC, ALAC, Opus, and WMA playback
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — for YouTube, YouTube Music, SoundCloud, Bandcamp, Bilibili, and NetEase Cloud Music
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — for YouTube, YouTube Music, SoundCloud, Mixcloud, Bandcamp, Bilibili, and NetEase Cloud Music
 
 On macOS: `brew install ffmpeg yt-dlp`. On Linux, use your distribution's package manager.
 
@@ -88,13 +106,17 @@ cliamp https://example.com/stream  # play a URL
 
 Press `Ctrl+K` to see all keybindings.
 
-**Configure remote providers** (Navidrome, Plex, Jellyfin, Audiobookshelf, Spotify, YouTube Music, NetEase Cloud Music) with the interactive wizard:
+**Configure remote providers** (Navidrome, Lyrion, Plex, Jellyfin, Audiobookshelf, Spotify, Mixcloud, YouTube Music, NetEase Cloud Music) with the interactive wizard:
 
 ```sh
 cliamp setup
 ```
 
-It walks you through each provider, validates the connection, and writes the right block to your config file (`~/.config/cliamp/config.toml`, or `%APPDATA%\cliamp\config.toml` on Windows when `HOME` is unset). See [docs/cli.md](docs/cli.md#setup-wizard) for details.
+It walks you through each provider and writes the right block to your config file (`~/.config/cliamp/config.toml`, or `%APPDATA%\cliamp\config.toml` on Windows when `HOME` is unset). Supported server connections are validated during setup; Mixcloud's optional browser-session or OAuth credentials are checked later, when used. See [docs/cli.md](docs/cli.md#setup-wizard) for details.
+
+The [Mixcloud provider guide](docs/mixcloud.md) covers its complete discovery,
+account, creator/show, genre search and local genre-favorite features, along
+with authentication, signed-in playback, resume/seeking and limitations.
 
 ## Radio
 
@@ -114,22 +136,22 @@ Want to host your own radio? Check out [cliamp-server](https://github.com/bjarne
 **Linux (Debian/Ubuntu):**
 
 ```sh
-sudo apt install libasound2-dev
+sudo apt install libasound2-dev libflac-dev libvorbis-dev libogg-dev libmpg123-dev
 ```
 
 **Linux (Fedora):**
 
 ```sh
-sudo dnf install alsa-lib-devel libvorbis-devel flac-devel
+sudo dnf install alsa-lib-devel flac-devel libvorbis-devel libogg-devel mpg123-devel
 ```
 
 **Linux (Arch):**
 
 ```sh
-sudo pacman -S alsa-lib
+sudo pacman -S alsa-lib flac libvorbis libogg mpg123
 ```
 
-**macOS:** No extra dependencies — CoreAudio is used.
+**macOS:** `brew install flac libvorbis libogg mpg123 pkg-config`
 
 **Windows:** No extra SDKs required for the core player — it uses pure-Go audio decoding. `ffmpeg.exe` and `yt-dlp.exe` remain optional runtime dependencies for the same formats/providers as on other platforms.
 
@@ -150,7 +172,7 @@ Spotify support uses `go-librespot`, which needs CGO and a MinGW toolchain:
    ```sh
    CGO_LDFLAGS="-Wl,-Bstatic -logg -Wl,-Bdynamic" CGO_ENABLED=1 go build -o cliamp.exe .
    ```
-4. `cliamp.exe` dynamically links `libvorbis`, `libvorbisenc`, `libvorbisfile`, `libFLAC`, and `libmpg123` from MSYS2. Either keep `C:\msys64\mingw64\bin` on `PATH` at runtime, or copy `libvorbis-0.dll`, `libvorbisenc-2.dll`, `libvorbisfile-3.dll`, `libFLAC.dll`, and `libmpg123-0.dll` next to `cliamp.exe`.
+4. `cliamp.exe` dynamically links codec and MinGW runtime DLLs. Either keep `C:\msys64\mingw64\bin` on `PATH` at runtime, or copy every `/mingw64/bin/*.dll` shown by `ldd cliamp.exe` next to `cliamp.exe`.
 
 **Clone and build:**
 
@@ -167,7 +189,7 @@ Or without Make: `go build -o cliamp .`
 **Optional runtime dependencies:**
 
 - [ffmpeg](https://ffmpeg.org/) — for AAC, ALAC, Opus, and WMA playback
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — for YouTube, SoundCloud, Bandcamp, Bilibili, and NetEase Cloud Music
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — for YouTube, SoundCloud, Mixcloud, Bandcamp, Bilibili, and NetEase Cloud Music
 
 ## Docs
 
