@@ -27,6 +27,34 @@ func liveClient(t *testing.T) *Client {
 	return New(base, os.Getenv("CLIAMP_LYRION_LIVE_USER"), os.Getenv("CLIAMP_LYRION_LIVE_PASS"))
 }
 
+func livePlayableTrack(t *testing.T, c *Client) playlist.Track {
+	t.Helper()
+
+	const probePage = 25
+	for offset := 0; ; offset += probePage {
+		albums, err := c.AlbumList("", offset, probePage)
+		if err != nil {
+			t.Fatalf("AlbumList(offset=%d) for probe: %v", offset, err)
+		}
+		if len(albums) == 0 {
+			break
+		}
+		for _, album := range albums {
+			tracks, err := c.AlbumTracks(album.ID)
+			if err != nil {
+				t.Fatalf("AlbumTracks(%s): %v", album.ID, err)
+			}
+			for _, track := range tracks {
+				if !track.Unplayable {
+					return track
+				}
+			}
+		}
+	}
+	t.Fatal("no album in the catalogue had a playable track")
+	return playlist.Track{}
+}
+
 func TestLiveBrowse(t *testing.T) {
 	c := liveClient(t)
 
@@ -73,36 +101,9 @@ func TestLiveBrowse(t *testing.T) {
 		t.Fatalf("ArtistAlbums: %v", err)
 	}
 
-	// An album made entirely of plugin-contributed tracks is filtered to empty
-	// by default, and those can cluster together in sort order, so page through
-	// the catalogue rather than giving up after the first page.
-	const probePage = 25
-	var tracks []playlist.Track
-	for offset := 0; len(tracks) == 0; offset += probePage {
-		page, err := c.AlbumList("", offset, probePage)
-		if err != nil {
-			t.Fatalf("AlbumList(offset=%d) for probe: %v", offset, err)
-		}
-		if len(page) == 0 {
-			break // catalogue exhausted
-		}
-		for _, a := range page {
-			got, err := c.AlbumTracks(a.ID)
-			if err != nil {
-				t.Fatalf("AlbumTracks(%s): %v", a.ID, err)
-			}
-			if len(got) > 0 {
-				tracks = got
-				break
-			}
-		}
-	}
-	if len(tracks) == 0 {
-		t.Fatal("no album in the catalogue had a playable track")
-	}
 	// Every tag letter must survive the round trip; LMS silently omits fields
 	// for tags it was not asked for, so a wrong tag set shows up as blanks.
-	tr := tracks[0]
+	tr := livePlayableTrack(t, c)
 	if tr.Title == "" {
 		t.Error("track missing title")
 	}
@@ -127,12 +128,13 @@ func TestLiveBrowse(t *testing.T) {
 func TestLiveSearch(t *testing.T) {
 	c := liveClient(t)
 
-	found, err := c.SearchTracks(context.Background(), "the", 5)
+	track := livePlayableTrack(t, c)
+	found, err := c.SearchTracks(context.Background(), track.Title, 5)
 	if err != nil {
 		t.Fatalf("SearchTracks: %v", err)
 	}
 	if len(found) == 0 {
-		t.Fatal(`no results for "the" in a live library`)
+		t.Fatalf("no results for known track title %q in a live library", track.Title)
 	}
 	if len(found) > 5 {
 		t.Errorf("got %d results, want the limit of 5 respected", len(found))
@@ -152,20 +154,7 @@ func TestLiveSearch(t *testing.T) {
 func TestLiveStream(t *testing.T) {
 	c := liveClient(t)
 
-	found, err := c.SearchTracks(context.Background(), "the", 50)
-	if err != nil {
-		t.Fatalf("SearchTracks: %v", err)
-	}
-	var uri string
-	for _, tr := range found {
-		if !tr.Unplayable {
-			uri = tr.Path
-			break
-		}
-	}
-	if uri == "" {
-		t.Skip("no file-backed track found to stream")
-	}
+	uri := livePlayableTrack(t, c).Path
 
 	// Track paths are credential-free URIs; the player resolves them at play
 	// time, so the test has to do the same.
