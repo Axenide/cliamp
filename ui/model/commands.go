@@ -161,6 +161,13 @@ type navTracksLoadedMsg struct {
 	err    error
 }
 
+// navGenresLoadedMsg carries the category list from a provider genre browser.
+type navGenresLoadedMsg struct {
+	genres []provider.GenreInfo
+	gen    uint64
+	err    error
+}
+
 // provAuthDoneMsg signals that interactive provider authentication completed.
 type provAuthDoneMsg struct {
 	providerName string
@@ -274,35 +281,35 @@ func fetchNetSearchCmd(query string, gen uint64) tea.Cmd {
 	}
 }
 
-func playStreamCmd(p player.Engine, path string, knownDuration time.Duration, gen uint64) tea.Cmd {
+func playStreamCmd(p player.Engine, path string, knownDuration time.Duration, startAt func() time.Duration, gen uint64) tea.Cmd {
 	return func() tea.Msg {
-		return streamPlayedMsg{path: path, gen: gen, err: p.Play(path, knownDuration)}
+		return streamPlayedMsg{path: path, gen: gen, err: p.PlayAtForGeneration(path, knownDuration, startAt(), gen)}
 	}
 }
 
-func preloadStreamCmd(p player.Engine, path string, knownDuration time.Duration, gen uint64) tea.Cmd {
+func preloadStreamCmd(p player.Engine, path string, knownDuration time.Duration, gen, preloadGen uint64) tea.Cmd {
 	return func() tea.Msg {
-		p.Preload(path, knownDuration) // errors silently ignored
+		p.PreloadForGeneration(path, knownDuration, preloadGen) // errors silently ignored
 		return streamPreloadedMsg{path: path, gen: gen}
 	}
 }
 
-func preloadLocalCmd(p player.Engine, path string, knownDuration time.Duration, gen uint64) tea.Cmd {
+func preloadLocalCmd(p player.Engine, path string, knownDuration time.Duration, gen, preloadGen uint64) tea.Cmd {
 	return func() tea.Msg {
-		p.Preload(path, knownDuration)
+		p.PreloadForGeneration(path, knownDuration, preloadGen)
 		return streamPreloadedMsg{path: path, gen: gen}
 	}
 }
 
 func playYTDLStreamCmd(p player.Engine, pageURL string, knownDuration time.Duration, gen uint64) tea.Cmd {
 	return func() tea.Msg {
-		return streamPlayedMsg{path: pageURL, gen: gen, err: p.PlayYTDL(pageURL, knownDuration)}
+		return streamPlayedMsg{path: pageURL, gen: gen, err: p.PlayYTDLForGeneration(pageURL, knownDuration, gen)}
 	}
 }
 
-func preloadYTDLStreamCmd(p player.Engine, pageURL string, knownDuration time.Duration, gen uint64) tea.Cmd {
+func preloadYTDLStreamCmd(p player.Engine, pageURL string, knownDuration time.Duration, gen, preloadGen uint64) tea.Cmd {
 	return func() tea.Msg {
-		p.PreloadYTDL(pageURL, knownDuration) // errors silently ignored
+		p.PreloadYTDLForGeneration(pageURL, knownDuration, preloadGen) // errors silently ignored
 		return streamPreloadedMsg{path: pageURL, gen: gen}
 	}
 }
@@ -394,10 +401,50 @@ func fetchNavAlbumListCmd(b provider.AlbumBrowser, sortType string, offset int, 
 	}
 }
 
+func fetchNavRemainingAlbumsCmd(b provider.AlbumBrowser, sortType string, offset int, gen uint64) tea.Cmd {
+	return func() tea.Msg {
+		start := offset
+		var albums []provider.AlbumInfo
+		for {
+			page, err := b.AlbumList(sortType, offset+len(albums), navAlbumPageSize)
+			if err != nil {
+				return navAlbumsLoadedMsg{offset: start, gen: gen, err: err}
+			}
+			albums = append(albums, page...)
+			if len(page) < navAlbumPageSize {
+				return navAlbumsLoadedMsg{albums: albums, offset: start, isLast: true, gen: gen}
+			}
+		}
+	}
+}
+
 func fetchNavAlbumTracksCmd(l provider.AlbumTrackLoader, albumID string, gen uint64) tea.Cmd {
 	return func() tea.Msg {
 		tracks, err := l.AlbumTracks(albumID)
 		return navTracksLoadedMsg{tracks: tracks, gen: gen, err: err}
+	}
+}
+
+func fetchNavGenresCmd(b provider.GenreBrowser, gen uint64) tea.Cmd {
+	return func() tea.Msg {
+		genres, err := b.Genres()
+		return navGenresLoadedMsg{genres: genres, gen: gen, err: err}
+	}
+}
+
+func fetchNavGenreTracksCmd(b provider.GenreBrowser, genreID, sortType string, gen uint64) tea.Cmd {
+	return func() tea.Msg {
+		tracks, err := b.GenreTracks(genreID, sortType)
+		return navTracksLoadedMsg{tracks: tracks, gen: gen, err: err}
+	}
+}
+
+func fetchNavGenreSearchCmd(s provider.GenreSearcher, query string, gen uint64) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		genres, err := s.SearchGenres(ctx, query, 100)
+		return navGenresLoadedMsg{genres: genres, gen: gen, err: err}
 	}
 }
 

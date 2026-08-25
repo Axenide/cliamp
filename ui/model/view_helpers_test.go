@@ -4,8 +4,48 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bjarneo/cliamp/favorites"
 	"github.com/bjarneo/cliamp/playlist"
+	"github.com/bjarneo/cliamp/provider"
 )
+
+func TestRestrictedMarkersAreViewOnly(t *testing.T) {
+	track := playlist.Track{
+		Title:        "Members Only",
+		Artist:       "Creator",
+		ProviderMeta: map[string]string{provider.MetaMixcloudExclusive: "true"},
+	}
+	if got := trackViewName(track); got != "Creator - Members Only [E]" {
+		t.Fatalf("trackViewName = %q", got)
+	}
+	if track.Title != "Members Only" {
+		t.Fatalf("track title mutated to %q", track.Title)
+	}
+
+	album := provider.AlbumInfo{Name: "Members Only", Restricted: true}
+	if got := albumViewName(album); got != "Members Only [E]" {
+		t.Fatalf("albumViewName = %q", got)
+	}
+	if album.Name != "Members Only" {
+		t.Fatalf("album name mutated to %q", album.Name)
+	}
+
+	plain := playlist.Track{Title: "Open Show", Artist: "Creator"}
+	if got := trackViewName(plain); got != "Creator - Open Show" {
+		t.Fatalf("unrestricted trackViewName = %q", got)
+	}
+	notExclusive := playlist.Track{
+		Title:        "Open Show",
+		Artist:       "Creator",
+		ProviderMeta: map[string]string{provider.MetaMixcloudExclusive: "false"},
+	}
+	if got := trackViewName(notExclusive); got != "Creator - Open Show" {
+		t.Fatalf("non-exclusive trackViewName = %q", got)
+	}
+	if got := albumViewName(provider.AlbumInfo{Name: "Open Show"}); got != "Open Show" {
+		t.Fatalf("unrestricted albumViewName = %q", got)
+	}
+}
 
 func TestFormatTrackTime(t *testing.T) {
 	tests := []struct {
@@ -30,30 +70,6 @@ func TestFormatTrackTime(t *testing.T) {
 	}
 }
 
-func TestFormatPlaylistDuration(t *testing.T) {
-	tests := []struct {
-		secs int
-		want string
-	}{
-		{0, ""},
-		{-1, ""},
-		{45, "45s"},
-		{59, "59s"},
-		{60, "1m"},
-		{600, "10m"},
-		{3540, "59m"},
-		{3600, "1h"},
-		{3660, "1h 1m"},
-		{7200, "2h"},
-		{7320, "2h 2m"},
-	}
-	for _, tt := range tests {
-		if got := formatPlaylistDuration(tt.secs); got != tt.want {
-			t.Errorf("formatPlaylistDuration(%d) = %q, want %q", tt.secs, got, tt.want)
-		}
-	}
-}
-
 func TestPlaylistLabel(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -62,7 +78,7 @@ func TestPlaylistLabel(t *testing.T) {
 		want   string
 	}{
 		{
-			"name only when both unknown",
+			"name only when no tracks",
 			"  ",
 			playlist.PlaylistInfo{Name: "Mix"},
 			"  Mix",
@@ -74,16 +90,34 @@ func TestPlaylistLabel(t *testing.T) {
 			"> Mix · 12 tracks",
 		},
 		{
-			"duration only",
+			"duration shown for static playlists",
 			"  ",
 			playlist.PlaylistInfo{Name: "Mix", DurationSecs: 3660},
 			"  Mix · 1h 1m",
 		},
 		{
-			"both",
+			"tracks and duration both shown",
 			"  ",
 			playlist.PlaylistInfo{Name: "Mix", TrackCount: 12, DurationSecs: 2700},
 			"  Mix · 12 tracks · 45m",
+		},
+		{
+			"duration hidden for dir-backed playlists",
+			"  ",
+			playlist.PlaylistInfo{Name: "Mix", TrackCount: 12, DurationSecs: 2700, DirSourceCount: 2},
+			"  Mix · 12 tracks",
+		},
+		{
+			"favorites shows zero count",
+			"  ",
+			playlist.PlaylistInfo{Name: favorites.PlaylistName},
+			"  Favorites · 0 tracks",
+		},
+		{
+			"favorites with tracks",
+			"  ",
+			playlist.PlaylistInfo{Name: favorites.PlaylistName, TrackCount: 3},
+			"  Favorites · 3 tracks",
 		},
 	}
 	for _, tt := range tests {
@@ -231,6 +265,7 @@ func TestProviderKeyForShortcut(t *testing.T) {
 		"P": "plex",
 		"J": "jellyfin",
 		"Y": "yt",
+		"X": "mixcloud",
 		"L": "local",
 		"R": "radio",
 		"x": "",

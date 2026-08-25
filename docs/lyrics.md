@@ -1,18 +1,18 @@
 # Lyrics
 
-Press `y` to show lyrics for the current track. For local files, cliamp uses embedded lyrics from the file tags first. If no embedded lyrics are present, lyrics are fetched from LRCLIB and NetEase Cloud Music.
+Press `y` to show lyrics for the current track. For a local file, cliamp first uses lyrics embedded in file tags. If the file has no embedded lyrics, cliamp fetches lyrics from LRCLIB and NetEase Cloud Music.
 
 ## Modes
 
-- **Synced lyrics**: for local files and Navidrome tracks, lyrics auto scroll and highlight the active line in time with playback.
-- **Scroll mode**: for streams and plain lyrics without timestamps, use `j`/`k` or arrow keys to scroll manually.
+- **Synced lyrics**: For local files, Navidrome tracks, and YouTube/yt-dlp tracks with a known duration, lyrics scroll automatically and highlight the active line during playback.
+- **Scroll mode**: For plain lyrics without timestamps, live radio (ICY), and YouTube Live, use `j`/`k` or the arrow keys to scroll manually. The YouTube Live position is not relative to the song.
 
-Embedded LRC lyrics keep their timestamps. Embedded plain text lyrics are shown in scroll mode.
+cliamp keeps timestamps in embedded LRC lyrics. It shows embedded plain-text lyrics in scroll mode.
 
 ## Streams
 
-Lyrics auto update when the ICY metadata changes (e.g., internet radio station transitions).
+cliamp updates lyrics when ICY metadata changes, for example when an internet radio station changes tracks.
 
 ## YouTube and SoundCloud
 
-Titles like "Artist - Song (Official Video)" are parsed to build better search queries.
+cliamp parses titles such as "Artist - Song (Official Video)" to build search queries.
