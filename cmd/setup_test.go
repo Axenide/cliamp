@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -254,6 +255,9 @@ func TestSaveSectionSecuresConfigFile(t *testing.T) {
 
 	if err := saveSection("mixcloud", "access_token = \"secret\""); err != nil {
 		t.Fatalf("saveSection: %v", err)
+	}
+	if runtime.GOOS == "windows" {
+		return // Windows does not expose Unix permission bits.
 	}
 
 	dirInfo, err := os.Stat(configDir)
