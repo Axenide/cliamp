@@ -290,6 +290,12 @@ func writeEntry(w io.Writer, e Entry) {
 	if e.Track.Feed {
 		fmt.Fprintln(w, "feed = true")
 	}
+	if e.Track.Realtime {
+		fmt.Fprintln(w, "realtime = true")
+	}
+	for k, v := range e.Track.ProviderMeta {
+		fmt.Fprintf(w, "provider_meta.%s = %q\n", k, v)
+	}
 }
 
 // parse skips unknown keys to keep the on-disk format forward-compatible.
@@ -352,6 +358,15 @@ func parse(data []byte) []Entry {
 			}
 		case "feed":
 			cur.Track.Feed = val == "true"
+		case "realtime":
+			cur.Track.Realtime = val == "true"
+		default:
+			if metaKey, ok := strings.CutPrefix(key, "provider_meta."); ok {
+				if cur.Track.ProviderMeta == nil {
+					cur.Track.ProviderMeta = make(map[string]string)
+				}
+				cur.Track.ProviderMeta[metaKey] = val
+			}
 		}
 	}
 	flush()

@@ -1014,3 +1014,58 @@ func TestRestorePlaylistDocumentRejectsHistory(t *testing.T) {
 		t.Fatal("expected an error restoring over the reserved history name")
 	}
 }
+
+func TestPlaylistsMigratesLegacyFavoritesToml(t *testing.T) {
+	p := newTestProvider(t)
+	src := filepath.Join(p.dir, "Favorites.toml")
+	if err := os.WriteFile(src, []byte("[[track]]\npath = \"/a.mp3\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	lists, err := p.Playlists()
+	if err != nil {
+		t.Fatalf("Playlists: %v", err)
+	}
+
+	// Original must be gone.
+	if _, err := os.Stat(src); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal("Favorites.toml should have been migrated away")
+	}
+
+	// Renamed file must appear.
+	dst := filepath.Join(p.dir, favoritesLegacyName+".toml")
+	if _, err := os.Stat(dst); err != nil {
+		t.Fatalf("migrated file missing: %v", err)
+	}
+
+	found := false
+	for _, l := range lists {
+		if l.ID == favoritesLegacyName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("migrated playlist not listed; got %v", lists)
+	}
+}
+
+func TestPlaylistsSkipsMigrationWhenDestExists(t *testing.T) {
+	p := newTestProvider(t)
+	src := filepath.Join(p.dir, "Favorites.toml")
+	dst := filepath.Join(p.dir, favoritesLegacyName+".toml")
+	if err := os.WriteFile(src, []byte("[[track]]\npath = \"/a.mp3\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dst, []byte("[[track]]\npath = \"/b.mp3\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := p.Playlists(); err != nil {
+		t.Fatalf("Playlists: %v", err)
+	}
+	// Source must NOT be clobbered when destination already exists.
+	if _, err := os.Stat(src); err != nil {
+		t.Fatalf("Favorites.toml should remain when dest already exists: %v", err)
+	}
+}

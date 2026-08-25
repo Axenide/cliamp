@@ -239,3 +239,34 @@ func TestTracksEmpty(t *testing.T) {
 		t.Fatalf("empty Tracks = %d, want 0", len(tracks))
 	}
 }
+
+func TestRealtimeAndProviderMetaPersistAcrossReload(t *testing.T) {
+	s := newTestStore(t)
+	_, err := s.Toggle(playlist.Track{
+		Path:         "https://radio.example.com/stream",
+		Title:        "Live Radio",
+		Realtime:     true,
+		ProviderMeta: map[string]string{"navidrome.id": "42", "provider": "navidrome"},
+	})
+	if err != nil {
+		t.Fatalf("Toggle: %v", err)
+	}
+
+	s2 := NewAt(s.Path())
+	tracks, err := s2.Tracks()
+	if err != nil {
+		t.Fatalf("Tracks: %v", err)
+	}
+	if len(tracks) != 1 {
+		t.Fatalf("count = %d, want 1", len(tracks))
+	}
+	if !tracks[0].Realtime {
+		t.Fatal("Realtime flag lost on reload")
+	}
+	if tracks[0].ProviderMeta["navidrome.id"] != "42" {
+		t.Fatalf("ProviderMeta lost on reload: %+v", tracks[0].ProviderMeta)
+	}
+	if tracks[0].ProviderMeta["provider"] != "navidrome" {
+		t.Fatalf("ProviderMeta provider lost on reload: %+v", tracks[0].ProviderMeta)
+	}
+}

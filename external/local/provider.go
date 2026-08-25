@@ -112,8 +112,16 @@ func (p *Provider) Playlists() ([]playlist.PlaylistInfo, error) {
 		if e.IsDir() || !strings.HasSuffix(strings.ToLower(e.Name()), ".toml") {
 			continue
 		}
-		name := strings.TrimSuffix(e.Name(), filepath.Ext(e.Name()))
-		doc, err := p.loadDoc(filepath.Join(p.dir, e.Name()))
+		fileName := e.Name()
+		// Migrate a physical Favorites.toml to a safe name before the
+		// virtual Favorites playlist reserves it; once migrated the
+		// renamed file is listed like any other playlist.
+		if fileName == "Favorites.toml" {
+			p.migrateFavoritesToml()
+			fileName = favoritesLegacyName + ".toml"
+		}
+		name := strings.TrimSuffix(fileName, filepath.Ext(fileName))
+		doc, err := p.loadDoc(filepath.Join(p.dir, fileName))
 		if err != nil {
 			continue
 		}
@@ -131,6 +139,23 @@ func (p *Provider) Playlists() ([]playlist.PlaylistInfo, error) {
 		})
 	}
 	return lists, nil
+}
+
+const favoritesLegacyName = "Favorites (Local)"
+
+// migrateFavoritesToml renames a physical Favorites.toml playlist to a safe
+// name so the virtual Favorites playlist can reserve it. The rename is
+// best-effort: if the destination already exists the source is left in place.
+func (p *Provider) migrateFavoritesToml() {
+	src := filepath.Join(p.dir, "Favorites.toml")
+	dst := filepath.Join(p.dir, favoritesLegacyName+".toml")
+	if _, err := os.Stat(src); err != nil {
+		return
+	}
+	if _, err := os.Stat(dst); err == nil {
+		return
+	}
+	os.Rename(src, dst)
 }
 
 // historyInfo returns the synthetic PlaylistInfo entry for "Recently Played",
