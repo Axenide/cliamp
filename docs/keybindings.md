@@ -74,9 +74,9 @@ active when the picker opened. While typing a filter, `Enter` finishes it and
 
 | Key | Action |
 |---|---|
-| `f` | Toggle bookmark ★ on selected track within the loaded playlist (or favorite a radio station in the radio browser) |
+| `f` | Toggle bookmark ★ on selected track (or favorite radio station in radio browser) |
 | `n` | Toggle favorite ♥ on selected track (cross-playlist; favorited tracks appear in the "Favorites" virtual playlist) |
-| `Ctrl+F` | Search — active provider's native search (Spotify, Qobuz, Tidal, Navidrome, Jellyfin, Emby, Plex, Audiobookshelf, Mixcloud, NetEase, Local) or YouTube fallback. Available from playlist and provider-browser views. |
+| `Ctrl+F` | Search — active provider's native search (Spotify, Qobuz, Tidal, Navidrome, Lyrion, Jellyfin, Emby, Plex, Audiobookshelf, Mixcloud, NetEase, Local) or YouTube fallback. Available from playlist and provider-browser views. |
 | `u` | Load URL (stream/playlist) |
 | `y` | Show or close lyrics |
 | `r` | Retry lyrics lookup while lyrics are open |
@@ -166,7 +166,7 @@ the browser closes.
 
 ## Provider browser (`N` key)
 
-When you press `N` to drill into a provider (Navidrome, Plex, Jellyfin, Emby, Audiobookshelf, Spotify, Qobuz, Tidal, Mixcloud, YouTube Music), the album/artist/track screens use:
+When you press `N` to drill into a provider (Navidrome, Lyrion, Plex, Jellyfin, Emby, Audiobookshelf, Spotify, Qobuz, Tidal, Mixcloud, YouTube Music), the album/artist/track screens use:
 
 | Key | Action |
 |---|---|
