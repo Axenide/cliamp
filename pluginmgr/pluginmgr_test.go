@@ -1,6 +1,7 @@
 package pluginmgr
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -170,6 +171,33 @@ func TestListPluginsShowsInstalled(t *testing.T) {
 	// List writes to stdout — we just verify it doesn't error.
 	if err := List(); err != nil {
 		t.Errorf("List: %v", err)
+	}
+}
+
+func TestTrustSingleFilePlugin(t *testing.T) {
+	home := withTempHome(t)
+	pluginDir := filepath.Join(home, ".config", "cliamp", "plugins")
+	if err := os.MkdirAll(pluginDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(pluginDir, "hello.lua"), []byte(`plugin.register({ name = "hello", version = "1.0", type = "hook" })`), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	var out bytes.Buffer
+	oldOutput := output
+	output = &out
+	t.Cleanup(func() { output = oldOutput })
+
+	if err := Trust("hello", true); err != nil {
+		t.Fatalf("Trust: %v", err)
+	}
+	out.Reset()
+	if err := List(); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if strings.Contains(out.String(), "untrusted") || !strings.Contains(out.String(), "trusted") {
+		t.Errorf("List output = %q, want trusted", out.String())
 	}
 }
 

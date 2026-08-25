@@ -70,7 +70,7 @@ func List() error {
 		return trustErr
 	}
 	for i := range plugins {
-		switch err := plugintrust.Verify(manifest, strings.TrimSuffix(plugins[i].file, "/"), plugins[i].path); {
+		switch err := plugintrust.Verify(manifest, plugins[i].name, plugins[i].path); {
 		case err == nil:
 			plugins[i].trust = "trusted"
 		case err == plugintrust.ErrHashMismatch:
