@@ -459,6 +459,7 @@ func (m *Model) beginPlaybackTrack(track playlist.Track) (playlist.Track, tea.Cm
 	nextRequest(&m.requests.stream)
 	if m.player != nil {
 		m.player.SetPlaybackGeneration(m.requests.stream)
+		m.player.ClearPreload()
 	}
 	nextRequest(&m.requests.preload)
 	m.preloading = false

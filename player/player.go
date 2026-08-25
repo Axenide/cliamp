@@ -57,6 +57,7 @@ type Player struct {
 	gaplessAdvance atomic.Bool   // set when gapless transition fires
 	seekGen        atomic.Int64  // generation counter for yt-dlp seeks; incremented to cancel stale seeks
 	playGen        atomic.Uint64 // current UI playback request; rejects stale asynchronous starts
+	preloadGen     atomic.Uint64 // current preload request; rejects stale background preloads
 
 	lastPlayedDuration time.Duration // real duration of the track finished by the last gapless swap
 
@@ -347,12 +348,47 @@ func (p *Player) PreloadYTDL(pageURL string, knownDuration time.Duration) error 
 	return p.preloadPipeline(tp)
 }
 
+// BeginPreload invalidates older preload work and returns the current token.
+func (p *Player) BeginPreload() uint64 {
+	return p.preloadGen.Add(1)
+}
+
+// PreloadForGeneration queues a stream only when generation is still current.
+func (p *Player) PreloadForGeneration(path string, knownDuration time.Duration, generation uint64) error {
+	tp, err := p.buildPipeline(path)
+	if err != nil {
+		return err
+	}
+	tp.setKnownDuration(knownDuration)
+	return p.preloadPipelineForGeneration(tp, generation)
+}
+
+// PreloadYTDLForGeneration queues a yt-dlp stream only when generation is still current.
+func (p *Player) PreloadYTDLForGeneration(pageURL string, knownDuration time.Duration, generation uint64) error {
+	tp, err := p.buildYTDLPipeline(pageURL, 0)
+	if err != nil {
+		return err
+	}
+	tp.knownDuration = knownDuration
+	return p.preloadPipelineForGeneration(tp, generation)
+}
+
 // preloadPipeline queues a ready trackPipeline for gapless transition.
 func (p *Player) preloadPipeline(tp *trackPipeline) error {
+	return p.preloadPipelineForGeneration(tp, 0)
+}
+
+func (p *Player) preloadPipelineForGeneration(tp *trackPipeline, generation uint64) error {
 	// Lock speaker to atomically swap the gapless next stream, ensuring no
 	// in-flight transition reads from the old pipeline we're about to close.
 	speaker.Lock()
 	p.mu.Lock()
+	if generation != 0 && p.preloadGen.Load() != generation {
+		p.mu.Unlock()
+		speaker.Unlock()
+		go tp.close()
+		return nil
+	}
 	old := p.nextPipeline
 	p.nextPipeline = tp
 	// Keep Player's pipeline state and gapless' token registration atomic with
@@ -371,6 +407,7 @@ func (p *Player) preloadPipeline(tp *trackPipeline) error {
 // Speaker is locked to ensure no in-flight gapless transition can reference the
 // pipeline we're about to close.
 func (p *Player) ClearPreload() {
+	p.preloadGen.Add(1)
 	speaker.Lock()
 	p.gapless.SetNext(nil)
 	speaker.Unlock()

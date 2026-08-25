@@ -90,6 +90,20 @@ func TestPlayPipelineForGenerationDiscardsStaleStart(t *testing.T) {
 	}
 }
 
+func TestPreloadPipelineForGenerationDiscardsStalePreload(t *testing.T) {
+	p := newTestPlayer()
+	p.gapless = &gaplessStreamer{}
+	stale := p.BeginPreload()
+	p.BeginPreload()
+
+	if err := p.preloadPipelineForGeneration(&trackPipeline{}, stale); err != nil {
+		t.Fatalf("preloadPipelineForGeneration: %v", err)
+	}
+	if p.nextPipeline != nil {
+		t.Fatal("stale preload replaced the next pipeline")
+	}
+}
+
 func TestSetVolumeMinClamps(t *testing.T) {
 	p := newTestPlayer()
 

@@ -25,8 +25,15 @@ func (f *fakeEngine) PlayAtForGeneration(path string, dur, offset time.Duration,
 func (f *fakeEngine) PlayYTDLForGeneration(path string, dur time.Duration, _ uint64) error {
 	return f.PlayYTDL(path, dur)
 }
-func (f *fakeEngine) Preload(string, time.Duration) error                 { return nil }
-func (f *fakeEngine) PreloadYTDL(string, time.Duration) error             { return nil }
+func (f *fakeEngine) Preload(string, time.Duration) error     { return nil }
+func (f *fakeEngine) PreloadYTDL(string, time.Duration) error { return nil }
+func (f *fakeEngine) BeginPreload() uint64                    { return 0 }
+func (f *fakeEngine) PreloadForGeneration(path string, dur time.Duration, _ uint64) error {
+	return f.Preload(path, dur)
+}
+func (f *fakeEngine) PreloadYTDLForGeneration(path string, dur time.Duration, _ uint64) error {
+	return f.PreloadYTDL(path, dur)
+}
 func (f *fakeEngine) ClearPreload()                                       {}
 func (f *fakeEngine) Stop()                                               {}
 func (f *fakeEngine) Close()                                              {}

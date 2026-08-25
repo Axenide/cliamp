@@ -33,6 +33,7 @@ type playbackFakeEngine struct {
 	clearPreloadCalls  int
 	stopCalls          int
 	playGeneration     uint64
+	preloadGeneration  uint64
 	eqBands            [eqBandCount]float64
 }
 
@@ -67,7 +68,26 @@ func (f *playbackFakeEngine) Preload(path string, _ time.Duration) error {
 	return nil
 }
 func (f *playbackFakeEngine) PreloadYTDL(string, time.Duration) error { return nil }
-func (f *playbackFakeEngine) ClearPreload()                           { f.clearPreloadCalls++ }
+func (f *playbackFakeEngine) BeginPreload() uint64 {
+	f.preloadGeneration++
+	return f.preloadGeneration
+}
+func (f *playbackFakeEngine) PreloadForGeneration(path string, dur time.Duration, generation uint64) error {
+	if f.preloadGeneration != generation {
+		return nil
+	}
+	return f.Preload(path, dur)
+}
+func (f *playbackFakeEngine) PreloadYTDLForGeneration(_ string, _ time.Duration, generation uint64) error {
+	if f.preloadGeneration != generation {
+		return nil
+	}
+	return nil
+}
+func (f *playbackFakeEngine) ClearPreload() {
+	f.clearPreloadCalls++
+	f.preloadGeneration++
+}
 func (f *playbackFakeEngine) Stop() {
 	f.stopCalls++
 	f.playing, f.paused = false, false
@@ -200,6 +220,18 @@ func TestPlayStreamCmdSkipsSupersededGeneration(t *testing.T) {
 	<-finished
 	if len(player.playCalls) != 0 {
 		t.Fatalf("Play calls = %v, want none", player.playCalls)
+	}
+}
+
+func TestPreloadStreamCmdSkipsSupersededGeneration(t *testing.T) {
+	player := &playbackFakeEngine{}
+	preloadGen := player.BeginPreload()
+	cmd := preloadStreamCmd(player, "https://example.com/stream", 0, 1, preloadGen)
+	player.BeginPreload()
+
+	_ = cmd()
+	if len(player.preloadCalls) != 0 {
+		t.Fatalf("Preload calls = %v, want none", player.preloadCalls)
 	}
 }
 

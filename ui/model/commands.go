@@ -273,16 +273,16 @@ func playStreamCmd(p player.Engine, path string, knownDuration time.Duration, st
 	}
 }
 
-func preloadStreamCmd(p player.Engine, path string, knownDuration time.Duration, gen uint64) tea.Cmd {
+func preloadStreamCmd(p player.Engine, path string, knownDuration time.Duration, gen, preloadGen uint64) tea.Cmd {
 	return func() tea.Msg {
-		p.Preload(path, knownDuration) // errors silently ignored
+		p.PreloadForGeneration(path, knownDuration, preloadGen) // errors silently ignored
 		return streamPreloadedMsg{path: path, gen: gen}
 	}
 }
 
-func preloadLocalCmd(p player.Engine, path string, knownDuration time.Duration, gen uint64) tea.Cmd {
+func preloadLocalCmd(p player.Engine, path string, knownDuration time.Duration, gen, preloadGen uint64) tea.Cmd {
 	return func() tea.Msg {
-		p.Preload(path, knownDuration)
+		p.PreloadForGeneration(path, knownDuration, preloadGen)
 		return streamPreloadedMsg{path: path, gen: gen}
 	}
 }
@@ -293,9 +293,9 @@ func playYTDLStreamCmd(p player.Engine, pageURL string, knownDuration time.Durat
 	}
 }
 
-func preloadYTDLStreamCmd(p player.Engine, pageURL string, knownDuration time.Duration, gen uint64) tea.Cmd {
+func preloadYTDLStreamCmd(p player.Engine, pageURL string, knownDuration time.Duration, gen, preloadGen uint64) tea.Cmd {
 	return func() tea.Msg {
-		p.PreloadYTDL(pageURL, knownDuration) // errors silently ignored
+		p.PreloadYTDLForGeneration(pageURL, knownDuration, preloadGen) // errors silently ignored
 		return streamPreloadedMsg{path: pageURL, gen: gen}
 	}
 }

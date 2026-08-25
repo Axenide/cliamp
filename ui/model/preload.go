@@ -74,7 +74,7 @@ func (m *Model) preloadNext() tea.Cmd {
 		}
 		nextDur := time.Duration(next.DurationSecs) * time.Second
 		m.preloading = true
-		return preloadYTDLStreamCmd(m.player, next.Path, nextDur, nextRequest(&m.requests.preload))
+		return preloadYTDLStreamCmd(m.player, next.Path, nextDur, nextRequest(&m.requests.preload), m.player.BeginPreload())
 	}
 	if next.Stream {
 		// For streams, only arm gapless if we're within the lead-time window.
@@ -94,9 +94,9 @@ func (m *Model) preloadNext() tea.Cmd {
 		// Mark in-flight so the tick loop doesn't dispatch a second concurrent
 		// preload before this goroutine has finished arming gapless.SetNext.
 		m.preloading = true
-		return preloadStreamCmd(m.player, next.Path, nextDur, nextRequest(&m.requests.preload))
+		return preloadStreamCmd(m.player, next.Path, nextDur, nextRequest(&m.requests.preload), m.player.BeginPreload())
 	}
 	nextDur := time.Duration(next.DurationSecs) * time.Second
 	m.preloading = true
-	return preloadLocalCmd(m.player, next.Path, nextDur, nextRequest(&m.requests.preload))
+	return preloadLocalCmd(m.player, next.Path, nextDur, nextRequest(&m.requests.preload), m.player.BeginPreload())
 }

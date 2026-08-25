@@ -14,6 +14,9 @@ type Engine interface {
 	PlayYTDLForGeneration(pageURL string, knownDuration time.Duration, generation uint64) error
 	Preload(path string, knownDuration time.Duration) error
 	PreloadYTDL(pageURL string, knownDuration time.Duration) error
+	BeginPreload() uint64
+	PreloadForGeneration(path string, knownDuration time.Duration, generation uint64) error
+	PreloadYTDLForGeneration(pageURL string, knownDuration time.Duration, generation uint64) error
 	ClearPreload()
 	Stop()
 	Close()
