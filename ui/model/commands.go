@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -243,7 +244,7 @@ func resolveURLCmd(rawURL string, autoPlay bool) tea.Cmd {
 	return func() tea.Msg {
 		tracks, err := resolve.URL(rawURL)
 		if err != nil {
-			return err
+			return fmt.Errorf("resolving URL: %w", err)
 		}
 		return feedsLoadedMsg{tracks: tracks, urls: []string{rawURL}, autoPlay: autoPlay}
 	}
