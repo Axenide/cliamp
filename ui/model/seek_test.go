@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -171,5 +172,35 @@ func TestChainedSeekConsumesResumeMarker(t *testing.T) {
 	}
 	if m.resume.path != "" || m.resume.secs != 0 {
 		t.Fatalf("resume state = %q/%ds, want it consumed", m.resume.path, m.resume.secs)
+	}
+}
+
+// A failed seek must not swallow the target the user queued behind it.
+func TestPendingSeekSurvivesFailedSeek(t *testing.T) {
+	eng := &playbackFakeEngine{playing: true, seekable: true, duration: time.Hour}
+	m := streamSeekModel(eng)
+
+	m.doSeek(10 * time.Second)
+	first := m.tickSeek(time.Duration(seekDebounceTicks) * ui.TickFast)
+	if first == nil {
+		t.Fatal("tickSeek returned nil, want the first seek to fire")
+	}
+	first()
+
+	m.doSeek(20 * time.Second)
+	m.tickSeek(time.Duration(seekDebounceTicks) * ui.TickFast)
+	if !m.seek.pending {
+		t.Fatal("seek.pending = false, want the newer target queued")
+	}
+
+	failed := seekTickMsg{err: errors.New("ffmpeg restart failed"), target: 10 * time.Second, gen: m.seek.gen}
+	updated, cmd := m.Update(failed)
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("Update returned nil after a failed seek, want the queued target to fire")
+	}
+	cmd()
+	if len(eng.seekCalls) != 2 {
+		t.Fatalf("Seek calls = %v, want the failed seek and the queued one", eng.seekCalls)
 	}
 }

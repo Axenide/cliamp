@@ -85,7 +85,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.seek.inFlight = false
-		if m.seek.pending && msg.err == nil {
+		if m.seek.pending {
+			// Commit the newer target even when this seek failed: the failure
+			// belongs to a position the user has already moved on from.
 			if msg.resume {
 				// The chained seek carries no resume marker, so spend it here
 				// or a later restart seeks back to the resume position.
