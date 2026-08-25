@@ -1614,7 +1614,7 @@ func (m *Model) handleURLInputKey(msg tea.KeyPressMsg) tea.Cmd {
 		if input != "" {
 			m.feedLoading = true
 			m.status.Activity("Loading URL...", statusTTLLong)
-			return resolveRemoteCmd([]string{input}, true)
+			return resolveURLCmd(input, true)
 		}
 		m.urlInputting = true
 		m.urlErr = "Enter a stream, track, or playlist URL."

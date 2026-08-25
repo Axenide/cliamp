@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -240,6 +241,19 @@ func resolveRemoteCmd(urls []string, autoPlay bool) tea.Cmd {
 			return err
 		}
 		return feedsLoadedMsg{tracks: tracks, urls: urls, autoPlay: autoPlay}
+	}
+}
+
+// resolveURLCmd resolves a single URL typed by the user. It classifies the
+// input the same way command-line arguments are classified, so raw stream and
+// audio-file addresses load as tracks instead of being parsed as feeds.
+func resolveURLCmd(rawURL string, autoPlay bool) tea.Cmd {
+	return func() tea.Msg {
+		tracks, err := resolve.URL(rawURL)
+		if err != nil {
+			return fmt.Errorf("resolving URL: %w", err)
+		}
+		return feedsLoadedMsg{tracks: tracks, urls: []string{rawURL}, autoPlay: autoPlay}
 	}
 }
 

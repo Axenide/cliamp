@@ -122,6 +122,11 @@ func Args(args []string) (Result, error) {
 }
 
 // Remote fetches feed and M3U URLs and returns the resolved tracks.
+//
+// Callers must pass URLs that have already been classified as remote
+// playlists, as Args does: a URL matching none of the cases below falls
+// through to resolveFeed. Use URL for input that has not been classified yet,
+// such as an address typed interactively.
 func Remote(urls []string) ([]playlist.Track, error) {
 	var tracks []playlist.Track
 	for _, u := range urls {
