@@ -5,6 +5,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/bjarneo/cliamp/history"
 	"github.com/bjarneo/cliamp/provider"
 	"github.com/bjarneo/cliamp/ui"
 )
@@ -27,6 +28,7 @@ const (
 	commandModeNavSearch
 	commandModePlaylistManager
 	commandModePlaylistManagerInput
+	commandModePlaylistManagerDirs
 	commandModePlaylistPicker
 	commandModePlaylistPickerInput
 	commandModeQueue
@@ -131,6 +133,9 @@ var commandRegistry = []commandSpec{
 	{Mode: commandModeMain, Keys: []string{"T"}, KeyLabel: "T", Label: "Open Tidal provider", Keymap: true},
 	{Mode: commandModeMain, Keys: []string{"ctrl+j"}, KeyLabel: "Ctrl+J", Label: "Jump to time", Keymap: true},
 	{Mode: commandModeMain, Keys: []string{"p"}, KeyLabel: "p", Label: "Playlist manager", Keymap: true},
+	{Mode: commandModeProvider, Keys: []string{"p"}, KeyLabel: "p", Label: "Playlist manager", Keymap: true, ContextHelp: true, Enabled: func(m Model) bool {
+		return m.isActiveProvider("Local") && m.localProvider != nil
+	}},
 	{Mode: commandModeMain, Keys: []string{"ctrl+h"}, KeyLabel: "Ctrl+H", Label: "Toggle album headers", Keymap: true},
 	{Mode: commandModeMain, Keys: []string{"i"}, KeyLabel: "i", Label: "Track info / metadata", Keymap: true, ContextHelp: true},
 	{Mode: commandModeMain, Keys: []string{"ctrl+s"}, KeyLabel: "Ctrl+S", Label: "Save/download track to ~/Music/cliamp", Keymap: true},
@@ -200,6 +205,31 @@ var commandRegistry = []commandSpec{
 	{Mode: commandModeLyrics, Keys: []string{"r"}, KeyLabel: "r", Label: "Retry", ContextHelp: true, Primary: true, Enabled: func(m Model) bool { return !m.lyrics.loading && (m.lyrics.err != nil || len(m.lyrics.lines) == 0) }},
 	{Mode: commandModeLyrics, Keys: []string{"esc"}, KeyLabel: "Esc", Label: "Close", ContextHelp: true, Cancel: true},
 	{Mode: commandModeInfo, Keys: []string{"esc"}, KeyLabel: "Esc", Label: "Close", ContextHelp: true, Cancel: true},
+	{Mode: commandModePlaylistManager, Keys: []string{"a"}, KeyLabel: "a", Label: "New playlist", ContextHelp: true, Primary: true, Enabled: func(m Model) bool {
+		return m.plManager.visible && m.plManager.screen == plMgrScreenList
+	}},
+	{Mode: commandModePlaylistManager, Keys: []string{"D"}, KeyLabel: "D", Label: "Add dir sources", ContextHelp: true, Enabled: func(m Model) bool {
+		if !m.plManager.visible {
+			return false
+		}
+		switch m.plManager.screen {
+		case plMgrScreenTracks:
+			return m.plManager.selPlaylist != history.PlaylistName
+		case plMgrScreenList:
+			idx := m.plMgrPlaylistRealIndex(m.plManager.cursor)
+			return idx >= 0 && m.plManager.playlists[idx].Name != history.PlaylistName
+		default:
+			return false
+		}
+	}},
+	{Mode: commandModePlaylistManagerDirs, Keys: []string{"esc", "backspace", "h", "left"}, KeyLabel: "Esc", Label: "Back to tracks", ContextHelp: true, Cancel: true},
+	{Mode: commandModePlaylistManagerDirs, Keys: []string{"a"}, KeyLabel: "a", Label: "Add dir", ContextHelp: true, Primary: true},
+	{Mode: commandModePlaylistManagerDirs, Keys: []string{"d"}, KeyLabel: "d", Label: "Remove", Destructive: true, ContextHelp: true},
+	{Mode: commandModePlaylistManagerDirs, Keys: []string{"r"}, KeyLabel: "r", Label: "Toggle recursive", ContextHelp: true},
+	{Mode: commandModePlaylistManagerDirs, Keys: []string{"up", "down", "k", "j"}, KeyLabel: "Up Down", Label: "Navigate", ContextHelp: true},
+	{Mode: commandModeFileBrowser, Keys: []string{"D"}, KeyLabel: "D", Label: "Add as dir source", ContextHelp: true, Enabled: func(m Model) bool {
+		return m.fileBrowser.visible && m.fileBrowser.targetPlaylist != ""
+	}},
 	{Mode: commandModeRadioStats, Keys: []string{"esc"}, KeyLabel: "Esc", Label: "Close", ContextHelp: true, Cancel: true},
 	{Mode: commandModeRadioStats, Keys: []string{"r"}, KeyLabel: "r", Label: "Refresh", ContextHelp: true, Primary: true},
 	{Mode: commandModeRadioStats, Keys: []string{"up", "down", "k", "j"}, KeyLabel: "Up Down", Label: "Scroll", ContextHelp: true},

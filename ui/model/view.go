@@ -97,7 +97,15 @@ func (m Model) isProviderRowActive(p playlist.PlaylistInfo) bool {
 // supply. Track count and total duration are appended when available.
 func playlistLabel(prefix string, p playlist.PlaylistInfo) string {
 	out := prefix + p.Name
-	parts := make([]string, 0, 2)
+	parts := make([]string, 0, 3)
+	if p.DirSourceCount > 0 {
+		n := p.DirSourceCount
+		s := "dir"
+		if n != 1 {
+			s = "dirs"
+		}
+		parts = append(parts, fmt.Sprintf("%d %s", n, s))
+	}
 	if p.TrackCount > 0 {
 		parts = append(parts, fmt.Sprintf("%d tracks", p.TrackCount))
 	}
