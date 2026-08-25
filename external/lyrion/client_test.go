@@ -335,7 +335,7 @@ func TestAlbumSortTypesUseSupportedLMSValues(t *testing.T) {
 	for i, sortType := range got {
 		ids[i] = sortType.ID
 	}
-	if want := []string{SortByName, SortByNew, SortByRandom}; !slices.Equal(ids, want) {
+	if want := []string{SortByName, SortByNew}; !slices.Equal(ids, want) {
 		t.Errorf("AlbumSortTypes() = %v, want %v", ids, want)
 	}
 }
