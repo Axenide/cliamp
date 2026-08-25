@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -238,6 +239,38 @@ func TestTracksPreservesStoredOrder(t *testing.T) {
 	}
 }
 
+func TestTracksPaginatesContainerResults(t *testing.T) {
+	var offsets []int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var env struct {
+			Params []json.RawMessage `json:"params"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&env); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		var command []any
+		if err := json.Unmarshal(env.Params[1], &command); err != nil {
+			t.Fatalf("decode command: %v", err)
+		}
+		offset := int(command[2].(float64))
+		offsets = append(offsets, offset)
+		id := offset + 1
+		io.WriteString(w, `{"result":{"count":2,"playlisttracks_loop":[{"id":`+strconv.Itoa(id)+`,"title":"Track"}]}}`)
+	}))
+	defer srv.Close()
+
+	tracks, err := New(srv.URL, "", "").Tracks("42")
+	if err != nil {
+		t.Fatalf("Tracks: %v", err)
+	}
+	if len(tracks) != 2 {
+		t.Fatalf("tracks = %d, want 2", len(tracks))
+	}
+	if want := []int{0, 1}; !slices.Equal(offsets, want) {
+		t.Errorf("offsets = %v, want %v", offsets, want)
+	}
+}
+
 func TestEmptyContainersAreNotErrors(t *testing.T) {
 	c, _ := newServer(t, `{"result":{"playlisttracks_loop":[]}}`)
 	tracks, err := c.Tracks("42")
@@ -256,6 +289,32 @@ func TestEmptyContainersAreNotErrors(t *testing.T) {
 	}
 	if len(tracks) != 0 {
 		t.Errorf("got %d tracks, want 0", len(tracks))
+	}
+}
+
+func TestFetchAllPaginatesToResponseCount(t *testing.T) {
+	var offsets []int
+	got, err := fetchAll(2, func(offset int) ([]int, int, error) {
+		offsets = append(offsets, offset)
+		switch offset {
+		case 0:
+			return []int{1, 2}, 5, nil
+		case 2:
+			return []int{3, 4}, 5, nil
+		case 4:
+			return []int{5}, 5, nil
+		default:
+			return nil, 5, nil
+		}
+	})
+	if err != nil {
+		t.Fatalf("fetchAll: %v", err)
+	}
+	if want := []int{1, 2, 3, 4, 5}; !slices.Equal(got, want) {
+		t.Errorf("fetchAll() = %v, want %v", got, want)
+	}
+	if want := []int{0, 2, 4}; !slices.Equal(offsets, want) {
+		t.Errorf("offsets = %v, want %v", offsets, want)
 	}
 }
 

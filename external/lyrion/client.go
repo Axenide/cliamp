@@ -30,9 +30,7 @@ const (
 	// hostile server cannot exhaust memory.
 	maxResponseBody = 32 << 20
 
-	// pageSize is the per-request row count for queries whose result set is
-	// bounded by its container (one playlist, one album). LMS treats a count
-	// larger than the available rows as "all of them".
+	// pageSize is the per-request row count for container queries.
 	pageSize = 10000
 
 	// rpcPath is the JSON-RPC endpoint, served on the same port as the web UI.
@@ -69,6 +67,25 @@ type Client struct {
 	// showUnplayable includes plugin-contributed tracks and playlists in
 	// results instead of filtering them out. See isLocal.
 	showUnplayable bool
+}
+
+type playlistRow struct {
+	ID   flexString `json:"id"`
+	Name string     `json:"playlist"`
+	URL  string     `json:"url"`
+}
+
+type artistRow struct {
+	ID   flexString `json:"id"`
+	Name string     `json:"artist"`
+}
+
+type albumRow struct {
+	ID       flexString `json:"id"`
+	Name     string     `json:"album"`
+	Artist   string     `json:"artist"`
+	ArtistID flexString `json:"artist_id"`
+	Year     flexInt    `json:"year"`
 }
 
 // New creates a Client for the server at serverURL. user and password may be
@@ -176,22 +193,37 @@ func (c *Client) request(ctx context.Context, command []any, out any) error {
 	return nil
 }
 
+func fetchAll[T any](size int, fetch func(offset int) ([]T, int, error)) ([]T, error) {
+	var all []T
+	for offset := 0; ; {
+		page, count, err := fetch(offset)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, page...)
+		if len(page) == 0 || (count > 0 && len(all) >= count) || (count == 0 && len(page) < size) {
+			return all, nil
+		}
+		offset += len(page)
+	}
+}
+
 // --- Browsing ---------------------------------------------------------------
 
 func (c *Client) Playlists() ([]playlist.PlaylistInfo, error) {
-	var res struct {
-		Loop []struct {
-			ID   flexString `json:"id"`
-			Name string     `json:"playlist"`
-			URL  string     `json:"url"`
-		} `json:"playlists_loop"`
-	}
-	cmd := []any{"playlists", 0, pageSize, "tags:u"}
-	if err := c.request(context.Background(), cmd, &res); err != nil {
+	rows, err := fetchAll(pageSize, func(offset int) ([]playlistRow, int, error) {
+		var res struct {
+			Count flexInt       `json:"count"`
+			Loop  []playlistRow `json:"playlists_loop"`
+		}
+		err := c.request(context.Background(), []any{"playlists", offset, pageSize, "tags:u"}, &res)
+		return res.Loop, int(res.Count), err
+	})
+	if err != nil {
 		return nil, err
 	}
-	out := make([]playlist.PlaylistInfo, 0, len(res.Loop))
-	for _, p := range res.Loop {
+	out := make([]playlist.PlaylistInfo, 0, len(rows))
+	for _, p := range rows {
 		// A plugin-imported playlist contains only that plugin's tracks, so
 		// hiding those tracks would leave it empty — hide the playlist too.
 		if !c.showUnplayable && !isLocal(p.URL) {
@@ -203,59 +235,74 @@ func (c *Client) Playlists() ([]playlist.PlaylistInfo, error) {
 }
 
 func (c *Client) Tracks(playlistID string) ([]playlist.Track, error) {
-	var res struct {
-		Loop []song `json:"playlisttracks_loop"`
-	}
-	cmd := []any{"playlists", "tracks", 0, pageSize, "playlist_id:" + playlistID, "tags:" + songTags}
-	if err := c.request(context.Background(), cmd, &res); err != nil {
+	rows, err := fetchAll(pageSize, func(offset int) ([]song, int, error) {
+		var res struct {
+			Count flexInt `json:"count"`
+			Loop  []song  `json:"playlisttracks_loop"`
+		}
+		err := c.request(context.Background(), []any{"playlists", "tracks", offset, pageSize, "playlist_id:" + playlistID, "tags:" + songTags}, &res)
+		return res.Loop, int(res.Count), err
+	})
+	if err != nil {
 		return nil, err
 	}
-	return c.toTracks(res.Loop), nil
+	return c.toTracks(rows), nil
 }
 
 func (c *Client) Artists() ([]provider.ArtistInfo, error) {
-	var res struct {
-		Loop []struct {
-			ID   flexString `json:"id"`
-			Name string     `json:"artist"`
-		} `json:"artists_loop"`
-	}
-	if err := c.request(context.Background(), []any{"artists", 0, pageSize}, &res); err != nil {
+	rows, err := fetchAll(pageSize, func(offset int) ([]artistRow, int, error) {
+		var res struct {
+			Count flexInt     `json:"count"`
+			Loop  []artistRow `json:"artists_loop"`
+		}
+		err := c.request(context.Background(), []any{"artists", offset, pageSize}, &res)
+		return res.Loop, int(res.Count), err
+	})
+	if err != nil {
 		return nil, err
 	}
-	out := make([]provider.ArtistInfo, 0, len(res.Loop))
-	for _, a := range res.Loop {
+	out := make([]provider.ArtistInfo, 0, len(rows))
+	for _, a := range rows {
 		out = append(out, provider.ArtistInfo{ID: a.ID.String(), Name: a.Name})
 	}
 	return out, nil
 }
 
 func (c *Client) ArtistAlbums(artistID string) ([]provider.AlbumInfo, error) {
-	return c.albums([]any{"albums", 0, pageSize, "artist_id:" + artistID, "tags:" + albumTags})
+	rows, err := fetchAll(pageSize, func(offset int) ([]albumRow, int, error) {
+		return c.albumPage([]any{"albums", offset, pageSize, "artist_id:" + artistID, "tags:" + albumTags})
+	})
+	if err != nil {
+		return nil, err
+	}
+	return albumsFromRows(rows), nil
 }
 
 func (c *Client) AlbumList(sortType string, offset, size int) ([]provider.AlbumInfo, error) {
 	if sortType == "" {
 		sortType = c.DefaultAlbumSort()
 	}
-	return c.albums([]any{"albums", offset, size, "sort:" + sortType, "tags:" + albumTags})
-}
-
-func (c *Client) albums(cmd []any) ([]provider.AlbumInfo, error) {
-	var res struct {
-		Loop []struct {
-			ID       flexString `json:"id"`
-			Name     string     `json:"album"`
-			Artist   string     `json:"artist"`
-			ArtistID flexString `json:"artist_id"`
-			Year     flexInt    `json:"year"`
-		} `json:"albums_loop"`
-	}
-	if err := c.request(context.Background(), cmd, &res); err != nil {
+	rows, _, err := c.albumPage([]any{"albums", offset, size, "sort:" + sortType, "tags:" + albumTags})
+	if err != nil {
 		return nil, err
 	}
-	out := make([]provider.AlbumInfo, 0, len(res.Loop))
-	for _, a := range res.Loop {
+	return albumsFromRows(rows), nil
+}
+
+func (c *Client) albumPage(cmd []any) ([]albumRow, int, error) {
+	var res struct {
+		Count flexInt    `json:"count"`
+		Loop  []albumRow `json:"albums_loop"`
+	}
+	if err := c.request(context.Background(), cmd, &res); err != nil {
+		return nil, 0, err
+	}
+	return res.Loop, int(res.Count), nil
+}
+
+func albumsFromRows(rows []albumRow) []provider.AlbumInfo {
+	out := make([]provider.AlbumInfo, 0, len(rows))
+	for _, a := range rows {
 		out = append(out, provider.AlbumInfo{
 			ID:       a.ID.String(),
 			Name:     a.Name,
@@ -264,7 +311,7 @@ func (c *Client) albums(cmd []any) ([]provider.AlbumInfo, error) {
 			Year:     int(a.Year),
 		})
 	}
-	return out, nil
+	return out
 }
 
 func (c *Client) AlbumSortTypes() []provider.SortType {
@@ -277,16 +324,20 @@ func (c *Client) AlbumSortTypes() []provider.SortType {
 func (c *Client) DefaultAlbumSort() string { return SortByName }
 
 func (c *Client) AlbumTracks(albumID string) ([]playlist.Track, error) {
-	var res struct {
-		Loop []song `json:"titles_loop"`
-	}
-	// sort:albumtrack orders by disc then track number, which is the order an
-	// album is meant to be heard in.
-	cmd := []any{"titles", 0, pageSize, "album_id:" + albumID, "sort:albumtrack", "tags:" + songTags}
-	if err := c.request(context.Background(), cmd, &res); err != nil {
+	rows, err := fetchAll(pageSize, func(offset int) ([]song, int, error) {
+		var res struct {
+			Count flexInt `json:"count"`
+			Loop  []song  `json:"titles_loop"`
+		}
+		// sort:albumtrack orders by disc then track number, which is the order an
+		// album is meant to be heard in.
+		err := c.request(context.Background(), []any{"titles", offset, pageSize, "album_id:" + albumID, "sort:albumtrack", "tags:" + songTags}, &res)
+		return res.Loop, int(res.Count), err
+	})
+	if err != nil {
 		return nil, err
 	}
-	return c.toTracks(res.Loop), nil
+	return c.toTracks(rows), nil
 }
 
 // --- Search -----------------------------------------------------------------
