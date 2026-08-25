@@ -118,18 +118,16 @@ func (m *Model) commitPendingSeek() tea.Cmd {
 }
 
 // seekCmd performs the decoder-restarting seek to target asynchronously.
+// Position and pipeline kind are read inside the command so playback progress
+// and track changes between queueing and execution are respected.
 func (m *Model) seekCmd(target time.Duration, resume bool) tea.Cmd {
-	curPos := m.player.Position()
-	d := target - curPos
-
 	p := m.player
-	ytdl := p.IsYTDLSeek()
 	return func() tea.Msg {
 		var err error
-		if ytdl {
-			err = p.SeekYTDL(d)
+		if p.IsYTDLSeek() {
+			err = p.SeekYTDL(target - p.Position())
 		} else {
-			err = p.Seek(d)
+			err = p.Seek(target - p.Position())
 		}
 		return seekTickMsg{err: err, resume: resume, target: target}
 	}
