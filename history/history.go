@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/bjarneo/cliamp/internal/appdir"
+	"github.com/bjarneo/cliamp/internal/fileutil"
 	"github.com/bjarneo/cliamp/internal/tomlutil"
 	"github.com/bjarneo/cliamp/playlist"
 )
@@ -185,12 +186,9 @@ func dedupeNewestFirst(entries []Entry) []Entry {
 }
 
 func (s *Store) saveLocked(entries []Entry) error {
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
-		return err
-	}
 	// Build the full content in memory (writes to a Builder can't fail), then
-	// write a temp file and rename so a partial/failed write can never truncate
-	// the existing history file.
+	// write a unique temp file and rename so a partial/failed write — or a
+	// second cliamp process — can never truncate or clobber existing history.
 	var b strings.Builder
 	for i, e := range entries {
 		if i > 0 {
@@ -198,11 +196,7 @@ func (s *Store) saveLocked(entries []Entry) error {
 		}
 		writeEntry(&b, e)
 	}
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(b.String()), 0o644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, s.path)
+	return fileutil.WriteFileAtomic(s.path, []byte(b.String()), 0o644)
 }
 
 // mergeTrackMeta keeps any non-empty metadata from the previous entry when a

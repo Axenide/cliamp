@@ -5,7 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/bjarneo/cliamp/history"
 	"github.com/bjarneo/cliamp/playlist"
 	"github.com/bjarneo/cliamp/provider"
 	"github.com/bjarneo/cliamp/theme"
@@ -408,8 +407,8 @@ func (m *Model) plMgrEnterTrackList(name string) {
 
 // plMgrReloadTracks re-reads the open track list in place so store changes
 // (fresh history entries, favorite toggles) appear without leaving the
-// screen. The cursor is clamped rather than reset, and any active filter is
-// re-applied.
+// screen. The cursor is clamped rather than reset, stale row marks are
+// dropped, and any active filter is re-applied.
 func (m *Model) plMgrReloadTracks(name string) {
 	tracks, err := m.localProvider.Tracks(name)
 	if err != nil {
@@ -417,10 +416,18 @@ func (m *Model) plMgrReloadTracks(name string) {
 	}
 	m.plMgrLoadTracks(tracks)
 	m.setHeaderStateFromTracks(tracks)
+	m.plManager.marked = make(map[int]bool)
 	if m.plManager.filter != "" {
 		m.plMgrRecomputeFilter()
 	}
 	newCount := m.plMgrTracksViewCount()
+	if newCount == 0 {
+		// An emptied list (e.g. the last favorite removed) can leave a
+		// stale scroll offset: the adjust helper returns early at zero.
+		m.plManager.cursor = 0
+		m.plManager.scroll = 0
+		return
+	}
 	if m.plManager.cursor >= newCount {
 		m.plManager.cursor = newCount - 1
 	}
@@ -471,8 +478,8 @@ func missingLocalTrack(track playlist.Track) bool {
 // to the directory-sources screen. Playlists whose provider does not implement
 // provider.PlaylistDirSourceManager show a notice instead of switching.
 func (m *Model) plMgrOpenDirs() {
-	if m.plManager.selPlaylist == history.PlaylistName {
-		m.status.Showf(statusTTLDefault, "%q is a virtual playlist with no directory sources", m.plManager.selPlaylist)
+	if name := plMgrVirtualPlaylistName(m.plManager.selPlaylist); name != "" {
+		m.status.Showf(statusTTLDefault, "%q is a virtual playlist with no directory sources", name)
 		return
 	}
 	dm, ok := m.localProvider.(provider.PlaylistDirSourceManager)
@@ -538,10 +545,11 @@ func (m *Model) plMgrRefreshTracksForSel() {
 // browser's D key when a target playlist is set.
 func (m *Model) fbAddDirSource() {
 	target := m.fileBrowser.targetPlaylist
-	if target == "" || target == history.PlaylistName {
-		if target == history.PlaylistName {
-			m.status.Showf(statusTTLDefault, "%q is a virtual playlist with no directory sources", target)
-		}
+	if target == "" {
+		return
+	}
+	if name := plMgrVirtualPlaylistName(target); name != "" {
+		m.status.Showf(statusTTLDefault, "%q is a virtual playlist with no directory sources", name)
 		return
 	}
 	var dirs []string

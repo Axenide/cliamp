@@ -12,6 +12,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/bjarneo/cliamp/favorites"
 	"github.com/bjarneo/cliamp/history"
 	"github.com/bjarneo/cliamp/internal/fileutil"
 	"github.com/bjarneo/cliamp/playlist"
@@ -582,6 +583,29 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 					m.status.Showf(statusTTLDefault, "☆ %s", track.DisplayName())
 				}
 			}
+		}
+
+	case "n":
+		if m.focus == focusPlaylist && m.plCursor >= 0 && m.plCursor < m.playlist.Len() && m.favMgr != nil {
+			track, ok := m.playlist.Track(m.plCursor)
+			if !ok {
+				return nil
+			}
+			added, err := m.favMgr.ToggleFavorite(track)
+			if err != nil {
+				m.status.Errorf(statusTTLDefault, "Favorite failed: %s", err)
+				return nil
+			}
+			m.refreshFavSet()
+			if added {
+				m.status.Showf(statusTTLDefault, favAddedMark+" %s", track.DisplayName())
+			} else {
+				m.status.Showf(statusTTLDefault, favRemovedMark+" %s", track.DisplayName())
+			}
+			// The provider pane renders Favorites counts from Playlists();
+			// re-pull so it reflects the toggle. The manager list refreshes
+			// itself on open.
+			return m.fetchProviderPlaylists()
 		}
 
 	case "shift+up":
@@ -1626,6 +1650,18 @@ func (m *Model) handlePlaylistManagerKey(msg tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
+// plMgrVirtualPlaylistName reports the provider-synthesized playlist name
+// (Favorites, Recently Played) when name refers to one; regular playlists
+// return "". Virtual playlists cannot be renamed, deleted, or given
+// directory sources.
+func plMgrVirtualPlaylistName(name string) string {
+	switch name {
+	case favorites.PlaylistName, history.PlaylistName:
+		return name
+	}
+	return ""
+}
+
 // handlePlMgrListKey handles keys on screen 0 (playlist list).
 func (m *Model) handlePlMgrListKey(msg tea.KeyPressMsg) tea.Cmd {
 	// Filter input mode swallows most keys.
@@ -1639,7 +1675,7 @@ func (m *Model) handlePlMgrListKey(msg tea.KeyPressMsg) tea.Cmd {
 		case "y", "Y":
 			var refresh tea.Cmd
 			realIdx := m.plMgrPlaylistRealIndex(m.plManager.cursor)
-			if realIdx >= 0 && m.plManager.playlists[realIdx].Name == history.PlaylistName {
+			if realIdx >= 0 && plMgrVirtualPlaylistName(m.plManager.playlists[realIdx].Name) != "" {
 				m.plManager.confirmDel = false
 				return nil
 			}
@@ -1756,7 +1792,7 @@ func (m *Model) handlePlMgrListKey(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		name := m.plManager.playlists[realIdx].Name
-		if name == history.PlaylistName {
+		if plMgrVirtualPlaylistName(name) != "" {
 			m.status.Showf(statusTTLDefault, "%q is a virtual playlist with no directory sources", name)
 			return nil
 		}
@@ -1774,8 +1810,8 @@ func (m *Model) handlePlMgrListKey(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		name := m.plManager.playlists[realIdx].Name
-		if name == history.PlaylistName {
-			m.status.Warning("Recently Played cannot be renamed", statusTTLDefault)
+		if plMgrVirtualPlaylistName(name) != "" {
+			m.status.Warningf(statusTTLDefault, "%s cannot be renamed", name)
 			return nil
 		}
 		m.plManager.renameOldName = name
@@ -1787,8 +1823,8 @@ func (m *Model) handlePlMgrListKey(msg tea.KeyPressMsg) tea.Cmd {
 		if idx < 0 {
 			break
 		}
-		if m.plManager.playlists[idx].Name == history.PlaylistName {
-			m.status.Warning("Recently Played cannot be deleted", statusTTLDefault)
+		if name := m.plManager.playlists[idx].Name; plMgrVirtualPlaylistName(name) != "" {
+			m.status.Warningf(statusTTLDefault, "%s cannot be deleted", name)
 			return nil
 		}
 		m.plManager.confirmDel = true
@@ -1978,6 +2014,55 @@ func (m *Model) handlePlMgrTracksKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.openFileBrowserForPlaylist(m.plManager.selPlaylist)
 	case "D":
 		m.plMgrOpenDirs()
+	case "f":
+		if name := plMgrVirtualPlaylistName(m.plManager.selPlaylist); name != "" {
+			m.status.Warningf(statusTTLDefault, "%s does not support bookmarks", name)
+			return nil
+		}
+		if bs, ok := m.localProvider.(provider.BookmarkSetter); ok {
+			realIdx := m.plMgrTrackRealIndex(m.plManager.cursor)
+			if realIdx >= 0 && realIdx < len(m.plManager.tracks) {
+				track := m.plManager.tracks[realIdx]
+				if err := bs.SetBookmarkByPath(m.plManager.selPlaylist, track.Path); err != nil {
+					m.status.Errorf(statusTTLDefault, "Save failed: %s", err)
+					return nil
+				}
+				m.plManager.tracks[realIdx].Bookmark = !m.plManager.tracks[realIdx].Bookmark
+				if m.plManager.tracks[realIdx].Bookmark {
+					m.status.Showf(statusTTLDefault, "★ %s", track.DisplayName())
+				} else {
+					m.status.Showf(statusTTLDefault, "☆ %s", track.DisplayName())
+				}
+			}
+		}
+	case "n":
+		if m.favMgr != nil {
+			realIdx := m.plMgrTrackRealIndex(m.plManager.cursor)
+			if realIdx >= 0 && realIdx < len(m.plManager.tracks) {
+				track := m.plManager.tracks[realIdx]
+				added, err := m.favMgr.ToggleFavorite(track)
+				if err != nil {
+					m.status.Errorf(statusTTLDefault, "Favorite failed: %s", err)
+					return nil
+				}
+				m.refreshFavSet()
+				if added {
+					m.status.Showf(statusTTLDefault, favAddedMark+" %s", track.DisplayName())
+				} else {
+					m.status.Showf(statusTTLDefault, favRemovedMark+" %s", track.DisplayName())
+				}
+				// Inside the Favorites screen a toggle re-reads the store so
+				// the rows mirror it: an unfavorite drops the row, a
+				// re-favorite restores it.
+				if m.plManager.selPlaylist == favorites.PlaylistName {
+					m.plMgrReloadTracks(favorites.PlaylistName)
+				}
+				if m.plManager.visible {
+					m.plMgrRefreshList()
+				}
+				return m.fetchProviderPlaylists()
+			}
+		}
 	case "d":
 		m.plMgrRemoveSelectedTracks()
 	case "u":
@@ -2392,9 +2477,18 @@ func (m *Model) plMgrSaveTracks(status string) bool {
 	return true
 }
 
+// plMgrRemoveSelectedTracks removes the selected tracks from the open playlist.
 func (m *Model) plMgrRemoveSelectedTracks() {
 	indices := m.plMgrSelectedTrackIndices()
 	if len(indices) == 0 {
+		return
+	}
+	if m.plManager.selPlaylist == favorites.PlaylistName {
+		m.status.Warning("Use n to remove tracks from Favorites", statusTTLDefault)
+		return
+	}
+	if m.plManager.selPlaylist == history.PlaylistName {
+		m.status.Warning("Recently Played tracks cannot be removed", statusTTLDefault)
 		return
 	}
 	for _, i := range indices {

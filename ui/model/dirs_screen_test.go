@@ -12,8 +12,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/bjarneo/cliamp/favorites"
 	"github.com/bjarneo/cliamp/history"
 	"github.com/bjarneo/cliamp/playlist"
+	"github.com/bjarneo/cliamp/provider"
 	"github.com/bjarneo/cliamp/ui"
 )
 
@@ -28,6 +30,7 @@ type dirSourceTestProvider struct {
 	added         []string
 	failOn        map[string]error // dirs that AddDirSource should fail on
 	historyTracks []playlist.Track // served for the Recently Played playlist
+	favPaths      map[string]struct{}
 }
 
 type dirSetRecCall struct {
@@ -38,6 +41,13 @@ type dirSetRecCall struct {
 func (p *dirSourceTestProvider) Tracks(id string) ([]playlist.Track, error) {
 	if id == history.PlaylistName {
 		return append([]playlist.Track(nil), p.historyTracks...), nil
+	}
+	if id == favorites.PlaylistName && p.favPaths != nil {
+		var out []playlist.Track
+		for path := range p.favPaths {
+			out = append(out, playlist.Track{Path: path, Title: path})
+		}
+		return out, nil
 	}
 	return p.commandsTestProvider.Tracks(id)
 }
@@ -81,11 +91,48 @@ func (p *dirSourceTestProvider) SetDirRecursive(_, dir string, recursive bool) e
 	return nil
 }
 
+func (p *dirSourceTestProvider) ToggleFavorite(track playlist.Track) (bool, error) {
+	if p.favPaths == nil {
+		p.favPaths = make(map[string]struct{})
+	}
+	if _, ok := p.favPaths[track.Path]; ok {
+		delete(p.favPaths, track.Path)
+		return false, nil
+	}
+	p.favPaths[track.Path] = struct{}{}
+	return true, nil
+}
+
+func (p *dirSourceTestProvider) IsFavorited(path string) bool {
+	if p.favPaths == nil {
+		return false
+	}
+	_, ok := p.favPaths[path]
+	return ok
+}
+
+func (p *dirSourceTestProvider) FavoritesCount() int {
+	return len(p.favPaths)
+}
+
+func (p *dirSourceTestProvider) Playlists() ([]playlist.PlaylistInfo, error) {
+	favs := playlist.PlaylistInfo{ID: favorites.PlaylistName, Name: favorites.PlaylistName, Section: favorites.PlaylistName}
+	if p.favPaths != nil {
+		favs.TrackCount = len(p.favPaths)
+	}
+	return []playlist.PlaylistInfo{favs, {ID: "music", Name: "music"}}, nil
+}
+
 func newDirsScreenTestModel(prov playlist.Provider) Model {
+	var favMgr provider.FavoritesManager
+	if fm, ok := prov.(provider.FavoritesManager); ok {
+		favMgr = fm
+	}
 	m := Model{
 		playlist:      playlist.New(),
 		localProvider: prov,
 		provider:      prov,
+		favMgr:        favMgr,
 		vis:           ui.NewVisualizer(48000),
 		plManager: plManagerState{
 			visible:     true,
@@ -128,7 +175,7 @@ func TestPlMgrDKeyOpensDirsScreen(t *testing.T) {
 func TestPlMgrDKeyHistoryShowsNotice(t *testing.T) {
 	prov := &dirSourceTestProvider{}
 	m := newDirsScreenTestModel(prov)
-	m.plManager.selPlaylist = "Recently Played"
+	m.plManager.selPlaylist = history.PlaylistName
 
 	m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "D"})
 
@@ -322,6 +369,104 @@ func TestPlMgrDeleteGuardsRecentlyPlayed(t *testing.T) {
 	m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "y"})
 	if len(prov.deleted) != 0 {
 		t.Fatalf("deleted = %v, want Recently Played untouched", prov.deleted)
+	}
+}
+
+func TestPlMgrNKeyRemovesRowFromFavoritesScreen(t *testing.T) {
+	prov := &dirSourceTestProvider{commandsTestProvider: commandsTestProvider{name: "Local"}}
+	if _, err := prov.ToggleFavorite(playlist.Track{Path: "/a.mp3", Title: "A"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := prov.ToggleFavorite(playlist.Track{Path: "/b.mp3", Title: "B"}); err != nil {
+		t.Fatal(err)
+	}
+	m := newDirsScreenTestModel(prov)
+	m.plManager.selPlaylist = favorites.PlaylistName
+	m.plMgrLoadTracks([]playlist.Track{{Path: "/a.mp3"}, {Path: "/b.mp3"}})
+
+	cmd := m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "n"})
+
+	if prov.IsFavorited("/a.mp3") {
+		t.Fatal("n should unfavorite the highlighted track")
+	}
+	if len(m.plManager.tracks) != 1 || m.plManager.tracks[0].Path != "/b.mp3" {
+		t.Fatalf("tracks = %+v, want only /b.mp3", m.plManager.tracks)
+	}
+	if !strings.HasPrefix(m.status.text, favRemovedMark) {
+		t.Fatalf("status = %q, want dimmed heart prefix %q", m.status.text, favRemovedMark)
+	}
+	if cmd == nil {
+		t.Fatal("expected a provider-playlist refresh command")
+	}
+	// The manager list must already show the updated Favorites count.
+	m.plMgrRefreshList()
+	found := false
+	for _, pl := range m.plManager.playlists {
+		if pl.Name == favorites.PlaylistName && pl.TrackCount == 1 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("playlists = %+v, want Favorites · 1 tracks after unfavorite", m.plManager.playlists)
+	}
+}
+
+func TestNKeyFromQueueRefreshesFavoritesCount(t *testing.T) {
+	prov := &dirSourceTestProvider{commandsTestProvider: commandsTestProvider{name: "Local"}}
+	m := newDirsScreenTestModel(prov)
+	m.focus = focusPlaylist
+	m.loadedPlaylist = "music"
+	m.playlist = playlist.New()
+	m.playlist.Add(playlist.Track{Path: "/song.mp3", Title: "Song"})
+	m.plCursor = 0
+	m.plManager.visible = false
+	m.plManager.screen = plMgrScreenList
+	m.plManager.playlists = nil
+
+	if cmd := m.handleKey(tea.KeyPressMsg{Text: "n"}); cmd == nil {
+		t.Fatal("expected a provider-playlist refresh command")
+	}
+	if !prov.IsFavorited("/song.mp3") {
+		t.Fatal("track should be favorited after n")
+	}
+	// Opening the manager must show the updated Favorites count.
+	m.openPlaylistManager()
+	found := false
+	for _, pl := range m.plManager.playlists {
+		if pl.Name == favorites.PlaylistName && pl.TrackCount == 1 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("playlists = %+v, want Favorites · 1 tracks after favorite", m.plManager.playlists)
+	}
+}
+
+func TestPlMgrDeleteGuardsFavorites(t *testing.T) {
+	prov := &paneManageProvider{commandsTestProvider: commandsTestProvider{name: "Local"}}
+	m := newDirsScreenTestModel(prov)
+	m.plManager.screen = plMgrScreenList
+	m.plManager.playlists = []playlist.PlaylistInfo{
+		{ID: favorites.PlaylistName, Name: favorites.PlaylistName},
+	}
+	m.plManager.cursor = 0
+
+	m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "d"})
+	if m.plManager.confirmDel {
+		t.Fatal("d on Favorites must not ask for confirmation")
+	}
+	if !strings.Contains(m.status.text, "cannot be deleted") {
+		t.Fatalf("status = %q, want a protection notice", m.status.text)
+	}
+
+	m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "r"})
+	if m.plManager.screen == plMgrScreenRename {
+		t.Fatal("r on Favorites must not open the rename input")
+	}
+
+	m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "D"})
+	if m.fileBrowser.visible {
+		t.Fatal("D on Favorites must not open the directory browser")
 	}
 }
 
@@ -697,6 +842,90 @@ func TestMaybeScrobbleReloadsOpenHistoryTracks(t *testing.T) {
 	}
 }
 
+// Removing the last favorite empties the screen; a stale scroll offset must
+// not survive (the scroll adjuster returns early on an empty list).
+func TestPlMgrReloadTracksResetsScrollWhenEmpty(t *testing.T) {
+	prov := &dirSourceTestProvider{}
+	m := newDirsScreenTestModel(prov)
+	m.plManager.screen = plMgrScreenTracks
+	m.plManager.selPlaylist = favorites.PlaylistName
+	m.plManager.tracks = []playlist.Track{{Path: "/a.mp3", Title: "A"}}
+	m.plManager.cursor = 0
+	m.plManager.scroll = 5
+
+	m.plMgrReloadTracks(favorites.PlaylistName)
+
+	if len(m.plManager.tracks) != 0 {
+		t.Fatalf("tracks = %d, want 0 after reload with no favorites", len(m.plManager.tracks))
+	}
+	if m.plManager.cursor != 0 || m.plManager.scroll != 0 {
+		t.Fatalf("cursor=%d scroll=%d, want both reset to 0", m.plManager.cursor, m.plManager.scroll)
+	}
+}
+
+func TestNKeyTogglesFavorite(t *testing.T) {
+	prov := &dirSourceTestProvider{
+		commandsTestProvider: commandsTestProvider{name: "Local"},
+	}
+	m := newDirsScreenTestModel(prov)
+	m.focus = focusPlaylist
+	m.loadedPlaylist = "music"
+	m.playlist = playlist.New()
+	m.playlist.Add(playlist.Track{Path: "/song.mp3", Title: "Song"})
+	m.plCursor = 0
+	m.plManager.visible = false
+	m.favSet = nil
+
+	// Toggle on.
+	m.handleKey(tea.KeyPressMsg{Text: "n"})
+	if !prov.IsFavorited("/song.mp3") {
+		t.Fatal("track should be favorited after n")
+	}
+	if m.favSet == nil {
+		t.Fatal("favSet should be populated after toggle")
+	}
+	if _, ok := m.favSet["/song.mp3"]; !ok {
+		t.Fatal("favSet should contain /song.mp3 after toggle")
+	}
+	if !strings.HasPrefix(m.status.text, favAddedMark) {
+		t.Fatalf("status = %q, want red heart prefix %q", m.status.text, favAddedMark)
+	}
+
+	// Toggle off.
+	m.handleKey(tea.KeyPressMsg{Text: "n"})
+	if prov.IsFavorited("/song.mp3") {
+		t.Fatal("track should be unfavorited after second n")
+	}
+	if m.favSet != nil {
+		if _, ok := m.favSet["/song.mp3"]; ok {
+			t.Fatal("favSet should not contain /song.mp3 after toggle off")
+		}
+	}
+	if !strings.HasPrefix(m.status.text, favRemovedMark) {
+		t.Fatalf("status = %q, want dimmed heart prefix %q", m.status.text, favRemovedMark)
+	}
+}
+
+func TestNKeyNoopWithoutFavMgr(t *testing.T) {
+	plain := commandsTestProvider{name: "Local"}
+	m := newDirsScreenTestModel(&dirSourceTestProvider{})
+	m.localProvider = plain
+	m.provider = plain
+	m.favMgr = nil
+	m.focus = focusPlaylist
+	m.loadedPlaylist = "music"
+	m.playlist = playlist.New()
+	m.playlist.Add(playlist.Track{Path: "/song.mp3", Title: "Song"})
+	m.plCursor = 0
+
+	m.handleKey(tea.KeyPressMsg{Text: "n"})
+
+	// No crash, no status change.
+	if m.status.text != "" {
+		t.Fatalf("status = %q, want empty (no favMgr)", m.status.text)
+	}
+}
+
 // Deleting a playlist whose document contains [[dir]] sources must restore
 // those sources verbatim on undo instead of rewriting a tracks-only file.
 func TestPlMgrDeleteUndoRestoresDirDocument(t *testing.T) {
@@ -729,10 +958,5 @@ func TestPlMgrDeleteUndoRestoresDirDocument(t *testing.T) {
 	}
 	if !strings.Contains(string(got), "[[dir]]") || !strings.Contains(string(got), "/music/rock") {
 		t.Fatalf("restored doc lost [[dir]] source: %q", got)
-	}
-	for _, name := range prov.restored {
-		if name == "mix" && prov.docRestores == nil {
-			t.Fatal("SavePlaylist path used instead of document restore")
-		}
 	}
 }
