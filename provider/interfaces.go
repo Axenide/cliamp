@@ -184,6 +184,16 @@ type PlaylistRenamer interface {
 	RenamePlaylist(oldName, newName string) error
 }
 
+// PlaylistDocumenter is implemented by providers that can hand back a
+// playlist's raw TOML document and restore it verbatim. Callers use this to
+// snapshot a playlist before a destructive operation so sections the plain
+// track list cannot represent (e.g. [[dir]] directory sources) survive an
+// undo.
+type PlaylistDocumenter interface {
+	PlaylistDocument(name string) ([]byte, error)
+	RestorePlaylistDocument(name string, data []byte) error
+}
+
 // BookmarkSetter is implemented by providers that support toggling
 // track bookmarks and persisting them.
 type BookmarkSetter interface {

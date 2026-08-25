@@ -1645,9 +1645,21 @@ func (m *Model) handlePlMgrListKey(msg tea.KeyPressMsg) tea.Cmd {
 			}
 			if realIdx >= 0 {
 				name := m.plManager.playlists[realIdx].Name
-				if tracks, err := m.localProvider.Tracks(name); err == nil {
-					m.plManager.undo = plManagerUndo{kind: plUndoPlaylist, name: name, tracks: cloneTracks(tracks)}
+				undo := plManagerUndo{kind: plUndoPlaylist, name: name}
+				// Snapshot the raw document so undo can restore [[dir]]
+				// sources verbatim; tracks are the fallback when the
+				// provider cannot hand back its document.
+				if d, ok := m.localProvider.(provider.PlaylistDocumenter); ok {
+					if data, err := d.PlaylistDocument(name); err == nil {
+						undo.doc = data
+					}
 				}
+				if undo.doc == nil {
+					if tracks, err := m.localProvider.Tracks(name); err == nil {
+						undo.tracks = cloneTracks(tracks)
+					}
+				}
+				m.plManager.undo = undo
 				if d, ok := m.localProvider.(provider.PlaylistDeleter); ok {
 					if err := d.DeletePlaylist(name); err != nil {
 						m.status.Errorf(statusTTLDefault, "Delete failed: %s", err)
@@ -2223,12 +2235,20 @@ func cloneTracks(tracks []playlist.Track) []playlist.Track {
 
 func (m *Model) plMgrSetTrackUndo() {
 	m.plMgrEnsureMissingLocal()
-	m.plManager.undo = plManagerUndo{
+	undo := plManagerUndo{
 		kind:         plUndoTracks,
 		name:         m.plManager.selPlaylist,
 		tracks:       cloneTracks(m.plManager.tracks),
 		missingLocal: append([]bool(nil), m.plManager.missingLocal...),
 	}
+	// Snapshot the raw document too so undo restores [[dir]] sources that
+	// SavePlaylist would drop.
+	if d, ok := m.localProvider.(provider.PlaylistDocumenter); ok {
+		if data, err := d.PlaylistDocument(undo.name); err == nil {
+			undo.doc = data
+		}
+	}
+	m.plManager.undo = undo
 }
 
 // plMgrUndoLast restores the last deleted playlist or removed tracks and
@@ -2245,16 +2265,38 @@ func (m *Model) plMgrUndoLast() tea.Cmd {
 		m.status.Warning("Undo unavailable", statusTTLDefault)
 		return nil
 	}
+	if len(undo.doc) > 0 {
+		if r, ok := saver.(provider.PlaylistDocumenter); ok {
+			if err := r.RestorePlaylistDocument(undo.name, undo.doc); err != nil {
+				m.status.Errorf(statusTTLDefault, "Undo failed: %s", err)
+				return nil
+			}
+			m.plMgrFinishUndo(undo)
+			return m.undoRefreshCmd(undo)
+		}
+	}
 	if err := saver.SavePlaylist(undo.name, cloneTracks(undo.tracks)); err != nil {
 		m.status.Errorf(statusTTLDefault, "Undo failed: %s", err)
 		return nil
 	}
+	m.plMgrFinishUndo(undo)
+	return m.undoRefreshCmd(undo)
+}
+
+// undoRefreshCmd schedules a provider-pane refresh after a deleted playlist
+// comes back, so the pane lists it without a pill switch.
+func (m *Model) undoRefreshCmd(undo plManagerUndo) tea.Cmd {
+	if undo.kind == plUndoPlaylist {
+		return m.refreshPaneAfterLocalWrite()
+	}
+	return nil
+}
+
+// plMgrFinishUndo clears the undo slot and refreshes the manager list plus an
+// open tracks screen after a successful restore.
+func (m *Model) plMgrFinishUndo(undo plManagerUndo) {
 	m.plManager.undo = plManagerUndo{}
 	m.plMgrRefreshList()
-	var refresh tea.Cmd
-	if undo.kind == plUndoPlaylist {
-		refresh = m.refreshPaneAfterLocalWrite()
-	}
 	if m.plManager.screen == plMgrScreenTracks && m.plManager.selPlaylist == undo.name {
 		m.plMgrRestoreTracks(undo.tracks, undo.missingLocal)
 		m.plManager.marked = make(map[int]bool)
@@ -2262,7 +2304,6 @@ func (m *Model) plMgrUndoLast() tea.Cmd {
 		m.plMgrTracksMaybeAdjustScroll(m.plMgrTracksVisible())
 	}
 	m.status.Showf(statusTTLDefault, "Restored %q", undo.name)
-	return refresh
 }
 
 func (m *Model) plMgrSelectedTrackIndices() []int {

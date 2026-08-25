@@ -2,11 +2,14 @@ package local
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/bjarneo/cliamp/history"
 	"github.com/bjarneo/cliamp/playlist"
 )
 
@@ -953,5 +956,52 @@ func TestCreateDirPlaylistNoFileOnInvalidDir(t *testing.T) {
 	}
 	if len(entries) != 0 {
 		t.Fatalf("partial playlist created: %v", entries)
+	}
+}
+
+func TestPlaylistDocumentRoundTripPreservesDirs(t *testing.T) {
+	p := newTestProvider(t)
+	audio := t.TempDir()
+	writeAudioFile(t, filepath.Join(audio, "a.mp3"))
+
+	if err := p.CreateDirPlaylist("mix", []string{audio}); err != nil {
+		t.Fatalf("CreateDirPlaylist: %v", err)
+	}
+
+	snapshot, err := p.PlaylistDocument("mix")
+	if err != nil {
+		t.Fatalf("PlaylistDocument: %v", err)
+	}
+	if doc := parsePlaylistDoc(snapshot); len(doc.dirs) != 1 {
+		t.Fatalf("snapshot missing [[dir]]: %+v", doc)
+	}
+
+	if err := p.DeletePlaylist("mix"); err != nil {
+		t.Fatalf("DeletePlaylist: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(p.dir, "mix.toml")); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("playlist file should be gone after delete, stat err = %v", err)
+	}
+
+	if err := p.RestorePlaylistDocument("mix", snapshot); err != nil {
+		t.Fatalf("RestorePlaylistDocument: %v", err)
+	}
+	restored, err := os.ReadFile(filepath.Join(p.dir, "mix.toml"))
+	if err != nil {
+		t.Fatalf("read restored: %v", err)
+	}
+	if string(restored) != string(snapshot) {
+		t.Fatal("restored document differs from the snapshot")
+	}
+	doc := parsePlaylistDoc(restored)
+	if len(doc.dirs) != 1 || doc.dirs[0].Path != audio || doc.dirs[0].Recursive != true {
+		t.Fatalf("[[dir]] source lost in restore: %+v", doc.dirs)
+	}
+}
+
+func TestRestorePlaylistDocumentRejectsHistory(t *testing.T) {
+	p := newTestProviderWithHistory(t)
+	if err := p.RestorePlaylistDocument(history.PlaylistName, []byte("[[track]]\n")); err == nil {
+		t.Fatal("expected an error restoring over the reserved history name")
 	}
 }

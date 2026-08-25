@@ -172,6 +172,7 @@ type plManagerUndo struct {
 	name         string
 	tracks       []playlist.Track
 	missingLocal []bool
+	doc          []byte // raw TOML snapshot; when set, undo restores it verbatim
 }
 
 type playlistPickerScreen int
