@@ -1,12 +1,11 @@
 # Creating a Provider
 
-Providers live in `external/<name>/` (e.g. `external/jellyfin/`). A provider is
-a Go package that implements the base `playlist.Provider` interface and
-optionally implements capability interfaces from the `provider/` package. The UI
-discovers capabilities at runtime via type assertions and enables features
-accordingly.
+Put providers in `external/<name>/`, for example `external/jellyfin/`. A
+provider is a Go package. It implements the base `playlist.Provider` interface
+and can implement capability interfaces from the `provider/` package. The UI
+uses type assertions at run time to detect capabilities and enable features.
 
-See the existing providers for reference:
+Use these providers as examples:
 
 - `external/navidrome/`: Subsonic API, browsing, scrobbling
 - `external/plex/`: Plex Media Server, search, album tracks
@@ -29,13 +28,13 @@ type Provider interface {
 }
 ```
 
-This gives the provider a name, a list of playlists, and the ability to return
-tracks for a playlist. That's enough for basic playback.
+This interface provides a name, a playlist list, and tracks for a playlist. It
+is enough for basic playback.
 
 ## Capability Interfaces (optional)
 
-Implement any combination of these to unlock additional UI features. All
-interfaces are defined in `provider/interfaces.go`.
+Implement any of these interfaces to enable more UI features. All interfaces
+are in `provider/interfaces.go`.
 
 | Interface | What it enables | Methods |
 |---|---|---|
@@ -117,14 +116,14 @@ func (p *Provider) AlbumTracks(albumID string) ([]playlist.Track, error) {
 
 ### 2. Return tracks
 
-When building `playlist.Track` values:
+When you create `playlist.Track` values:
 
-- **`Path`**: the playable URL or file path. For HTTP streams, use a full URL.
-  For custom URI schemes (e.g. `spotify:track:xxx`), implement `CustomStreamer`.
-- **`Stream: true`**: set this for HTTP URLs so the player uses the streaming
+- **`Path`**: Set the playable URL or file path. For HTTP streams, use a full URL.
+  For a custom URI scheme, for example `spotify:track:xxx`, implement `CustomStreamer`.
+- **`Stream: true`**: Set this for HTTP URLs. The player then uses the streaming
   pipeline.
-- **`ProviderMeta`**: attach provider-specific metadata as a string map with
-  namespaced keys. This is used for features like scrobbling:
+- **`ProviderMeta`**: Add provider-specific metadata in a string map with
+  namespaced keys. cliamp uses this metadata for features such as scrobbling:
 
 ```go
 playlist.Track{
@@ -138,7 +137,7 @@ playlist.Track{
 
 ### 3. Add configuration
 
-Add a config struct to `config/config.go`:
+Add a configuration struct to `config/config.go`:
 
 ```go
 type JellyfinConfig struct {
@@ -147,7 +146,7 @@ type JellyfinConfig struct {
 }
 ```
 
-Add the field to the top-level `Config` struct and a TOML section:
+Add the field to the top-level `Config` struct. Then add a TOML section:
 
 ```toml
 [jellyfin]
@@ -157,7 +156,7 @@ token = "your-api-key"
 
 ### 4. Register in main.go
 
-Wire up the provider in the `run()` function in `main.go`:
+Register the provider in the `run()` function in `main.go`:
 
 ```go
 if cfg.Jellyfin.URL != "" && cfg.Jellyfin.Token != "" {
@@ -168,7 +167,7 @@ if cfg.Jellyfin.URL != "" && cfg.Jellyfin.Token != "" {
 }
 ```
 
-If your provider needs a custom audio pipeline (like Spotify's `spotify:` URIs),
+If the provider needs a custom audio pipeline, such as Spotify `spotify:` URIs,
 register a streamer factory:
 
 ```go
@@ -179,8 +178,8 @@ if cs, ok := myProv.(provider.CustomStreamer); ok {
 }
 ```
 
-If your provider needs the buffered download pipeline for its stream URLs
-(like Navidrome's Subsonic endpoints), register a URL matcher:
+If the provider needs the buffered download pipeline for stream URLs, such as
+Navidrome Subsonic endpoints, register a URL matcher:
 
 ```go
 p.RegisterBufferedURLMatcher(jellyfin.IsStreamURL)
@@ -188,34 +187,34 @@ p.RegisterBufferedURLMatcher(jellyfin.IsStreamURL)
 
 ### 5. Add a `--provider` flag value
 
-In `main.go`'s help text, add your provider key to the `--provider` line so
-users can set it as their default.
+In the `main.go` help text, add the provider key to the `--provider` line. Users
+can then set it as the default.
 
 ## What the UI Does Automatically
 
-You don't need to touch the UI code. Based on which interfaces your provider
-implements, the UI will automatically:
+Do not change the UI code. The UI uses the interfaces your provider implements
+to do the following:
 
-- Show the browse overlay (`N`) if any registered provider implements
+- Show the browse overlay (`N`) when any registered provider implements
   `ArtistBrowser`, `AlbumBrowser`, or `GenreBrowser`
 - Add `BrowseEntryProvider` routes to the provider pane without exposing them
-  as playable playlists to IPC or other provider consumers. `AfterID` places a
-  route after one list item, with `AfterSection` as its section-level fallback.
-  A route extending a missing section is omitted. `OpenInPlaylist` makes its
-  non-empty final result replace the main playlist instead of opening the
-  browser's track screen
-- Jump from a highlighted track to its artist/creator when the originating
+  as playable playlists to IPC or other provider users. `AfterID` puts a route
+  after one list item. `AfterSection` is its section fallback. cliamp omits a
+  route that extends a missing section. `OpenInPlaylist` replaces the main
+  playlist with its non-empty final result instead of opening the browser track
+  screen
+- Jump from a highlighted track to its artist or creator when the source
   provider implements both `TrackArtistResolver` and `ArtistBrowser`
 - Add genre lists and sort views for `GenreBrowser`, the `f` action for
   `GenreFavoriteToggler`, and provider-side category search for `GenreSearcher`
-- Show the search overlay ("F") if any registered provider implements `Searcher`
-- Enable add-to-playlist in search results if the searched provider implements `PlaylistWriter`
-- Report playback at track start and finish if `PlaybackReporter` is implemented, logging any failure the provider returns
-- Run interactive auth on first use if `Authenticator` is implemented
-- Place the cursor on the in-progress track and start it at the stored position if `ResumeTarget` is implemented
-- Push an interim listening position every 15 seconds while a track plays if `ProgressReporter` is implemented
-- Label the browse overlay's two levels with your own nouns if `BrowseLabeler` is implemented
-- Call `Close()` on shutdown if `Closer` is implemented
+- Show the search overlay ("F") when a registered provider implements `Searcher`
+- Enable add-to-playlist in search results when the searched provider implements `PlaylistWriter`
+- Report playback at track start and finish when `PlaybackReporter` is implemented. Log failures that the provider returns.
+- Run interactive authentication on first use when `Authenticator` is implemented
+- Put the cursor on the active track and start at its stored position when `ResumeTarget` is implemented
+- Send the listening position every 15 seconds while a track plays when `ProgressReporter` is implemented
+- Set the browse overlay levels to your own nouns when `BrowseLabeler` is implemented
+- Call `Close()` during shutdown when `Closer` is implemented
 
-The "N" and "F" shortcuts work regardless of which provider is currently active
-They find the first registered provider with the needed capability.
+The "N" and "F" shortcuts work with any active provider. They use the first
+registered provider with the required capability.

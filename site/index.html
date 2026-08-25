@@ -3,21 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CLIAMP — Terminal Music Player</title>
-<meta name="description" content="A retro terminal music player inspired by Winamp 2.x. Play local files, YouTube, Spotify, Qobuz, Tidal, Plex, Jellyfin, Emby, Navidrome, Lyrion, SoundCloud, Mixcloud, NetEase, and 30,000+ radio stations with a spectrum visualizer and 10-band EQ.">
+<title>CLIAMP - Terminal Music Player</title>
+<meta name="description" content="A terminal music player based on Winamp 2.x. Play local files, YouTube, Spotify, Qobuz, Tidal, Plex, Jellyfin, Emby, Navidrome, Lyrion, SoundCloud, Mixcloud, NetEase, and more than 30,000 radio stations. Use a spectrum visualizer and 10-band equalizer.">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
 <!-- Open Graph -->
 <meta property="og:type" content="website">
-<meta property="og:title" content="CLIAMP — Terminal Music Player">
-<meta property="og:description" content="A retro terminal music player inspired by Winamp 2.x. Play YouTube, Spotify, Qobuz, Tidal, Plex, Jellyfin, Emby, Navidrome, Lyrion, SoundCloud, Mixcloud, NetEase, and 30,000+ radio stations from your terminal with a spectrum visualizer and 10-band EQ.">
+<meta property="og:title" content="CLIAMP - Terminal Music Player">
+<meta property="og:description" content="A terminal music player based on Winamp 2.x. Play YouTube, Spotify, Qobuz, Tidal, Plex, Jellyfin, Emby, Navidrome, Lyrion, SoundCloud, Mixcloud, NetEase, and more than 30,000 radio stations. Use a spectrum visualizer and 10-band equalizer.">
 <meta property="og:image" content="https://cliamp.stream/og-image.png">
 <meta property="og:url" content="https://cliamp.stream">
 
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="CLIAMP — Terminal Music Player">
-<meta name="twitter:description" content="A retro terminal music player inspired by Winamp 2.x. Play YouTube, Spotify, Qobuz, Tidal, Plex, Jellyfin, Emby, Navidrome, Lyrion, SoundCloud, Mixcloud, NetEase, and 30,000+ radio stations from your terminal with a spectrum visualizer and 10-band EQ.">
+<meta name="twitter:title" content="CLIAMP - Terminal Music Player">
+<meta name="twitter:description" content="A terminal music player based on Winamp 2.x. Play YouTube, Spotify, Qobuz, Tidal, Plex, Jellyfin, Emby, Navidrome, Lyrion, SoundCloud, Mixcloud, NetEase, and more than 30,000 radio stations. Use a spectrum visualizer and 10-band equalizer.">
 <meta name="twitter:image" content="https://cliamp.stream/og-image.png">
 
 <style>
@@ -529,8 +529,8 @@ footer{border-top:1px solid var(--line);background:var(--ink-2);padding:46px 0 5
       <div>
         <div class="hero-eyebrow"><span class="led"></span>Terminal music player</div>
         <h1 class="hero-word">cli<span>amp</span></h1>
-        <p class="hero-sub"><em>Winamp</em> for your shell.</p>
-        <p class="hero-desc">Playlists, a 10-band EQ, visualizers, synced lyrics, remote control, and a Lua plugin system — streaming from <em>Spotify, Qobuz, Tidal, YouTube Music, Plex, Jellyfin, Emby, Navidrome, Lyrion</em>, and 30,000+ radio stations.</p>
+        <p class="hero-sub"><em>Winamp</em> for the shell.</p>
+        <p class="hero-desc">Use playlists, a 10-band EQ, visualizers, synced lyrics, remote control, and Lua plugins. Stream from <em>Spotify, Qobuz, Tidal, YouTube Music, Plex, Jellyfin, Emby, Navidrome, Lyrion</em>, and more than 30,000 radio stations.</p>
         <div class="hero-cta">
           <a href="#install" class="btn btn-go">Install<span class="ar">→</span></a>
           <a href="https://github.com/bjarneo/cliamp" class="btn btn-ghost">Source<span class="ar">↗</span></a>
@@ -552,11 +552,11 @@ footer{border-top:1px solid var(--line);background:var(--ink-2);padding:46px 0 5
           <div class="tty-body">
             <div class="t-row"><span class="t-title">C L I A M P</span><span class="t-focus">[Playlist]</span></div>
             <div class="t-row t-track-row"><span class="t-track-sym">♫</span><span class="t-track" id="t-track-name">Lofi Hip Hop Radio</span></div>
-            <div class="t-row t-time-row" onclick="toggleRadio()" role="button" tabindex="0" aria-label="Play / Stop" onkeydown="if(event.key===' '||event.key==='Enter'){event.preventDefault();toggleRadio()}">
+            <div class="t-row t-time-row" onclick="toggleRadio()" role="button" tabindex="0" aria-label="Play or stop" onkeydown="if(event.key===' '||event.key==='Enter'){event.preventDefault();toggleRadio()}">
               <span class="t-time">00:00 / 00:00</span>
               <span class="t-status">
                 <span class="t-status-stopped">■ Stopped <em>(click to play)</em></span>
-                <span class="t-status-loading">◌ Buffering…</span>
+                <span class="t-status-loading">◌ Buffering...</span>
                 <span class="t-status-playing">● Streaming</span>
               </span>
             </div>
@@ -619,14 +619,14 @@ footer{border-top:1px solid var(--line);background:var(--ink-2);padding:46px 0 5
             </div>
           </div>
         </div>
-        <p class="tune-hint">Click a station above to tune in live — right here in your browser.</p>
+        <p class="tune-hint">Select a station to play it live in this browser.</p>
         <div class="tty-hint"><code id="radio-hint-cmd"><span class="p">$ </span>cliamp https://radio.cliamp.stream/lofi/stream.pls</code></div>
       </div>
     </div>
 
     <!-- sponsor -->
     <div class="sponsor">
-      <a href="https://contextowl.co"><img src="https://contextowl.co/uploads/_brand/sponsor-dark.svg" alt="Proudly sponsored by contextowl.co" width="400"></a>
+      <a href="https://contextowl.co"><img src="https://contextowl.co/uploads/_brand/sponsor-dark.svg" alt="Sponsored by contextowl.co" width="400"></a>
     </div>
   </div>
 </section>
@@ -694,12 +694,12 @@ footer{border-top:1px solid var(--line);background:var(--ink-2);padding:46px 0 5
       </div>
     </div>
     <div class="install-note reveal">
-      Or build from source — <a href="https://github.com/bjarneo/cliamp">see the README</a>. Windows builds are available from Releases; when <code>HOME</code> is unset, config lives under <code>%APPDATA%\cliamp</code>.
+      Build from source. <a href="https://github.com/bjarneo/cliamp">See the README.</a> Windows builds are in Releases. If <code>HOME</code> is not set, the config is in <code>%APPDATA%\cliamp</code>.
     </div>
     <div class="next-step reveal">
-      <div class="next-step-label">Next step · configure providers</div>
-      <h3>Run the setup wizard</h3>
-      <p>An interactive TUI walks you through Navidrome, Lyrion, Plex, Jellyfin, Emby, Spotify, Qobuz, Tidal, Mixcloud, NetEase, and YouTube Music. It links to each provider's credential page and writes the right block to your config file. Supported server connections are validated during setup; Mixcloud's optional browser-session or OAuth credentials are checked later, when used.</p>
+      <div class="next-step-label">Next: configure providers</div>
+      <h3>Run setup</h3>
+      <p>Use the interactive TUI to configure Navidrome, Lyrion, Plex, Jellyfin, Emby, Spotify, Qobuz, Tidal, Mixcloud, NetEase, and YouTube Music. The TUI opens each provider credential page and writes the required block to the config file. The TUI tests supported server connections during setup. Mixcloud browser-session or OAuth credentials are optional and are tested when you use them.</p>
       <div class="install-box" onclick="copyCmd(this,'cliamp setup')">
         <div class="install-platform">Setup</div>
         <code><span class="prompt">$ </span>cliamp setup</code>
@@ -717,38 +717,38 @@ footer{border-top:1px solid var(--line);background:var(--ink-2);padding:46px 0 5
       <span class="strip-meter"><i></i><i></i><i></i><i></i><i></i></span>
     </div>
     <p class="sources-intro reveal">
-      Stream from everywhere. Every provider runs through the same <em>playlist, EQ, visualizer, and lyrics pipeline</em> — your config follows you across services. Run <code>cliamp setup</code> for an interactive wizard that walks you through Navidrome, Lyrion, Plex, Jellyfin, Emby, Audiobookshelf, Spotify, Qobuz, Tidal, Mixcloud, NetEase, and YouTube Music.
+      Use all providers with the same <em>playlist, EQ, visualizer, and lyrics pipeline</em>. Your config works across services. Run <code>cliamp setup</code> to configure Navidrome, Lyrion, Plex, Jellyfin, Emby, Audiobookshelf, Spotify, Qobuz, Tidal, Mixcloud, NetEase, and YouTube Music.
     </p>
     <div class="sources-grid reveal">
-      <div class="source" style="--src-color:#1db954"><div class="source-badge">OAuth · cached</div><div class="source-name">Spotify</div><div class="source-desc">Stream your Premium library. Bring your own developer <code>client_id</code> for a private Web API quota; playback is authorized separately. Search with <kbd>Ctrl+F</kbd>; Development Mode paging is automatic. Pre-built Windows releases include Spotify support.</div></div>
-      <div class="source" style="--src-color:#c3c9d4"><div class="source-badge">OAuth · lossless</div><div class="source-name">Qobuz</div><div class="source-desc">Opt-in: set <code>[qobuz] enabled = true</code>. Stream lossless FLAC up to 24-bit/192kHz from your subscription. Browse favorites &amp; playlists, search with <kbd>Ctrl+F</kbd>. Sign in once via OAuth in your browser.</div></div>
-      <div class="source" style="--src-color:#33ffee"><div class="source-badge">OAuth · lossless</div><div class="source-name">Tidal</div><div class="source-desc">Opt-in: set <code>[tidal] enabled = true</code>. Stream lossless FLAC (CD quality) from your subscription. Browse favorites &amp; playlists, search tracks &amp; albums with <kbd>Ctrl+F</kbd> — album hits lead the results and expand into the full track list. Sign in once by approving a <code>link.tidal.com</code> device code.</div></div>
-      <div class="source" style="--src-color:#ff0000"><div class="source-badge">yt-dlp</div><div class="source-name">YouTube</div><div class="source-desc">Search videos with <kbd>Ctrl+F</kbd>, then play, append, or queue from a results list.</div></div>
-      <div class="source" style="--src-color:#ff4444"><div class="source-badge">Cookies · OAuth</div><div class="source-name">YT Music</div><div class="source-desc">Browse your playlists and Liked Music directly via browser cookies (zero OAuth setup) or custom Google Cloud credentials. Set <code>cookies_from</code> in your config.</div></div>
-      <div class="source" style="--src-color:#e5a00d"><div class="source-badge">Media server</div><div class="source-name">Plex</div><div class="source-desc">Browse albums and stream from your Plex Media Server.</div></div>
-      <div class="source" style="--src-color:#00a4dc"><div class="source-badge">Media server</div><div class="source-name">Jellyfin</div><div class="source-desc">Artists, albums, tracks — buffered gapless playback.</div></div>
-      <div class="source" style="--src-color:#52b54b"><div class="source-badge">Media server</div><div class="source-name">Emby</div><div class="source-desc">Browse your Emby music library with API key or username/password auth.</div></div>
-      <div class="source" style="--src-color:#2ecc71"><div class="source-badge">Subsonic API</div><div class="source-name">Navidrome</div><div class="source-desc">Browse your self-hosted library with synced lyrics.</div></div>
-      <div class="source" style="--src-color:#8e6bb5"><div class="source-badge">Media server</div><div class="source-name">Lyrion</div><div class="source-desc">Browse a Lyrion Music Server (LMS) library — playlists, artists, albums, and search.</div></div>
-      <div class="source" style="--src-color:#3c873a"><div class="source-badge">Media server</div><div class="source-name">Audiobookshelf</div><div class="source-desc">Audiobooks and podcasts from your own server, with synced listening position and resume.</div></div>
-      <div class="source" style="--src-color:#ff7700"><div class="source-badge">Provider · yt-dlp</div><div class="source-name">SoundCloud</div><div class="source-desc">Opt-in: set <code>[soundcloud] enabled = true</code>. Search with <kbd>Ctrl+F</kbd>, browse curated genre playlists, or add <code>user</code> for your profile. <code>cookies_from</code> unlocks Go+ tracks via your browser session.</div></div>
-      <div class="source" style="--src-color:#5000ff"><div class="source-badge">Public API · yt-dlp</div><div class="source-name">Mixcloud</div><div class="source-desc">Opt-in: set <code>[mixcloud] enabled = true</code>. Account-first Stream, Favorites and followed Creators, recent and popular shows, collections, creator Uploads/Favorites, native show search, live genre/tag discovery, locally favorited style charts, restricted-show warnings, and resume. Press <kbd>Shift+X</kbd> to open; browser cookies support signed-in playback.</div></div>
-      <div class="source" style="--src-color:#d33a31"><div class="source-badge">Provider · yt-dlp</div><div class="source-name">NetEase</div><div class="source-desc">Opt-in: run <code>cliamp setup</code> after signing in at <code>music.163.com</code>, then choose your browser. Browse liked songs, account playlists, saved playlists, and charts with browser-cookie playback.</div></div>
-      <div class="source" style="--src-color:#629aa9"><div class="source-badge">yt-dlp</div><div class="source-name">Bandcamp</div><div class="source-desc">Paste any Bandcamp URL and it just plays.</div></div>
-      <div class="source" style="--src-color:#00a1d6"><div class="source-badge">yt-dlp</div><div class="source-name">Bilibili</div><div class="source-desc">Audio tracks from Bilibili videos via yt-dlp.</div></div>
-      <div class="source" style="--src-color:#f7a000"><div class="source-badge">30k+ stations</div><div class="source-name">Radio</div><div class="source-desc">Browse stations by country, tag, or name. ICY metadata.</div></div>
-      <div class="source" style="--src-color:#c3a6ff"><div class="source-badge">RSS feeds</div><div class="source-name">Podcasts</div><div class="source-desc">Pass any podcast RSS URL and listen in your terminal.</div></div>
-      <div class="source" style="--src-color:#37f5a0"><div class="source-badge">Local</div><div class="source-name">Files</div><div class="source-desc">MP3, FLAC, OGG, Opus, WAV, AAC, ALAC, WMA. ID3 tags read.</div></div>
+      <div class="source" style="--src-color:#1db954"><div class="source-badge">OAuth · cached</div><div class="source-name">Spotify</div><div class="source-desc">Stream your Premium library. Set your developer <code>client_id</code> to use a private Web API quota. Authorize playback separately. Search with <kbd>Ctrl+F</kbd>. The app handles Development Mode paging. Pre-built Windows releases support Spotify.</div></div>
+      <div class="source" style="--src-color:#c3c9d4"><div class="source-badge">OAuth · lossless</div><div class="source-name">Qobuz</div><div class="source-desc">Enable Qobuz: set <code>[qobuz] enabled = true</code>. Stream lossless FLAC from your subscription, up to 24-bit/192kHz. Browse favorites and playlists. Search with <kbd>Ctrl+F</kbd>. Sign in once with OAuth in your browser.</div></div>
+      <div class="source" style="--src-color:#33ffee"><div class="source-badge">OAuth · lossless</div><div class="source-name">Tidal</div><div class="source-desc">Enable Tidal: set <code>[tidal] enabled = true</code>. Stream lossless FLAC at CD quality from your subscription. Browse favorites and playlists. Search tracks and albums with <kbd>Ctrl+F</kbd>. Album results appear first and expand to the full track list. Sign in once by approving a <code>link.tidal.com</code> device code.</div></div>
+      <div class="source" style="--src-color:#ff0000"><div class="source-badge">yt-dlp</div><div class="source-name">YouTube</div><div class="source-desc">Search videos with <kbd>Ctrl+F</kbd>. Then play, append, or queue a result.</div></div>
+      <div class="source" style="--src-color:#ff4444"><div class="source-badge">Cookies · OAuth</div><div class="source-name">YT Music</div><div class="source-desc">Browse playlists and Liked Music with browser cookies. Browser cookies need no OAuth setup. You can use custom Google Cloud credentials instead. Set <code>cookies_from</code> in your config.</div></div>
+      <div class="source" style="--src-color:#e5a00d"><div class="source-badge">Media server</div><div class="source-name">Plex</div><div class="source-desc">Browse albums. Stream from your Plex Media Server.</div></div>
+      <div class="source" style="--src-color:#00a4dc"><div class="source-badge">Media server</div><div class="source-name">Jellyfin</div><div class="source-desc">Browse artists, albums, and tracks. Use buffered gapless playback.</div></div>
+      <div class="source" style="--src-color:#52b54b"><div class="source-badge">Media server</div><div class="source-name">Emby</div><div class="source-desc">Browse your Emby music library. Use an API key or username and password.</div></div>
+      <div class="source" style="--src-color:#2ecc71"><div class="source-badge">Subsonic API</div><div class="source-name">Navidrome</div><div class="source-desc">Browse your self-hosted library. View synced lyrics.</div></div>
+      <div class="source" style="--src-color:#8e6bb5"><div class="source-badge">Media server</div><div class="source-name">Lyrion</div><div class="source-desc">Browse a Lyrion Music Server (LMS) library: playlists, artists, albums, and search.</div></div>
+      <div class="source" style="--src-color:#3c873a"><div class="source-badge">Media server</div><div class="source-name">Audiobookshelf</div><div class="source-desc">Listen to audiobooks and podcasts from your server. Sync listening position and resume.</div></div>
+      <div class="source" style="--src-color:#ff7700"><div class="source-badge">Provider · yt-dlp</div><div class="source-name">SoundCloud</div><div class="source-desc">Enable SoundCloud: set <code>[soundcloud] enabled = true</code>. Search with <kbd>Ctrl+F</kbd>, browse curated genre playlists, or add <code>user</code> for your profile. <code>cookies_from</code> lets you play Go+ tracks from your browser session.</div></div>
+      <div class="source" style="--src-color:#5000ff"><div class="source-badge">Public API · yt-dlp</div><div class="source-name">Mixcloud</div><div class="source-desc">Enable Mixcloud: set <code>[mixcloud] enabled = true</code>. Browse account Stream and Favorites, followed Creators, recent and popular shows, collections, and creator Uploads and Favorites. Search shows and discover live genres and tags. View locally favorited style charts, restricted-show warnings, and resume. Press <kbd>Shift+X</kbd> to open. Browser cookies support signed-in playback.</div></div>
+      <div class="source" style="--src-color:#d33a31"><div class="source-badge">Provider · yt-dlp</div><div class="source-name">NetEase</div><div class="source-desc">Run <code>cliamp setup</code> after you sign in at <code>music.163.com</code>. Then select your browser. Browse liked songs, account playlists, saved playlists, and charts. Use browser cookies for playback.</div></div>
+      <div class="source" style="--src-color:#629aa9"><div class="source-badge">yt-dlp</div><div class="source-name">Bandcamp</div><div class="source-desc">Paste a Bandcamp URL to play it.</div></div>
+      <div class="source" style="--src-color:#00a1d6"><div class="source-badge">yt-dlp</div><div class="source-name">Bilibili</div><div class="source-desc">Play audio from Bilibili videos with yt-dlp.</div></div>
+      <div class="source" style="--src-color:#f7a000"><div class="source-badge">30k+ stations</div><div class="source-name">Radio</div><div class="source-desc">Browse stations by country, tag, or name. View ICY metadata.</div></div>
+      <div class="source" style="--src-color:#c3a6ff"><div class="source-badge">RSS feeds</div><div class="source-name">Podcasts</div><div class="source-desc">Give a podcast RSS URL to listen in the terminal.</div></div>
+      <div class="source" style="--src-color:#37f5a0"><div class="source-badge">Local</div><div class="source-name">Files</div><div class="source-desc">Play MP3, FLAC, OGG, Opus, WAV, AAC, ALAC, and WMA files. The app reads ID3 tags.</div></div>
     </div>
     <div class="source-config reveal">
       <div class="next-step-label">NetEase Cloud Music</div>
-      <h3>Browser-session setup</h3>
-      <p>Sign in at <code>music.163.com</code>, then run <code>cliamp setup</code>. Choose NetEase Cloud Music, pick the browser you used, and the wizard validates the session before writing config.</p>
+      <h3>Browser session setup</h3>
+      <p>Sign in at <code>music.163.com</code>. Then run <code>cliamp setup</code>. Select NetEase Cloud Music and the browser you used. The wizard checks the session before it writes the config.</p>
       <pre><code>[netease]
 enabled = true
 cookies_from = "chrome"
 user_id = "your-account-user-id"</code></pre>
-      <p>After setup, press <kbd>M</kbd> to open NetEase and <kbd>Ctrl+F</kbd> to search. Playback uses <code>yt-dlp</code> with the same browser cookie source.</p>
+      <p>After setup, press <kbd>M</kbd> to open NetEase and <kbd>Ctrl+F</kbd> to search. Playback uses <code>yt-dlp</code> and the same browser cookie source.</p>
     </div>
   </div>
 </section>
@@ -761,29 +761,28 @@ user_id = "your-account-user-id"</code></pre>
       <span class="strip-meter"><i></i><i></i><i></i><i></i><i></i></span>
     </div>
     <div class="features-grid reveal">
-      <div class="feature"><div class="feature-icon">≡</div><div class="feature-name">10-Band Equalizer</div><p>Parametric EQ presets plus a persistent Custom curve that survives preset changes and restarts.</p></div>
-      <div class="feature"><div class="feature-icon">◈</div><div class="feature-name">Themes &amp; Visualizers</div><p>21 contrast-checked built-in themes and spectrum, mirrored spectrum, waveform, particle, and true-stereo modes. Wave, Scope, and Heartbeat render at 60 FPS; use <code>--visualizer-60fps</code> for smoother animation elsewhere. Stereo provides dedicated L/R horizontal LED peak meters. Hot-swap with <kbd>t</kbd> / <kbd>v</kbd>.</p></div>
-      <div class="feature"><div class="feature-icon">☰</div><div class="feature-name">Playlists</div><p>TOML playlists with dynamic <code>[[dir]]</code> directory sources you can add, remove, and toggle-recursive from the playlist manager (<code>D</code>), create, rename, delete, and fill playlists with folders or files in the manager (<code>a</code>/<code>r</code>/<code>d</code>), cross-playlist favorites (<code>n</code>), plus M3U/M3U8/PLS import/export, duplicate-safe writes, and TUI/CLI sort tools.</p></div>
-      <div class="feature"><div class="feature-icon">⟲</div><div class="feature-name">Recently Played</div><p>Auto-recorded listening history. Browse it as a virtual playlist or run <code>cliamp history</code> from the shell.</p></div>
-      <div class="feature"><div class="feature-icon">→</div><div class="feature-name">HTTP Streaming</div><p>Play from URLs, internet radio, remote M3U playlists, and HLS (<code>.m3u8</code>) streams, with decoded-audio jitter buffering for live radio.</p></div>
-      <div class="feature"><div class="feature-icon">♪</div><div class="feature-name">Synced Lyrics</div><p>Embedded local lyrics first, then LRCLIB/NetEase fallback. Auto-scrolling for timestamped lyrics.</p></div>
-      <div class="feature"><div class="feature-icon">⇄</div><div class="feature-name">Gapless Playback</div><p>Seamless transitions with preloaded next-track buffering.</p></div>
-      <div class="feature"><div class="feature-icon">♬</div><div class="feature-name">MPRIS / Media Keys</div><p>Desktop integration. Hardware media keys, <code>playerctl</code>, and embedded local cover art.</p></div>
-      <div class="feature"><div class="feature-icon">▮</div><div class="feature-name">Quickshell Widget (Omarchy)</div><p>Drop-in <a href="https://quickshell.org">Quickshell</a> now-playing card with a Winamp 2-style spectrum, tracking your active Omarchy theme. <a href="https://github.com/bjarneo/cliamp/blob/main/docs/quickshell.md">Setup</a>.</p></div>
-      <div class="feature"><div class="feature-icon">⚙</div><div class="feature-name">Audio Quality</div><p>Configurable sample rate (22kHz-192kHz), up to 5 seconds of buffering, and resampling.</p></div>
-      <div class="feature"><div class="feature-icon">⌀</div><div class="feature-name">Live Radio Metadata</div><p>ICY/Shoutcast metadata for the current song on internet radio, plus API-based now-playing for FIP and NTS.</p></div>
-      <div class="feature"><div class="feature-icon">✎</div><div class="feature-name">Embedded Tag Reading</div><p>ID3v2, Vorbis comments, MP4 atoms - artist, album, genre, year, lyrics, cover art.</p></div>
-      <div class="feature"><div class="feature-icon">▶</div><div class="feature-name">CLI Flags</div><p>Override volume, shuffle, repeat, theme, EQ, sample rate per-session.</p></div>
+      <div class="feature"><div class="feature-icon">≡</div><div class="feature-name">10-Band Equalizer</div><p>Use parametric EQ presets. The persistent Custom curve remains after preset changes and restarts.</p></div>
+      <div class="feature"><div class="feature-icon">◈</div><div class="feature-name">Themes &amp; Visualizers</div><p>Use 21 built-in themes with contrast checks. Select spectrum, mirrored spectrum, waveform, particle, and true-stereo modes. Wave, Scope, and Heartbeat run at 60 FPS. Use <code>--visualizer-60fps</code> for smoother animation in other modes. Stereo has separate L/R horizontal LED peak meters. Press <kbd>t</kbd> / <kbd>v</kbd> to change them.</p></div>
+      <div class="feature"><div class="feature-icon">☰</div><div class="feature-name">Playlists</div><p>Use TOML playlists and dynamic <code>[[dir]]</code> directory sources. In the playlist manager (<code>D</code>), add, remove, and turn recursive search on or off. Create, rename, delete, and fill playlists with folders or files in the manager (<code>a</code>/<code>r</code>/<code>d</code>). Use cross-playlist favorites (<code>n</code>). Import and export M3U/M3U8/PLS files. The app prevents duplicate writes and sorts in the TUI or CLI.</p></div>
+      <div class="feature"><div class="feature-icon">⟲</div><div class="feature-name">Recently Played</div><p>The app records listening history automatically. Browse it as a virtual playlist or run <code>cliamp history</code>.</p></div>
+      <div class="feature"><div class="feature-icon">→</div><div class="feature-name">HTTP Streaming</div><p>Play URLs, internet radio, remote M3U playlists, and HLS (<code>.m3u8</code>) streams. The app uses decoded-audio jitter buffering for live radio.</p></div>
+      <div class="feature"><div class="feature-icon">♪</div><div class="feature-name">Synced Lyrics</div><p>Use embedded local lyrics first. The app uses LRCLIB/NetEase if needed. It auto-scrolls timestamped lyrics.</p></div>
+      <div class="feature"><div class="feature-icon">⇄</div><div class="feature-name">Gapless Playback</div><p>The app preloads the next track for seamless transitions.</p></div>
+      <div class="feature"><div class="feature-icon">♬</div><div class="feature-name">MPRIS / Media Keys</div><p>The app integrates with the desktop. Use hardware media keys and <code>playerctl</code>. The app shows embedded local cover art.</p></div>
+      <div class="feature"><div class="feature-icon">⚙</div><div class="feature-name">Audio Quality</div><p>Set the sample rate and buffering time (up to 5 seconds). Use resampling.</p></div>
+      <div class="feature"><div class="feature-icon">⌀</div><div class="feature-name">Live Radio Metadata</div><p>View ICY/Shoutcast metadata for the current internet-radio song. Get API-based now-playing data for FIP and NTS.</p></div>
+      <div class="feature"><div class="feature-icon">✎</div><div class="feature-name">Embedded Tag Reading</div><p>Read ID3v2, Vorbis comments, and MP4 atoms: artist, album, genre, year, lyrics, and cover art.</p></div>
+      <div class="feature"><div class="feature-icon">▶</div><div class="feature-name">CLI Flags</div><p>Use flags to override volume, shuffle, repeat, theme, EQ, and sample rate for a session.</p></div>
       <div class="feature"><div class="feature-icon">⇥</div><div class="feature-name">Shell Completion</div><p>Generate completion scripts for Bash, Zsh, Fish, and PowerShell.</p></div>
-      <div class="feature"><div class="feature-icon">≡</div><div class="feature-name">Diagnostic Logging</div><p>File logs at <span class="path">~/.config/cliamp/cliamp.log</span>. Set <code>log_level</code> in config or <code>--log-level</code> on the CLI: <code>debug</code>, <code>info</code>, <code>warn</code>, <code>error</code>.</p></div>
-      <div class="feature"><div class="feature-icon">↑</div><div class="feature-name">Self-Update</div><p>Run <code>cliamp upgrade</code> for stable releases, or <code>cliamp upgrade --prerelease</code> to test betas.</p></div>
-      <div class="feature"><div class="feature-icon">$</div><div class="feature-name">Env-Interpolated Secrets</div><p>Reference any string in <code>config.toml</code> from the environment with <code>${VAR}</code> or <code>$VAR</code>. Keep passwords and tokens out of the file.</p></div>
-      <div class="feature"><div class="feature-icon">⌁</div><div class="feature-name">Remote Control</div><p>Control a running instance or build a GUI with V2-only local-socket IPC. It provides complete state snapshots, jobs, live playlist and provider controls, and push NDJSON events. Run with <code>--daemon</code> for headless playback driven by scripts or a desktop widget. <a href="https://github.com/bjarneo/cliamp/blob/main/docs/upgrading-ipc-v2.md">Upgrade guide</a>.</p></div>
-      <div class="feature"><div class="feature-icon">⎔</div><div class="feature-name">Lua Plugins</div><p>Lua 5.1 sandboxed plugin system. Hook events, add visualizers, push data. Publish namespaced events with <code>p:publish()</code>; retained events replay to new subscribers, so local companion apps get current state the moment they connect. Values convert to JSON up to 64 levels deep, and cyclic references become <code>null</code>.</p></div>
+      <div class="feature"><div class="feature-icon">≡</div><div class="feature-name">Diagnostic Logging</div><p>Write logs to <span class="path">~/.config/cliamp/cliamp.log</span>. Set <code>log_level</code> in the config or <code>--log-level</code> on the CLI: <code>debug</code>, <code>info</code>, <code>warn</code>, <code>error</code>.</p></div>
+      <div class="feature"><div class="feature-icon">↑</div><div class="feature-name">Self-Update</div><p>Run <code>cliamp upgrade</code> for stable releases. Run <code>cliamp upgrade --prerelease</code> to test beta releases.</p></div>
+      <div class="feature"><div class="feature-icon">$</div><div class="feature-name">Env-Interpolated Secrets</div><p>Read any string in <code>config.toml</code> from the environment with <code>${VAR}</code> or <code>$VAR</code>. Keep passwords and tokens out of the file.</p></div>
+      <div class="feature"><div class="feature-icon">⌁</div><div class="feature-name">Remote Control</div><p>Control a running instance or build a GUI with V2-only local-socket IPC. It provides complete state snapshots, jobs, live playlist and provider controls, and push NDJSON events. Run with <code>--daemon</code> for headless playback from scripts or a desktop widget. <a href="https://github.com/bjarneo/cliamp/blob/main/docs/upgrading-ipc-v2.md">Upgrade guide</a>.</p></div>
+      <div class="feature"><div class="feature-icon">⎔</div><div class="feature-name">Lua Plugins</div><p>Use sandboxed Lua 5.1 plugins. Handle events, add visualizers, and send data. Publish namespaced events with <code>p:publish()</code>. Retained events go to new subscribers, so local companion apps get the current state when they connect. Values convert to JSON up to 64 levels deep. Cyclic references become <code>null</code>.</p></div>
       <div class="feature"><div class="feature-icon">▣</div><div class="feature-name">Save to Disk</div><p>Press <kbd>Ctrl+S</kbd> to save the current track to <code>~/Music</code>.</p></div>
-      <div class="feature"><div class="feature-icon">↔</div><div class="feature-name">Responsive TUI</div><p>Full, compact, minimal, and simplified layouts keep playback usable in terminal splits and small SSH sessions. Simplified mode shows artist/title and a time and seek-progress strip, without a visualizer or playlist.</p></div>
-      <div class="feature"><div class="feature-icon">⟲</div><div class="feature-name">Undo Queue Edits</div><p>Restore the last playlist removal or queue clear with <kbd>Ctrl+Z</kbd>.</p></div>
-      <div class="feature"><div class="feature-icon">⌨</div><div class="feature-name">Consistent Keyboard Input</div><p>Search, URLs, playlist names, and jump prompts support cursor movement, paste, word deletion, and clear-line editing.</p></div>
+      <div class="feature"><div class="feature-icon">↔</div><div class="feature-name">Responsive TUI</div><p>Use full, compact, minimal, and simplified layouts in terminal splits and small SSH sessions. Simplified mode shows artist and title, plus a time and seek-progress strip. It has no visualizer or playlist.</p></div>
+      <div class="feature"><div class="feature-icon">⟲</div><div class="feature-name">Undo Queue Edits</div><p>Press <kbd>Ctrl+Z</kbd> to restore the last playlist removal or queue clear.</p></div>
+      <div class="feature"><div class="feature-icon">⌨</div><div class="feature-name">Consistent Keyboard Input</div><p>Use cursor movement, paste, word deletion, and clear-line editing in search, URL, playlist-name, and jump prompts.</p></div>
     </div>
   </div>
 </section>
@@ -801,9 +800,9 @@ user_id = "your-account-user-id"</code></pre>
       <div class="community-plugin"><span class="community-plugin-jack"></span><div class="community-plugin-meta"><div class="community-plugin-name"><a href="https://github.com/HANCORE-linux/cliamp-plugin-nightrider">cliamp-plugin-nightrider</a></div><div class="community-plugin-desc">Nightrider visualizer</div></div><span class="community-plugin-author"><a href="https://github.com/HANCORE-linux">@HANCORE-linux</a></span></div>
       <div class="community-plugin"><span class="community-plugin-jack"></span><div class="community-plugin-meta"><div class="community-plugin-name"><a href="https://github.com/8bit64k/cliamp-plugin-tubeamp">cliamp-plugin-tubeamp</a></div><div class="community-plugin-desc">Vacuum-tube amplifier visualizer</div></div><span class="community-plugin-author"><a href="https://github.com/8bit64k">@8bit64k</a></span></div>
       <div class="community-plugin"><span class="community-plugin-jack"></span><div class="community-plugin-meta"><div class="community-plugin-name"><a href="https://github.com/8bit64k/cliamp-plugin-nova">cliamp-plugin-nova</a></div><div class="community-plugin-desc">Concentric-ring spectrum visualizer</div></div><span class="community-plugin-author"><a href="https://github.com/8bit64k">@8bit64k</a></span></div>
-      <div class="community-plugin"><span class="community-plugin-jack"></span><div class="community-plugin-meta"><div class="community-plugin-name"><a href="https://github.com/sollymay/cliamp-plugin-gpodder-sync">cliamp-plugin-gpodder-sync</a></div><div class="community-plugin-desc">gpodder.net subscription, progress and download sync</div></div><span class="community-plugin-author"><a href="https://github.com/sollymay">@sollymay</a></span></div>
+      <div class="community-plugin"><span class="community-plugin-jack"></span><div class="community-plugin-meta"><div class="community-plugin-name"><a href="https://github.com/sollymay/cliamp-plugin-gpodder-sync">cliamp-plugin-gpodder-sync</a></div><div class="community-plugin-desc">gpodder.net subscription, progress, and download sync</div></div><span class="community-plugin-author"><a href="https://github.com/sollymay">@sollymay</a></span></div>
       <div class="community-plugin"><span class="community-plugin-jack"></span><div class="community-plugin-meta"><div class="community-plugin-name"><a href="https://github.com/fazaimron27/cliamp-plugin-discord-rpc">cliamp-plugin-discord-rpc</a></div><div class="community-plugin-desc">Discord Rich Presence</div></div><span class="community-plugin-author"><a href="https://github.com/fazaimron27">@fazaimron27</a></span></div>
-      <div class="community-plugin"><span class="community-plugin-jack"></span><div class="community-plugin-meta"><div class="community-plugin-name"><a href="https://github.com/coryshaw1/herdr-cliamp">herdr-cliamp</a></div><div class="community-plugin-desc">Floating cliamp for the herdr multiplexer that keeps playing when hidden, with now-playing and transport keybinds</div></div><span class="community-plugin-author"><a href="https://github.com/coryshaw1">@coryshaw1</a></span></div>
+      <div class="community-plugin"><span class="community-plugin-jack"></span><div class="community-plugin-meta"><div class="community-plugin-name"><a href="https://github.com/coryshaw1/herdr-cliamp">herdr-cliamp</a></div><div class="community-plugin-desc">Floating cliamp for the herdr multiplexer. It keeps playing when hidden and has now-playing and transport key bindings.</div></div><span class="community-plugin-author"><a href="https://github.com/coryshaw1">@coryshaw1</a></span></div>
     </div>
   </div>
 </section>
@@ -838,7 +837,7 @@ user_id = "your-account-user-id"</code></pre>
         <div class="radio-stat-value"><span class="radio-stat-dot"></span><span id="radio-now">-</span></div>
         <div class="radio-stat-label">listening now</div>
       </div>
-      <div class="radio-stat radio-stat-peak" title="Highest number of listeners online at once">
+      <div class="radio-stat radio-stat-peak" title="Highest number of listeners online at one time">
         <div class="radio-stat-value" id="radio-peak">-</div>
         <div class="radio-stat-label">all-time high</div>
       </div>
@@ -848,16 +847,16 @@ user_id = "your-account-user-id"</code></pre>
       </div>
       <div class="radio-stat">
         <div class="radio-stat-value" id="radio-hours">-</div>
-        <div class="radio-stat-label">listen hours</div>
+        <div class="radio-stat-label">listening hours</div>
       </div>
     </div>
     <div class="radio-card reveal">
-      <div class="radio-card-title">Daily Activity</div>
+      <div class="radio-card-title">Daily activity</div>
       <div class="radio-chart" id="radio-chart"></div>
       <div class="radio-chart-labels" id="radio-chart-labels"></div>
     </div>
     <div class="radio-card reveal">
-      <div class="radio-card-title">Listeners Around the World</div>
+      <div class="radio-card-title">Listeners by country</div>
       <div class="radio-globe-wrap">
         <canvas class="radio-globe-canvas" id="radio-globe"></canvas>
         <div class="radio-countries" id="radio-countries"></div>
@@ -878,7 +877,7 @@ user_id = "your-account-user-id"</code></pre>
 <!-- ═══ FOOTER ═══ -->
 <footer>
   <div class="footer-inner">
-    <div class="footer-brand">CLIAMP · built for the terminal</div>
+    <div class="footer-brand">CLIAMP - terminal music player</div>
     <div class="footer-ascii">░▒▓█▓▒░ ░▒▓█▓▒░ ░▒▓█▓▒░</div>
     <div class="footer-links">
       <a href="https://whiterose.org.contextowl.co/docs/cliamp" class="footer-link">
@@ -1181,7 +1180,7 @@ function renderRadioStats(){
       el.textContent="";
       var err=document.createElement("span");
       err.className="radio-error";
-      err.textContent="Could not load radio stats";
+      err.textContent="Cannot load radio statistics.";
       el.appendChild(err);
     });
 }
