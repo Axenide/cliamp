@@ -272,6 +272,83 @@ func TestPausedBarsDecayToRestThenSuspend(t *testing.T) {
 	}
 }
 
+func TestPausedRawSampleModeClearsWaveform(t *testing.T) {
+	v := NewVisualizer(44100)
+	activateMode(t, v, VisWave)
+	v.waveBuf = []float64{-0.5, 0.5}
+	ctx := VisTickContext{Paused: true}
+
+	if !v.PausedDecayPending(ctx) {
+		t.Fatal("raw waveform was considered settled before being cleared")
+	}
+	v.Tick(ctx)
+	if len(v.waveBuf) != 0 {
+		t.Fatalf("waveBuf len = %d after pause, want 0", len(v.waveBuf))
+	}
+	if v.PausedDecayPending(ctx) {
+		t.Fatal("raw waveform still settling after pause clear")
+	}
+}
+
+func TestModeSwitchClearsSmoothedBands(t *testing.T) {
+	v := NewVisualizer(44100)
+	activateMode(t, v, VisBars)
+	v.smoothedBands = uniformBands(0.8)
+
+	activateMode(t, v, VisClassicPeak)
+	if len(v.smoothedBands) != 0 {
+		t.Fatalf("smoothedBands len = %d after mode switch, want 0", len(v.smoothedBands))
+	}
+}
+
+func TestPausedGeyserWaitsForParticles(t *testing.T) {
+	withPanelWidth(t, 16)
+	v := NewVisualizer(44100)
+	v.Rows = 5
+	activateMode(t, v, VisGeyser)
+	driver := v.driverFor(VisGeyser).(*geyserDriver)
+	driver.particles = []geyserParticle{{x: 1, y: float64(v.Rows * 4), tier: 1}}
+	v.bands = uniformBands(0)
+	v.smoothedBands = uniformBands(0)
+	ctx := VisTickContext{Paused: true}
+
+	if !v.PausedDecayPending(ctx) {
+		t.Fatal("geyser was considered settled with a live particle")
+	}
+	v.Tick(ctx)
+	if len(driver.particles) != 0 {
+		t.Fatalf("geyser particles = %d after off-screen decay, want 0", len(driver.particles))
+	}
+	if v.PausedDecayPending(ctx) {
+		t.Fatal("geyser still settling after particles expired")
+	}
+}
+
+func TestPausedSandWaitsForExplosion(t *testing.T) {
+	withPanelWidth(t, 16)
+	v := NewVisualizer(44100)
+	v.Rows = 5
+	activateMode(t, v, VisSand)
+	driver := v.driverFor(VisSand).(*sandDriver)
+	driver.ensure(v.Rows*4, PanelWidth*2)
+	driver.particles = []sandParticle{{x: 1, y: float64(v.Rows * 4), tier: 1}}
+	driver.explosionTTL = 1
+	v.bands = uniformBands(0)
+	v.smoothedBands = uniformBands(0)
+	ctx := VisTickContext{Paused: true}
+
+	if !v.PausedDecayPending(ctx) {
+		t.Fatal("sand was considered settled during an explosion")
+	}
+	v.Tick(ctx)
+	if len(driver.particles) != 0 || driver.explosionTTL != 0 {
+		t.Fatalf("sand explosion state after decay = particles %d, ttl %d", len(driver.particles), driver.explosionTTL)
+	}
+	if v.PausedDecayPending(ctx) {
+		t.Fatal("sand still settling after explosion expired")
+	}
+}
+
 func TestDefaultDriverTickGatesAnalyzeAtAnalyzeCadence(t *testing.T) {
 	v := NewVisualizer(44100)
 	activateMode(t, v, VisBars)
@@ -379,6 +456,33 @@ func TestRawSampleModesRefreshWaveBufAtZeroBandCount(t *testing.T) {
 	}
 	if !reflect.DeepEqual(v.waveBuf, samples) {
 		t.Fatalf("waveBuf = %v, want %v after zero-band tick refresh", v.waveBuf, samples)
+	}
+}
+
+func TestRawSampleModesAnalyzeEveryTick(t *testing.T) {
+	for _, mode := range []VisMode{VisWave, VisScope, VisHeartbeat} {
+		t.Run(visModes[mode].name, func(t *testing.T) {
+			v := NewVisualizer(44100)
+			v.Cols = 80
+			activateMode(t, v, mode)
+
+			calls := 0
+			ctx := VisTickContext{
+				Now:     time.Unix(1, 0),
+				Playing: true,
+				Analyze: func(spec VisAnalysisSpec) []float64 {
+					calls++
+					return v.Analyze([]float64{float64(calls)}, spec)
+				},
+			}
+			v.Tick(ctx)
+			ctx.Now = ctx.Now.Add(TickWave)
+			v.Tick(ctx)
+
+			if calls != 2 {
+				t.Fatalf("Analyze calls = %d, want 2", calls)
+			}
+		})
 	}
 }
 

@@ -868,6 +868,44 @@ func (p *Provider) DeletePlaylist(name string) error {
 	return os.Remove(path)
 }
 
+// PlaylistDocument returns the playlist's raw TOML bytes, including sections
+// the expanded track list cannot represent (e.g. [[dir]] sources).
+func (p *Provider) PlaylistDocument(name string) ([]byte, error) {
+	path, err := p.safePath(name)
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read playlist %q: %w", name, err)
+	}
+	return data, nil
+}
+
+// RestorePlaylistDocument overwrites the playlist with raw TOML bytes so an
+// undo can put back exactly what a delete removed, [[dir]] sections included.
+func (p *Provider) RestorePlaylistDocument(name string, data []byte) error {
+	if isHistoryName(name) {
+		return errReservedHistoryName
+	}
+	if err := os.MkdirAll(p.dir, 0o755); err != nil {
+		return fmt.Errorf("creating playlist dir: %w", err)
+	}
+	path, err := p.safePath(name)
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return fmt.Errorf("writing playlist %q: %w", name, err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return fmt.Errorf("replacing playlist %q: %w", name, err)
+	}
+	return nil
+}
+
 // ClearHistory wipes the recorded play history. Returns nil if no history
 // exists yet.
 func (p *Provider) ClearHistory() error {
@@ -966,6 +1004,9 @@ func writeTrack(w io.Writer, t playlist.Track) {
 	if t.Feed {
 		fmt.Fprintln(w, "feed = true")
 	}
+	if t.Realtime {
+		fmt.Fprintln(w, "realtime = true")
+	}
 	if t.Artist != "" {
 		fmt.Fprintf(w, "artist = %q\n", t.Artist)
 	}
@@ -998,12 +1039,13 @@ func writeTrack(w io.Writer, t playlist.Track) {
 // parseTrackFields converts a parsed [[track]] section into a Track.
 func parseTrackFields(f map[string]string) playlist.Track {
 	t := playlist.Track{
-		Path:   f["path"],
-		Title:  f["title"],
-		Artist: f["artist"],
-		Album:  f["album"],
-		Genre:  f["genre"],
-		Feed:   f["feed"] == "true",
+		Path:     f["path"],
+		Title:    f["title"],
+		Artist:   f["artist"],
+		Album:    f["album"],
+		Genre:    f["genre"],
+		Feed:     f["feed"] == "true",
+		Realtime: f["realtime"] == "true",
 	}
 	t.EmbeddedLyrics = f["embedded_lyrics"]
 	t.AlbumArtURL = f["album_art_url"]

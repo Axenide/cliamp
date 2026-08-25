@@ -213,6 +213,9 @@ type paneManageProvider struct {
 	commandsTestProvider
 	deleted  []string
 	restored []string
+	docs     map[string][]byte
+	// docRestores records payloads passed to RestorePlaylistDocument.
+	docRestores map[string][]byte
 }
 
 func (p *paneManageProvider) CreatePlaylist(_ context.Context, _ string) (string, error) {
@@ -222,6 +225,22 @@ func (p *paneManageProvider) CreatePlaylist(_ context.Context, _ string) (string
 func (p *paneManageProvider) RemoveTrack(_ string, _ int) error { return nil }
 
 func (p *paneManageProvider) SavePlaylist(name string, _ []playlist.Track) error {
+	p.restored = append(p.restored, name)
+	return nil
+}
+
+func (p *paneManageProvider) PlaylistDocument(name string) ([]byte, error) {
+	if data, ok := p.docs[name]; ok {
+		return data, nil
+	}
+	return nil, os.ErrNotExist
+}
+
+func (p *paneManageProvider) RestorePlaylistDocument(name string, data []byte) error {
+	if p.docRestores == nil {
+		p.docRestores = make(map[string][]byte)
+	}
+	p.docRestores[name] = data
 	p.restored = append(p.restored, name)
 	return nil
 }
@@ -904,5 +923,40 @@ func TestNKeyNoopWithoutFavMgr(t *testing.T) {
 	// No crash, no status change.
 	if m.status.text != "" {
 		t.Fatalf("status = %q, want empty (no favMgr)", m.status.text)
+	}
+}
+
+// Deleting a playlist whose document contains [[dir]] sources must restore
+// those sources verbatim on undo instead of rewriting a tracks-only file.
+func TestPlMgrDeleteUndoRestoresDirDocument(t *testing.T) {
+	prov := &paneManageProvider{
+		commandsTestProvider: commandsTestProvider{
+			name:  "Local",
+			lists: []playlist.PlaylistInfo{{ID: "mix", Name: "mix"}},
+		},
+		docs: map[string][]byte{
+			"mix": []byte("[[dir]]\npath = \"/music/rock\"\nrecursive = true\n\n[[track]]\npath = \"/music/keep.mp3\"\n"),
+		},
+	}
+	m := newDirsScreenTestModel(prov)
+	m.plManager.screen = plMgrScreenList
+	m.plManager.playlists = []playlist.PlaylistInfo{{ID: "mix", Name: "mix"}}
+	m.plManager.cursor = 0
+
+	m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "d"}) // arm confirmation
+	m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "y"}) // delete
+	if len(prov.deleted) != 1 || prov.deleted[0] != "mix" {
+		t.Fatalf("deleted = %v, want [mix]", prov.deleted)
+	}
+
+	if cmd := m.handlePlaylistManagerKey(tea.KeyPressMsg{Text: "u"}); cmd == nil {
+		t.Fatal("undo of a deleted playlist must schedule a pane refresh")
+	}
+	got, ok := prov.docRestores["mix"]
+	if !ok {
+		t.Fatal("undo must restore the raw playlist document")
+	}
+	if !strings.Contains(string(got), "[[dir]]") || !strings.Contains(string(got), "/music/rock") {
+		t.Fatalf("restored doc lost [[dir]] source: %q", got)
 	}
 }

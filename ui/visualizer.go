@@ -71,6 +71,7 @@ const (
 	VisGeyser                     // bass-driven particle fountain
 	VisClassicLED                 // Winamp 2.9 LED matrix with falling peak caps
 	VisStereo                     // stereo L/R horizontal LED peak meters
+	VisMirror                     // Braille spectrum bars mirrored about a horizontal axis
 	VisNone                       // hidden — no visualizer
 	VisCount                      // sentinel for cycling
 )
@@ -277,6 +278,10 @@ type visModeDriver interface {
 	OnLeave(*Visualizer)
 }
 
+type visPauseSettler interface {
+	pauseSettled() bool
+}
+
 // visEntry pairs a display name with a factory for that mode's visModeDriver.
 type visEntry struct {
 	name      string
@@ -352,9 +357,9 @@ func defaultDriverTick(v *Visualizer, ctx VisTickContext, spec VisAnalysisSpec) 
 	}
 	spec = NormalizeAnalysisSpec(spec)
 	if ctx.Analyze != nil {
-		// Decouple FFT cadence from animation cadence: skip Analyze if we ran
-		// it recently. Animation still advances every tick via advanceSmoothing.
-		due := v.lastAnalyzeAt.IsZero() || ctx.Now.IsZero() ||
+		// Decouple FFT cadence from animation cadence. Raw-sample modes have no
+		// FFT work, so refresh their waveform on every render tick.
+		due := spec.BandCount == 0 || v.lastAnalyzeAt.IsZero() || ctx.Now.IsZero() ||
 			ctx.Now.Sub(v.lastAnalyzeAt) >= TickAnalyze
 		if due {
 			bands := ctx.Analyze(spec)
@@ -419,6 +424,7 @@ type Visualizer struct {
 	luaRender       LuaVisRenderer
 	luaDriverCache  map[int]visModeDriver
 	pulseCoordCache *pulseCoords
+	mirrorGrid      brailleGrid
 }
 
 // LuaVisRenderer is the callback type for rendering a Lua visualizer frame.
@@ -481,6 +487,7 @@ var visModes = [VisCount]visEntry{
 	VisGeyser:      {"Geyser", newGeyserDriver},
 	VisClassicLED:  {"ClassicLED", newClassicLEDDriver},
 	VisStereo:      {"Stereo", newStereoDriver},
+	VisMirror:      {"Mirror", newFastRenderOnlyDriver(spectrumAnalysisSpec(DefaultSpectrumBands), TickAnim, (*Visualizer).renderMirror)},
 	VisNone:        {"None", newNoOpDriver},
 }
 
@@ -861,6 +868,12 @@ func (v *Visualizer) TickInterval(ctx VisTickContext) time.Duration {
 	return driver.TickInterval(v, ctx)
 }
 
+// UsesRawSamples reports whether the active visualizer draws directly from audio samples.
+func (v *Visualizer) UsesRawSamples() bool {
+	driver := v.syncDriverMode()
+	return driver != nil && NormalizeAnalysisSpec(driver.AnalysisSpec(v)).BandCount == 0
+}
+
 func (v *Visualizer) Tick(ctx VisTickContext) {
 	if v == nil || v.Rows <= 0 {
 		return
@@ -879,6 +892,9 @@ func (v *Visualizer) Tick(ctx VisTickContext) {
 	}
 	v.refreshPending = false
 	if ctx.Paused {
+		if spec := NormalizeAnalysisSpec(driver.AnalysisSpec(v)); spec.BandCount == 0 {
+			v.waveBuf = v.waveBuf[:0]
+		}
 		// Keep easing the visual down to rest instead of freezing mid-frame.
 		// Drivers already know how to decay when not playing (silent band
 		// analysis, target-zero physics); we just keep ticking until settled.
@@ -918,14 +934,19 @@ func (v *Visualizer) resetFrameTiming() {
 
 // pausedSettled reports whether a paused visualizer has no content left to
 // ease down, so it can freeze at rest. Band-driven modes must empty both the
-// raw and smoothed bands; drivers with their own physics (classic peak/LED,
-// stereo) stay active until their internal animation settles, which they
-// signal with a fast tick interval even when not playing.
+// raw and smoothed bands, raw-sample modes must clear their waveform, and
+// stateful drivers must finish their own animation. Classic meters signal
+// animation through their tick interval; particle modes implement
+// visPauseSettler.
 func (v *Visualizer) pausedSettled(driver visModeDriver, ctx VisTickContext) bool {
 	if v == nil || driver == nil {
 		return true
 	}
-	if spec := NormalizeAnalysisSpec(driver.AnalysisSpec(v)); spec.BandCount > 0 {
+	spec := NormalizeAnalysisSpec(driver.AnalysisSpec(v))
+	if spec.BandCount == 0 && len(v.waveBuf) > 0 {
+		return false
+	}
+	if spec.BandCount > 0 {
 		for _, b := range v.bands {
 			if b >= pausedDecayEpsilon {
 				return false
@@ -937,13 +958,16 @@ func (v *Visualizer) pausedSettled(driver visModeDriver, ctx VisTickContext) boo
 			}
 		}
 	}
+	if settler, ok := driver.(visPauseSettler); ok && !settler.pauseSettled() {
+		return false
+	}
 	ctx.Playing = false
 	return driver.TickInterval(v, ctx) >= TickSlow
 }
 
 // PausedDecayPending reports whether a paused visualizer still needs ticks to
-// settle its content to rest. The model uses it to keep the slow tick cadence
-// instead of dropping to fully idle while bars ease down.
+// settle its content to rest. The model uses it to keep an active tick cadence
+// instead of dropping to fully idle while content eases down.
 func (v *Visualizer) PausedDecayPending(ctx VisTickContext) bool {
 	driver := v.syncDriverMode()
 	if driver == nil {
@@ -1121,6 +1145,8 @@ func (v *Visualizer) syncDriverMode() visModeDriver {
 		if (prevSpec.BandCount == 0) != (nextSpec.BandCount == 0) {
 			v.resetSpectrumHistory()
 		}
+		v.smoothedBands = v.smoothedBands[:0]
+		v.lastSmoothTick = time.Time{}
 		if prev != nil {
 			prev.OnLeave(v)
 		}

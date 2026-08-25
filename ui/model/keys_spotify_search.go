@@ -38,7 +38,7 @@ func (m *Model) handleSpotSearchInputKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.closeSpotSearch()
 	case tea.KeyEnter:
 		if m.spotSearch.query == "" {
-			m.spotSearch.err = "Enter a search query."
+			m.setSpotSearchError("Enter a search query.")
 			return nil
 		}
 		if !m.spotSearch.loading {
@@ -123,7 +123,7 @@ func (m *Model) handleSpotSearchResultsKey(msg tea.KeyPressMsg) tea.Cmd {
 			// The playlist picker adds one track; an album is many, and Spotify
 			// has no single call to add a whole record.
 			if track.IsAlbum() {
-				m.spotSearch.err = "Open the album with Enter, then add tracks from the queue."
+				m.setSpotSearchError("Open the album with Enter, then add tracks from the queue.")
 				return nil
 			}
 			m.spotSearch.selTrack = track
@@ -132,6 +132,9 @@ func (m *Model) handleSpotSearchResultsKey(msg tea.KeyPressMsg) tea.Cmd {
 			return fetchSpotPlaylistsCmd(m.spotSearch.prov, nextRequest(&m.requests.spotLists))
 		}
 	case "esc", "backspace":
+		m.invalidateSpotAlbumRequest()
+		nextRequest(&m.requests.spotLists)
+		m.spotSearch.loading = false
 		m.spotSearch.screen = spotSearchInput
 		m.spotSearch.err = ""
 	case "ctrl+u":
@@ -165,18 +168,26 @@ func (m *Model) spotSearchBusy() bool {
 	return m.spotSearch.loading || m.spotSearch.albumLoading
 }
 
+func (m *Model) setSpotSearchError(message string) {
+	m.spotSearch.err = message
+	if m.spotSearch.screen == spotSearchResults {
+		m.spotSearchResultsMaybeAdjustScroll(m.spotSearchResultsVisible())
+	}
+}
+
 // expandSpotAlbum fetches the tracks of the selected album placeholder. The
 // overlay stays open while it runs: closing it would bump the request
 // generation and drop the response.
 func (m *Model) expandSpotAlbum(album playlist.Track, action spotAlbumAction) tea.Cmd {
 	loader, ok := m.spotSearch.prov.(provider.AlbumTrackLoader)
 	if !ok {
-		m.spotSearch.err = "This provider cannot open albums."
+		m.setSpotSearchError("This provider cannot open albums.")
 		return nil
 	}
 	m.spotSearch.albumLoading = true
 	m.spotSearch.err = ""
-	return fetchSpotAlbumTracksCmd(loader, album, action, nextRequest(&m.requests.spotAlbum))
+	ctx := m.newSpotRequestContext(30 * time.Second)
+	return fetchSpotAlbumTracksCmd(ctx, loader, album, action, nextRequest(&m.requests.spotAlbum))
 }
 
 func (m *Model) spotSearchPlaylistMaybeAdjustScroll(visible int) {
@@ -248,7 +259,7 @@ func (m *Model) handleSpotSearchNewNameKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.spotSearchPlaylistMaybeAdjustScroll(m.spotSearchPlaylistVisible())
 	case tea.KeyEnter:
 		if strings.TrimSpace(m.spotSearch.newName) == "" {
-			m.spotSearch.err = "Playlist name is required."
+			m.setSpotSearchError("Playlist name is required.")
 			return nil
 		}
 		if !m.spotSearch.loading {

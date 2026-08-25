@@ -24,9 +24,11 @@ func (m *Model) quit() tea.Cmd {
 	// Only save resume for seekable tracks:
 	// - local files (not stream)
 	// - HTTP streams with known duration (podcast MP3s, seek-by-reconnect)
-	// Exclude YTDL (position unreliable) and real-time live streams.
+	// - finite Mixcloud shows (yt-dlp tracks with a counted PCM position)
+	// Other yt-dlp sites and real-time live streams remain excluded.
 	if track, _ := m.currentPlaybackTrack(); track.Path != "" &&
-		!playlist.IsYTDL(track.Path) && !track.IsLive() &&
+		(!playlist.IsYTDL(track.Path) || playlist.IsMixcloudURL(track.Path)) &&
+		!track.IsLive() &&
 		m.player.IsPlaying() {
 		if secs := int(m.player.Position().Seconds()); secs > 0 {
 			m.exitResume.path = track.Path
@@ -197,8 +199,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return m.quit()
 	}
 	if msg.String() == "ctrl+z" {
-		m.undoPlaylistMutation()
-		return nil
+		return m.undoPlaylistMutation()
 	}
 	if msg.String() == "ctrl+k" && !m.keymap.visible {
 		if m.fullVis {
@@ -266,6 +267,10 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	// Queue manager overlay
 	if m.queue.visible {
 		return m.handleQueueKey(msg)
+	}
+
+	if m.radioStats.visible {
+		return m.handleRadioStatsKey(msg)
 	}
 
 	// Track info overlay
@@ -360,9 +365,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 				}
 			}
 			if len(m.providerLists) > 0 && !m.provLoading {
-				m.provLoading = true
-				m.activeProviderPlaylistID = m.providerLists[m.provCursor].ID
-				return m.fetchProviderTracks(m.providerLists[m.provCursor].ID)
+				return m.openProviderList(m.provCursor)
 			}
 		case "tab":
 			m.focus = m.nextMainFocus(focusPlaylist)
@@ -393,11 +396,18 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 			}
 		case "f":
 			return m.toggleProviderFavorite()
+		case "i":
+			if m.canOpenRadioStats() {
+				return m.openRadioStats()
+			}
 		case "o":
 			m.openFileBrowser()
 		case "N":
-			if prov := m.findBrowseProvider(); prov != nil {
-				m.openNavBrowserWith(prov)
+			// Provider-pane browsing must stay scoped to the provider being
+			// viewed. Falling back to another registered browser can otherwise
+			// send (for example) Spotify's pane into Mixcloud.
+			if providerSupportsBrowse(m.provider) {
+				m.openNavBrowserWith(m.provider)
 			}
 		case "pgup", "ctrl+u":
 			m.providerPageUp()
@@ -425,10 +435,14 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 			return m.switchToProvider("yt")
 		case "C":
 			return m.switchToProvider("soundcloud")
+		case "X":
+			return m.switchToProvider("mixcloud")
 		case "M":
 			return m.switchToProvider("netease")
 		case "Q":
 			return m.switchToProvider("qobuz")
+		case "T":
+			return m.switchToProvider("tidal")
 		case "L":
 			return m.switchToProvider("local")
 		case "R":
@@ -692,16 +706,14 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		if err := m.configSaver.Save("repeat", fmt.Sprintf("%q", m.playlist.Repeat().String())); err != nil {
 			m.status.Errorf(statusTTLDefault, "Config save failed: %s", err)
 		}
-		m.player.ClearPreload()
-		return m.preloadNext()
+		return m.rearmPreload()
 
 	case "z":
 		m.playlist.ToggleShuffle()
 		if err := m.configSaver.Save("shuffle", fmt.Sprintf("%v", m.playlist.Shuffled())); err != nil {
 			m.status.Errorf(statusTTLDefault, "Config save failed: %s", err)
 		}
-		m.player.ClearPreload()
-		return m.preloadNext()
+		return m.rearmPreload()
 
 	case "tab":
 		m.focus = m.nextMainFocus(m.focus)
@@ -717,7 +729,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 
 	case "e":
-		if m.layout.tier == layoutMinimal {
+		if m.simplified || m.layout.tier == layoutMinimal {
 			break
 		}
 		m.cycleEQPreset()
@@ -729,6 +741,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 				m.playlist.Queue(m.plCursor)
 			}
 			m.normalizeQueueOverlay()
+			return m.rearmPreload()
 		}
 
 	case "w":
@@ -804,8 +817,11 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.urlErr = ""
 
 	case "N":
-		if prov := m.findBrowseProvider(); prov != nil {
-			m.openNavBrowserWith(prov)
+		if cmd, ok := m.openSelectedTrackArtistBrowser(); ok {
+			return cmd
+		}
+		if providerSupportsBrowse(m.provider) {
+			m.openNavBrowserWith(m.provider)
 		}
 
 	case "L":
@@ -818,16 +834,23 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return m.switchToProvider("yt")
 	case "C":
 		return m.switchToProvider("soundcloud")
+	case "X":
+		return m.switchToProvider("mixcloud")
 	case "M":
 		return m.switchToProvider("netease")
 	case "Q":
 		return m.switchToProvider("qobuz")
+	case "T":
+		return m.switchToProvider("tidal")
 
 	case "ctrl+h":
 		m.toggleAlbumHeadersManual()
 		m.adjustScroll()
 
 	case "v":
+		if m.simplified {
+			break
+		}
 		m.vis.CycleMode()
 		m.vis.RequestRefresh()
 		m.refreshChrome()
@@ -838,14 +861,20 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 
 	case "ctrl+v":
+		if m.simplified {
+			break
+		}
 		m.openVisPicker()
 
 	case "V":
+		if m.simplified {
+			break
+		}
 		m.fullVis = !m.fullVis
 		m.recomputeLayout()
 
 	case "ctrl+x":
-		if m.focus == focusPlaylist {
+		if !m.simplified && m.focus == focusPlaylist {
 			m.toggleExpandedView()
 		}
 
@@ -1147,10 +1176,8 @@ func (m *Model) handleProvSearchKey(msg tea.KeyPressMsg) tea.Cmd {
 			idx := m.provSearch.results[m.provSearch.cursor]
 			m.provCursor = idx
 			m.providerMaybeAdjustScroll()
-			m.provLoading = true
 			m.provSearch.active = false
-			m.activeProviderPlaylistID = m.providerLists[idx].ID
-			return m.fetchProviderTracks(m.providerLists[idx].ID)
+			return m.openProviderList(idx)
 		}
 	case tea.KeyUp:
 		if m.provSearch.cursor > 0 {
@@ -1210,7 +1237,7 @@ func (m *Model) restoreCatalog(cs provider.CatalogSearcher) {
 	}
 	cs.ClearSearch()
 	if lists, err := m.provider.Playlists(); err == nil {
-		m.providerLists = lists
+		m.providerLists = providerListsWithBrowse(m.provider, lists)
 	}
 	m.provCursor = 0
 	m.provScroll = 0
@@ -1427,6 +1454,7 @@ func (m *Model) handleSearchKey(msg tea.KeyPressMsg) tea.Cmd {
 				m.playlist.Queue(idx)
 			}
 			m.normalizeQueueOverlay()
+			return m.rearmPreload()
 		}
 
 	case tea.KeyUp:
@@ -1653,9 +1681,21 @@ func (m *Model) handlePlMgrListKey(msg tea.KeyPressMsg) tea.Cmd {
 			}
 			if realIdx >= 0 {
 				name := m.plManager.playlists[realIdx].Name
-				if tracks, err := m.localProvider.Tracks(name); err == nil {
-					m.plManager.undo = plManagerUndo{kind: plUndoPlaylist, name: name, tracks: cloneTracks(tracks)}
+				undo := plManagerUndo{kind: plUndoPlaylist, name: name}
+				// Snapshot the raw document so undo can restore [[dir]]
+				// sources verbatim; tracks are the fallback when the
+				// provider cannot hand back its document.
+				if d, ok := m.localProvider.(provider.PlaylistDocumenter); ok {
+					if data, err := d.PlaylistDocument(name); err == nil {
+						undo.doc = data
+					}
 				}
+				if undo.doc == nil {
+					if tracks, err := m.localProvider.Tracks(name); err == nil {
+						undo.tracks = cloneTracks(tracks)
+					}
+				}
+				m.plManager.undo = undo
 				if d, ok := m.localProvider.(provider.PlaylistDeleter); ok {
 					if err := d.DeletePlaylist(name); err != nil {
 						m.status.Errorf(statusTTLDefault, "Delete failed: %s", err)
@@ -2280,12 +2320,20 @@ func cloneTracks(tracks []playlist.Track) []playlist.Track {
 
 func (m *Model) plMgrSetTrackUndo() {
 	m.plMgrEnsureMissingLocal()
-	m.plManager.undo = plManagerUndo{
+	undo := plManagerUndo{
 		kind:         plUndoTracks,
 		name:         m.plManager.selPlaylist,
 		tracks:       cloneTracks(m.plManager.tracks),
 		missingLocal: append([]bool(nil), m.plManager.missingLocal...),
 	}
+	// Snapshot the raw document too so undo restores [[dir]] sources that
+	// SavePlaylist would drop.
+	if d, ok := m.localProvider.(provider.PlaylistDocumenter); ok {
+		if data, err := d.PlaylistDocument(undo.name); err == nil {
+			undo.doc = data
+		}
+	}
+	m.plManager.undo = undo
 }
 
 // plMgrUndoLast restores the last deleted playlist or removed tracks and
@@ -2302,16 +2350,38 @@ func (m *Model) plMgrUndoLast() tea.Cmd {
 		m.status.Warning("Undo unavailable", statusTTLDefault)
 		return nil
 	}
+	if len(undo.doc) > 0 {
+		if r, ok := saver.(provider.PlaylistDocumenter); ok {
+			if err := r.RestorePlaylistDocument(undo.name, undo.doc); err != nil {
+				m.status.Errorf(statusTTLDefault, "Undo failed: %s", err)
+				return nil
+			}
+			m.plMgrFinishUndo(undo)
+			return m.undoRefreshCmd(undo)
+		}
+	}
 	if err := saver.SavePlaylist(undo.name, cloneTracks(undo.tracks)); err != nil {
 		m.status.Errorf(statusTTLDefault, "Undo failed: %s", err)
 		return nil
 	}
+	m.plMgrFinishUndo(undo)
+	return m.undoRefreshCmd(undo)
+}
+
+// undoRefreshCmd schedules a provider-pane refresh after a deleted playlist
+// comes back, so the pane lists it without a pill switch.
+func (m *Model) undoRefreshCmd(undo plManagerUndo) tea.Cmd {
+	if undo.kind == plUndoPlaylist {
+		return m.refreshPaneAfterLocalWrite()
+	}
+	return nil
+}
+
+// plMgrFinishUndo clears the undo slot and refreshes the manager list plus an
+// open tracks screen after a successful restore.
+func (m *Model) plMgrFinishUndo(undo plManagerUndo) {
 	m.plManager.undo = plManagerUndo{}
 	m.plMgrRefreshList()
-	var refresh tea.Cmd
-	if undo.kind == plUndoPlaylist {
-		refresh = m.refreshPaneAfterLocalWrite()
-	}
 	if m.plManager.screen == plMgrScreenTracks && m.plManager.selPlaylist == undo.name {
 		m.plMgrRestoreTracks(undo.tracks, undo.missingLocal)
 		m.plManager.marked = make(map[int]bool)
@@ -2319,7 +2389,6 @@ func (m *Model) plMgrUndoLast() tea.Cmd {
 		m.plMgrTracksMaybeAdjustScroll(m.plMgrTracksVisible())
 	}
 	m.status.Showf(statusTTLDefault, "Restored %q", undo.name)
-	return refresh
 }
 
 func (m *Model) plMgrSelectedTrackIndices() []int {
@@ -2873,34 +2942,54 @@ func (m *Model) handleQueueKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		m.normalizeQueueOverlay()
 	case "shift+up":
+		moved := false
 		if m.queue.cursor > 0 {
 			if m.playlist.MoveQueue(m.queue.cursor, m.queue.cursor-1) {
 				m.queue.cursor--
+				moved = true
 			}
 		}
 		m.normalizeQueueOverlay()
+		if moved {
+			return m.rearmPreload()
+		}
 	case "shift+down":
+		moved := false
 		if m.queue.cursor < qLen-1 {
 			if m.playlist.MoveQueue(m.queue.cursor, m.queue.cursor+1) {
 				m.queue.cursor++
+				moved = true
 			}
 		}
 		m.normalizeQueueOverlay()
+		if moved {
+			return m.rearmPreload()
+		}
 	case "d":
+		removed := false
 		if qLen > 0 {
 			m.playlistUndo = playlistUndo{active: true, snapshot: m.playlist.Snapshot()}
 			m.playlist.RemoveQueueAt(m.queue.cursor)
+			removed = true
 			m.status.Show("Removed queued track (Ctrl+Z to undo)", statusTTLDefault)
 		}
 		m.normalizeQueueOverlay()
+		if removed {
+			return m.rearmPreload()
+		}
 	case "c":
+		cleared := false
 		if qLen > 0 {
 			m.playlistUndo = playlistUndo{active: true, snapshot: m.playlist.Snapshot()}
 			m.playlist.ClearQueue()
+			cleared = true
 			m.normalizeQueueOverlay()
 			m.status.Show("Cleared queue (Ctrl+Z to undo)", statusTTLDefault)
 		}
 		m.queue.visible = false
+		if cleared {
+			return m.rearmPreload()
+		}
 	case "esc", "A":
 		m.queue.visible = false
 	}

@@ -554,33 +554,16 @@ func (p *SpotifyProvider) webAPIWithBody(ctx context.Context, method, path strin
 }
 
 // devModeSearchLimit is the largest per-request limit /v1/search accepts for an
-// app still in Spotify's Development Mode. Anything above it comes back as
-// 400 "Invalid limit", which reads like a bug in the value we picked but is
-// simply the cap. Measured against a Development Mode app: 10 succeeds, 11 does
-// not, and offset paging past the cap works fine.
+// app in Spotify's Development Mode. SearchTracks uses it for every request so
+// personal client IDs never need a rejected probe before pagination starts.
 const devModeSearchLimit = 10
 
-// isInvalidLimit reports whether err is Spotify's 400 "Invalid limit" reply,
-// i.e. the app is capped at devModeSearchLimit results per search request.
 func isInvalidLimit(err error) bool {
 	if err == nil {
 		return false
 	}
 	msg := err.Error()
 	return strings.Contains(msg, "400") && strings.Contains(msg, "Invalid limit")
-}
-
-// friendlySearchError turns a failed /v1/search into something actionable.
-// A surviving "Invalid limit" means the cap moved below devModeSearchLimit,
-// since SearchTracks already retries in pages of that size.
-func friendlySearchError(err error) error {
-	if err == nil {
-		return nil
-	}
-	if isInvalidLimit(err) {
-		return fmt.Errorf("spotify: search rejected even a limit of %d; Spotify's cap for Development Mode apps appears to have changed (%w)", devModeSearchLimit, err)
-	}
-	return fmt.Errorf("spotify: search: %w", err)
 }
 
 // spotifySearchPage is one page of /v1/search results.
@@ -655,8 +638,7 @@ func (p *SpotifyProvider) searchPaged(ctx context.Context, query string, limit i
 // are not playable as-is: the caller expands the chosen one with AlbumTracks.
 //
 // Apps in Development Mode cap /v1/search at devModeSearchLimit results per
-// request, so a rejected limit is retried as several smaller pages instead of
-// being reported as a blocked search.
+// request, so larger result sets always use offset pagination.
 func (p *SpotifyProvider) SearchTracks(ctx context.Context, query string, limit int) ([]playlist.Track, error) {
 	if err := p.ensureSession(); err != nil {
 		return nil, err
@@ -668,14 +650,20 @@ func (p *SpotifyProvider) SearchTracks(ctx context.Context, query string, limit 
 		limit = 50
 	}
 
-	// Try the whole thing in one request first: an app with Extended Quota Mode
-	// takes any limit up to 50 and needs no paging.
-	result, err := p.searchPage(ctx, query, limit, 0)
-	if err != nil && isInvalidLimit(err) && limit > devModeSearchLimit {
+	var result *spotifySearchPage
+	var err error
+	if p.clientID == DefaultClientID {
+		// Preserve one-request searches for the shared legacy client. Fall back
+		// to Development Mode pages if Spotify applies the new cap to it later.
+		result, err = p.searchPage(ctx, query, limit, 0)
+		if err != nil && isInvalidLimit(err) && limit > devModeSearchLimit {
+			result, err = p.searchPaged(ctx, query, limit)
+		}
+	} else {
 		result, err = p.searchPaged(ctx, query, limit)
 	}
 	if err != nil {
-		return nil, friendlySearchError(err)
+		return nil, fmt.Errorf("spotify: search: %w", err)
 	}
 
 	var tracks []playlist.Track
@@ -704,12 +692,16 @@ func (p *SpotifyProvider) SearchTracks(ctx context.Context, query string, limit 
 // they belong to, so the album's own name, artist and release year are fetched
 // once and filled in on every track for display.
 func (p *SpotifyProvider) AlbumTracks(albumID string) ([]playlist.Track, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return p.AlbumTracksContext(ctx, albumID)
+}
+
+// AlbumTracksContext returns every track of a Spotify album with caller-controlled cancellation.
+func (p *SpotifyProvider) AlbumTracksContext(ctx context.Context, albumID string) ([]playlist.Track, error) {
 	if err := p.ensureSession(); err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
 	album, err := p.album(ctx, albumID)
 	if err != nil {
 		return nil, err
@@ -787,7 +779,7 @@ func (p *SpotifyProvider) AddTrackToPlaylist(ctx context.Context, playlistID str
 	}
 
 	body, _ := json.Marshal(map[string]any{"uris": []string{trackURI}})
-	path := fmt.Sprintf("/v1/playlists/%s/tracks", playlistID)
+	path := fmt.Sprintf("/v1/playlists/%s/items", playlistID)
 
 	resp, err := p.webAPIWithBody(ctx, "POST", path, nil, bytes.NewReader(body), "application/json", http.StatusOK, http.StatusCreated)
 	if err != nil {
@@ -810,15 +802,9 @@ func (p *SpotifyProvider) CreatePlaylist(ctx context.Context, name string) (stri
 		return "", err
 	}
 
-	userID := p.currentUserID(ctx)
-	if userID == "" {
-		return "", fmt.Errorf("spotify: could not determine user ID")
-	}
-
 	body, _ := json.Marshal(map[string]any{"name": name, "public": false})
-	path := fmt.Sprintf("/v1/users/%s/playlists", userID)
 
-	resp, err := p.webAPIWithBody(ctx, "POST", path, nil, bytes.NewReader(body), "application/json", http.StatusOK, http.StatusCreated)
+	resp, err := p.webAPIWithBody(ctx, "POST", "/v1/me/playlists", nil, bytes.NewReader(body), "application/json", http.StatusOK, http.StatusCreated)
 	if err != nil {
 		return "", fmt.Errorf("spotify: create playlist: %w", err)
 	}

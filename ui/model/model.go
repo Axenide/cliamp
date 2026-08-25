@@ -58,7 +58,7 @@ func (f focusArea) label() string {
 // main playback screen and the provider playlist pane.
 func (m Model) mainFocusAreas() []focusArea {
 	areas := []focusArea{focusPlaylist}
-	if m.layout.tier == layoutMinimal || m.layout.tier == layoutTooSmall {
+	if m.simplified || m.layout.tier == layoutMinimal || m.layout.tier == layoutTooSmall {
 		return areas
 	}
 	areas = append(areas, focusEQ)
@@ -129,6 +129,7 @@ const (
 	screenLyrics
 	screenJump
 	screenFullVisualizer
+	screenRadioStats
 )
 
 func (s topLevelScreen) label() string {
@@ -165,6 +166,8 @@ func (s topLevelScreen) label() string {
 		return "Jump to Time"
 	case screenFullVisualizer:
 		return "Visualizer"
+	case screenRadioStats:
+		return "Radio Stats"
 	default:
 		return ""
 	}
@@ -195,6 +198,7 @@ const (
 	navBrowseModeByAlbum                                // paginated album list → track list
 	navBrowseModeByArtist                               // artist list → track list (album-separated)
 	navBrowseModeByArtistAlbum                          // artist list → album list → track list
+	navBrowseModeByGenre                                // genre list → latest/popular → track list
 )
 
 // navBrowseScreenType identifies which screen within the active browse mode is shown.
@@ -285,6 +289,7 @@ type Model struct {
 	fileBrowser    fileBrowserState
 	navBrowser     navBrowserState
 	catalogBatch   catalogBatchState
+	radioStats     radioStatsState
 	ytdlBatch      ytdlBatchState
 	reconnect      reconnectState
 	save           saveState
@@ -363,6 +368,10 @@ type Model struct {
 	// snapshot survives Update's value-receiver copy.
 	pluginEmit *pluginEmitState
 
+	// ipcRuntime publishes GUI-facing runtime snapshots from the Update owner.
+	// It is shared by value-receiver copies of Model.
+	ipcRuntime *ipcRuntimeState
+
 	// History recorder (nil if config dir unavailable; safe to call when nil)
 	historyStore *history.Store
 
@@ -399,10 +408,11 @@ type Model struct {
 	// Full-screen visualizer mode (Shift+V)
 	fullVis bool
 
-	autoPlay       bool // start playing immediately on launch
-	lowPower       bool // lower UI/render cadences in low-power mode
-	compact        bool // compact mode: cap frame width at 80 columns
-	heightExpanded bool // tracks whether manual 'x' expansion is active
+	autoPlay        bool // start playing immediately on launch
+	lowPower        bool // lower UI/render cadences in low-power mode
+	visualizer60FPS bool // render a visible visualizer at the animation cadence
+	simplified      bool // simplified playback view: track summary and time strip
+	heightExpanded  bool // tracks whether manual 'x' expansion is active
 
 	// Cached per-tick to avoid repeated speaker.Lock() calls in View().
 	cachedPos  time.Duration
@@ -435,6 +445,8 @@ func (m Model) activeScreen() topLevelScreen {
 		return screenPlaylistManager
 	case m.queue.visible:
 		return screenQueue
+	case m.radioStats.visible:
+		return screenRadioStats
 	case m.showInfo:
 		return screenInfo
 	case m.lyrics.visible:
@@ -468,7 +480,7 @@ func (m Model) usesContentFirstLayout() bool {
 	}
 	if m.keymap.visible || m.devicePicker.visible || m.fileBrowser.visible ||
 		m.navBrowser.visible || m.themePicker.visible || m.queue.visible ||
-		m.search.active {
+		m.radioStats.visible || m.search.active {
 		return true
 	}
 	if m.plPicker.visible && m.plPicker.screen == plPickerChoose {
@@ -481,6 +493,12 @@ func (m Model) usesContentFirstLayout() bool {
 		return true
 	}
 	return m.netSearch.active && m.netSearch.screen == netSearchResults
+}
+
+// usesSimplifiedLayout applies the sparse playback chrome only to the main
+// playlist view. Provider browsing and overlays retain their normal space.
+func (m Model) usesSimplifiedLayout() bool {
+	return m.simplified && m.activeScreen() == screenMain && m.focus != focusProvider
 }
 
 func (m Model) isPlaying() bool {
