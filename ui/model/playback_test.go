@@ -23,6 +23,7 @@ type playbackFakeEngine struct {
 	duration          time.Duration
 	seekYTDLErr       error
 	playCalls         []string
+	seekCalls         []time.Duration
 	seekYTDLCalls     []time.Duration
 	playAtOffsets     []time.Duration
 	preloadCalls      []string
@@ -52,9 +53,12 @@ func (f *playbackFakeEngine) Stop() {
 	f.stopCalls++
 	f.playing, f.paused = false, false
 }
-func (f *playbackFakeEngine) Close()                   {}
-func (f *playbackFakeEngine) TogglePause()             { f.paused = !f.paused }
-func (f *playbackFakeEngine) Seek(time.Duration) error { return nil }
+func (f *playbackFakeEngine) Close()       {}
+func (f *playbackFakeEngine) TogglePause() { f.paused = !f.paused }
+func (f *playbackFakeEngine) Seek(d time.Duration) error {
+	f.seekCalls = append(f.seekCalls, d)
+	return nil
+}
 func (f *playbackFakeEngine) SeekYTDL(d time.Duration) error {
 	f.seekYTDLCalls = append(f.seekYTDLCalls, d)
 	return f.seekYTDLErr

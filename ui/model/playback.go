@@ -470,6 +470,7 @@ func (m *Model) beginPlaybackTrack(track playlist.Track) (playlist.Track, tea.Cm
 	m.lyrics.query = ""
 	m.lyrics.scroll = 0
 	m.seek.active = false
+	m.seek.pending = false
 	m.seek.timer = 0
 	m.seek.timerFor = 0
 	m.seek.grace = 0
@@ -617,6 +618,8 @@ func (m *Model) applyResume() tea.Cmd {
 	target := m.clampPosition(time.Duration(m.resume.secs) * time.Second)
 	if playlist.IsMixcloudURL(track.Path) && m.player.IsYTDLSeek() {
 		m.seek.active = true
+		m.seek.inFlight = true
+		m.seek.pending = false
 		m.seek.targetPos = target
 		m.seek.timer = 0
 		m.seek.timerFor = 0

@@ -113,7 +113,18 @@ func (m *Model) finishSeek() {
 	})
 }
 
+// commitPendingSeek starts the seek to the pending target. Only one such seek
+// runs at a time: overlapping decoder restarts prepare their replacements
+// against the same pipeline state, so the first to commit makes the others
+// no-ops and the newest target would be silently lost. A target that arrives
+// while a seek runs is committed when that seek reports back.
 func (m *Model) commitPendingSeek() tea.Cmd {
+	if m.seek.inFlight {
+		m.seek.pending = true
+		return nil
+	}
+	m.seek.inFlight = true
+	m.seek.pending = false
 	return m.seekCmd(m.seek.targetPos, false)
 }
 

@@ -80,6 +80,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case seekTickMsg:
 		// Async seek completed.
+		m.seek.inFlight = false
+		if m.seek.pending && msg.err == nil {
+			// A newer target arrived while this seek was running; land on it
+			// rather than reporting this now-stale position as final.
+			return m, m.commitPendingSeek()
+		}
+		m.seek.pending = false
 		// Only clear seekActive if no new seek keypresses arrived during loading.
 		if m.seek.timer <= 0 {
 			m.seek.active = false
