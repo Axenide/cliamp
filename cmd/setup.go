@@ -1324,7 +1324,7 @@ func saveSection(section, body string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 
@@ -1336,7 +1336,7 @@ func saveSection(section, body string) error {
 		if !errors.Is(err, fs.ErrNotExist) {
 			return err
 		}
-		return os.WriteFile(path, []byte(block), 0o644)
+		return writeConfigFile(path, block)
 	}
 
 	lines := strings.Split(string(data), "\n")
@@ -1347,7 +1347,7 @@ func saveSection(section, body string) error {
 			out += "\n\n"
 		}
 		out += block
-		return os.WriteFile(path, []byte(out), 0o644)
+		return writeConfigFile(path, out)
 	}
 
 	before := strings.TrimRight(strings.Join(lines[:start], "\n"), "\n")
@@ -1368,7 +1368,14 @@ func saveSection(section, body string) error {
 			b.WriteString("\n")
 		}
 	}
-	return os.WriteFile(path, []byte(b.String()), 0o644)
+	return writeConfigFile(path, b.String())
+}
+
+func writeConfigFile(path, contents string) error {
+	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0o600)
 }
 
 // findSection returns [start, end) line indices for the [name] block in

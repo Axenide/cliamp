@@ -248,6 +248,46 @@ func TestNetEaseSetupBody(t *testing.T) {
 	}
 }
 
+func TestSaveSectionSecuresConfigFile(t *testing.T) {
+	configDir := filepath.Join(t.TempDir(), "config")
+	t.Setenv("CLIAMP_CONFIG_DIR", configDir)
+
+	if err := saveSection("mixcloud", "access_token = \"secret\""); err != nil {
+		t.Fatalf("saveSection: %v", err)
+	}
+
+	dirInfo, err := os.Stat(configDir)
+	if err != nil {
+		t.Fatalf("Stat(%q): %v", configDir, err)
+	}
+	if got, want := dirInfo.Mode().Perm(), os.FileMode(0o700); got != want {
+		t.Errorf("mode for %q = %o, want %o", configDir, got, want)
+	}
+
+	path := filepath.Join(configDir, "config.toml")
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("Stat(%q): %v", path, err)
+	}
+	if got, want := info.Mode().Perm(), os.FileMode(0o600); got != want {
+		t.Errorf("mode for %q = %o, want %o", path, got, want)
+	}
+
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatalf("Chmod(%q): %v", path, err)
+	}
+	if err := saveSection("mixcloud", "access_token = \"secret\""); err != nil {
+		t.Fatalf("rewrite saveSection: %v", err)
+	}
+	info, err = os.Stat(path)
+	if err != nil {
+		t.Fatalf("Stat(%q): %v", path, err)
+	}
+	if got, want := info.Mode().Perm(), os.FileMode(0o600); got != want {
+		t.Errorf("rewritten mode for %q = %o, want %o", path, got, want)
+	}
+}
+
 func TestQobuzSetupBody(t *testing.T) {
 	spec := providerSpec{}
 	for _, p := range providers() {
