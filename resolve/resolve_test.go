@@ -330,3 +330,18 @@ func TestParseYTDLTracksCountsMalformedEntries(t *testing.T) {
 		t.Fatalf("tracks = %+v, want one valid track", tracks)
 	}
 }
+
+// TestRemoteRequiresClassifiedURLs documents why URL exists: Remote's default
+// arm assumes its input was already classified as a feed, so handing it a raw
+// stream address parses the audio as XML.
+func TestRemoteRequiresClassifiedURLs(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "audio/mpeg")
+		io.WriteString(w, "\xff\xfb\x90\x00not xml")
+	}))
+	defer srv.Close()
+
+	if _, err := Remote([]string{srv.URL + "/live"}); err == nil {
+		t.Fatal("Remote accepted an unclassified stream URL; URL is no longer needed")
+	}
+}
