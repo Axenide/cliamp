@@ -231,7 +231,7 @@ This applies to:
 - `/` file browser filter
 - `Ctrl+F` when the active provider is Local (your saved playlists)
 
-Other `Ctrl+F` providers (Spotify, Qobuz, Tidal, Navidrome, Jellyfin, Emby, Plex, Audiobookshelf, Mixcloud, NetEase, YouTube) send your query to their own search API, so matching there follows each service's rules.
+Other `Ctrl+F` providers (Spotify, Qobuz, Tidal, Navidrome, Lyrion, Jellyfin, Emby, Plex, Audiobookshelf, Mixcloud, NetEase, YouTube) send your query to their own search API, so matching there follows each service's rules.
 
 ## General
 
