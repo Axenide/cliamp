@@ -269,7 +269,7 @@ func fetchNetSearchCmd(query string, gen uint64) tea.Cmd {
 
 func playStreamCmd(p player.Engine, path string, knownDuration time.Duration, startAt func() time.Duration, gen uint64) tea.Cmd {
 	return func() tea.Msg {
-		return streamPlayedMsg{path: path, gen: gen, err: p.PlayAt(path, knownDuration, startAt())}
+		return streamPlayedMsg{path: path, gen: gen, err: p.PlayAtForGeneration(path, knownDuration, startAt(), gen)}
 	}
 }
 
@@ -289,7 +289,7 @@ func preloadLocalCmd(p player.Engine, path string, knownDuration time.Duration, 
 
 func playYTDLStreamCmd(p player.Engine, pageURL string, knownDuration time.Duration, gen uint64) tea.Cmd {
 	return func() tea.Msg {
-		return streamPlayedMsg{path: pageURL, gen: gen, err: p.PlayYTDL(pageURL, knownDuration)}
+		return streamPlayedMsg{path: pageURL, gen: gen, err: p.PlayYTDLForGeneration(pageURL, knownDuration, gen)}
 	}
 }
 

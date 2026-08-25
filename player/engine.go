@@ -9,6 +9,9 @@ type Engine interface {
 	Play(path string, knownDuration time.Duration) error
 	PlayAt(path string, knownDuration, offset time.Duration) error
 	PlayYTDL(pageURL string, knownDuration time.Duration) error
+	SetPlaybackGeneration(generation uint64)
+	PlayAtForGeneration(path string, knownDuration, offset time.Duration, generation uint64) error
+	PlayYTDLForGeneration(pageURL string, knownDuration time.Duration, generation uint64) error
 	Preload(path string, knownDuration time.Duration) error
 	PreloadYTDL(pageURL string, knownDuration time.Duration) error
 	ClearPreload()

@@ -78,6 +78,18 @@ func TestRestoreYTDLSeekSource(t *testing.T) {
 	}
 }
 
+func TestPlayPipelineForGenerationDiscardsStaleStart(t *testing.T) {
+	p := newTestPlayer()
+	p.SetPlaybackGeneration(2)
+
+	if err := p.playPipelineForGeneration(&trackPipeline{}, 1); err != nil {
+		t.Fatalf("playPipelineForGeneration: %v", err)
+	}
+	if p.current != nil {
+		t.Fatal("stale playback start replaced the current pipeline")
+	}
+}
+
 func TestSetVolumeMinClamps(t *testing.T) {
 	p := newTestPlayer()
 

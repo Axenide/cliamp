@@ -15,9 +15,16 @@ type fakeEngine struct {
 	position   time.Duration
 }
 
-func (f *fakeEngine) Play(string, time.Duration) error                    { return nil }
-func (f *fakeEngine) PlayAt(string, time.Duration, time.Duration) error   { return nil }
-func (f *fakeEngine) PlayYTDL(string, time.Duration) error                { return nil }
+func (f *fakeEngine) Play(string, time.Duration) error                  { return nil }
+func (f *fakeEngine) PlayAt(string, time.Duration, time.Duration) error { return nil }
+func (f *fakeEngine) PlayYTDL(string, time.Duration) error              { return nil }
+func (f *fakeEngine) SetPlaybackGeneration(uint64)                      {}
+func (f *fakeEngine) PlayAtForGeneration(path string, dur, offset time.Duration, _ uint64) error {
+	return f.PlayAt(path, dur, offset)
+}
+func (f *fakeEngine) PlayYTDLForGeneration(path string, dur time.Duration, _ uint64) error {
+	return f.PlayYTDL(path, dur)
+}
 func (f *fakeEngine) Preload(string, time.Duration) error                 { return nil }
 func (f *fakeEngine) PreloadYTDL(string, time.Duration) error             { return nil }
 func (f *fakeEngine) ClearPreload()                                       {}

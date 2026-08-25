@@ -54,8 +54,9 @@ type Player struct {
 	bitDepth        int // 16 or 32
 	tapBufferFrames int
 
-	gaplessAdvance atomic.Bool  // set when gapless transition fires
-	seekGen        atomic.Int64 // generation counter for yt-dlp seeks; incremented to cancel stale seeks
+	gaplessAdvance atomic.Bool   // set when gapless transition fires
+	seekGen        atomic.Int64  // generation counter for yt-dlp seeks; incremented to cancel stale seeks
+	playGen        atomic.Uint64 // current UI playback request; rejects stale asynchronous starts
 
 	lastPlayedDuration time.Duration // real duration of the track finished by the last gapless swap
 
@@ -159,6 +160,24 @@ func (p *Player) Play(path string, knownDuration time.Duration) error {
 // PlayAt is Play, starting at offset. The decoder is positioned before the
 // pipeline reaches the speaker, so no audio plays from 0:00.
 func (p *Player) PlayAt(path string, knownDuration, offset time.Duration) error {
+	return p.playAt(path, knownDuration, offset, 0, false)
+}
+
+// SetPlaybackGeneration invalidates asynchronous playback starts from older
+// UI requests. It waits for an in-progress source commit to finish so a new
+// generation cannot race its final ownership check.
+func (p *Player) SetPlaybackGeneration(generation uint64) {
+	p.lifecycleMu.Lock()
+	p.playGen.Store(generation)
+	p.lifecycleMu.Unlock()
+}
+
+// PlayAtForGeneration starts a stream only when generation is still current.
+func (p *Player) PlayAtForGeneration(path string, knownDuration, offset time.Duration, generation uint64) error {
+	return p.playAt(path, knownDuration, offset, generation, true)
+}
+
+func (p *Player) playAt(path string, knownDuration, offset time.Duration, generation uint64, requireCurrent bool) error {
 	tp, err := p.buildPipeline(path)
 	if err != nil {
 		return fmt.Errorf("play at %v: %w", offset, err)
@@ -171,12 +190,24 @@ func (p *Player) PlayAt(path string, knownDuration, offset time.Duration) error 
 			_ = tp.decoder.Seek(sample)
 		}
 	}
+	if requireCurrent {
+		return p.playPipelineForGeneration(tp, generation)
+	}
 	return p.playPipeline(tp)
 }
 
 // PlayYTDL starts playing a yt-dlp page URL via a piped yt-dlp | ffmpeg chain.
 // Playback starts as soon as the first PCM samples arrive (~1-3s). Not seekable.
 func (p *Player) PlayYTDL(pageURL string, knownDuration time.Duration) error {
+	return p.playYTDL(pageURL, knownDuration, 0, false)
+}
+
+// PlayYTDLForGeneration starts a yt-dlp stream only when generation is still current.
+func (p *Player) PlayYTDLForGeneration(pageURL string, knownDuration time.Duration, generation uint64) error {
+	return p.playYTDL(pageURL, knownDuration, generation, true)
+}
+
+func (p *Player) playYTDL(pageURL string, knownDuration time.Duration, generation uint64, requireCurrent bool) error {
 	// Probe duration concurrently with pipeline setup so it doesn't delay playback.
 	probeCh := make(chan time.Duration, 1)
 	if knownDuration == 0 {
@@ -203,6 +234,9 @@ func (p *Player) PlayYTDL(pageURL string, knownDuration time.Duration) error {
 		}
 	}
 	tp.knownDuration = knownDuration
+	if requireCurrent {
+		return p.playPipelineForGeneration(tp, generation)
+	}
 	return p.playPipeline(tp)
 }
 
@@ -210,8 +244,17 @@ func (p *Player) PlayYTDL(pageURL string, knownDuration time.Duration) error {
 // On the first call it builds the long-lived EQ → volume → tap → ctrl chain.
 // Subsequent calls swap only the track source via the gapless streamer.
 func (p *Player) playPipeline(tp *trackPipeline) error {
-	p.resumeSpeaker()
+	return p.playPipelineForGeneration(tp, 0)
+}
+
+func (p *Player) playPipelineForGeneration(tp *trackPipeline, generation uint64) error {
 	p.lifecycleMu.Lock()
+	if generation != 0 && p.playGen.Load() != generation {
+		p.lifecycleMu.Unlock()
+		go tp.close()
+		return nil
+	}
+	p.resumeSpeaker()
 
 	// Collect old pipelines to close after releasing locks.
 	var oldCurrent, oldNext *trackPipeline

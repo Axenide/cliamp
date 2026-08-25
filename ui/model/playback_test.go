@@ -32,6 +32,7 @@ type playbackFakeEngine struct {
 	preloadCalls       []string
 	clearPreloadCalls  int
 	stopCalls          int
+	playGeneration     uint64
 	eqBands            [eqBandCount]float64
 }
 
@@ -46,6 +47,21 @@ func (f *playbackFakeEngine) PlayAt(path string, dur, offset time.Duration) erro
 	return f.Play(path, dur)
 }
 func (f *playbackFakeEngine) PlayYTDL(string, time.Duration) error { return nil }
+func (f *playbackFakeEngine) SetPlaybackGeneration(generation uint64) {
+	f.playGeneration = generation
+}
+func (f *playbackFakeEngine) PlayAtForGeneration(path string, dur, offset time.Duration, generation uint64) error {
+	if f.playGeneration != generation {
+		return nil
+	}
+	return f.PlayAt(path, dur, offset)
+}
+func (f *playbackFakeEngine) PlayYTDLForGeneration(_ string, _ time.Duration, generation uint64) error {
+	if f.playGeneration != generation {
+		return nil
+	}
+	return nil
+}
 func (f *playbackFakeEngine) Preload(path string, _ time.Duration) error {
 	f.preloadCalls = append(f.preloadCalls, path)
 	return nil
@@ -162,6 +178,28 @@ func TestStreamPlayedNotifiesOnceWithoutResume(t *testing.T) {
 	m = updated.(Model)
 	if len(notifier.updates) != 1 {
 		t.Fatalf("notifier updates = %d, want exactly 1", len(notifier.updates))
+	}
+}
+
+func TestPlayStreamCmdSkipsSupersededGeneration(t *testing.T) {
+	player := &playbackFakeEngine{}
+	player.SetPlaybackGeneration(1)
+	started := make(chan struct{})
+	continueStart := make(chan struct{})
+	cmd := playStreamCmd(player, "https://example.com/stream", 0, func() time.Duration {
+		close(started)
+		<-continueStart
+		return 0
+	}, 1)
+	finished := make(chan tea.Msg, 1)
+	go func() { finished <- cmd() }()
+	<-started
+
+	player.SetPlaybackGeneration(2)
+	close(continueStart)
+	<-finished
+	if len(player.playCalls) != 0 {
+		t.Fatalf("Play calls = %v, want none", player.playCalls)
 	}
 }
 
