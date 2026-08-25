@@ -78,6 +78,19 @@ func TestRestoreYTDLSeekSource(t *testing.T) {
 	}
 }
 
+func TestCommitYTDLSeekDoesNotReplaceNewTrack(t *testing.T) {
+	old := &trackPipeline{}
+	current := &trackPipeline{}
+	p := &Player{gapless: &gaplessStreamer{}, current: current}
+
+	if p.commitYTDLSeek(old, &trackPipeline{}, 0) {
+		t.Fatal("commitYTDLSeek() = true, want false for replaced track")
+	}
+	if p.current != current {
+		t.Fatal("stale seek replaced the current pipeline")
+	}
+}
+
 func TestPlayPipelineForGenerationDiscardsStaleStart(t *testing.T) {
 	p := newTestPlayer()
 	p.SetPlaybackGeneration(2)

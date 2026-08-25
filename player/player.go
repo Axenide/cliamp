@@ -656,29 +656,37 @@ func (p *Player) SeekYTDL(d time.Duration) error {
 	tp.knownDuration = cur.knownDuration
 	tp.ytdlSeek = true
 
-	// Check if this seek was cancelled while we were building.
-	if p.seekGen.Load() != gen {
-		// A newer seek was requested — discard this result.
+	if !p.commitYTDLSeek(cur, tp, gen) {
+		// The seek was cancelled or another track started while the new pipeline
+		// was being built.
 		go closePipelines(tp)
-		return nil
 	}
+	return nil
+}
 
-	// Now acquire speaker lock to swap streams.
+// commitYTDLSeek swaps in a rebuilt seek pipeline only when it still belongs
+// to the active track. It must validate under the same locks used for the swap
+// because playback can change while yt-dlp is starting.
+func (p *Player) commitYTDLSeek(cur, replacement *trackPipeline, gen int64) bool {
 	speaker.Lock()
-	p.gapless.Replace(tp.stream)
+	p.mu.Lock()
+	if p.seekGen.Load() != gen || p.current != cur {
+		p.mu.Unlock()
+		speaker.Unlock()
+		return false
+	}
+	p.gapless.Replace(replacement.stream)
 	p.gapless.SetNext(nil)
 	p.gaplessAdvance.Store(false)
-	speaker.Unlock()
-
-	p.mu.Lock()
 	old := p.current
 	oldNext := p.nextPipeline
-	p.current = tp
+	p.current = replacement
 	p.nextPipeline = nil
 	p.mu.Unlock()
+	speaker.Unlock()
 	// Clean up old pipelines async to avoid blocking on process wait.
 	go closePipelines(old, oldNext)
-	return nil
+	return true
 }
 
 // restoreYTDLSeekSource puts the original stream back after a replacement
