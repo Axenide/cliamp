@@ -99,7 +99,9 @@ func TestUserPlaylistsRespectsPageCap(t *testing.T) {
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 		if limit > 50 {
 			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"status":400,"subStatus":1001,"userMessage":"Too big page, max page size is [50]"}`)
+			if _, err := fmt.Fprint(w, `{"status":400,"subStatus":1001,"userMessage":"Too big page, max page size is [50]"}`); err != nil {
+				t.Errorf("write error: %v", err)
+			}
 			return
 		}
 		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
