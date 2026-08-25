@@ -65,6 +65,7 @@ const (
 	MetaNetEaseID   = "netease.id"
 	MetaQobuzID     = "qobuz.id"
 	MetaTidalID     = "tidal.id"
+	MetaLyrionID    = "lyrion.id"
 	MetaMixcloudKey = "mixcloud.key"
 	// MetaMixcloudCreator is the profile username that owns a Mixcloud show.
 	MetaMixcloudCreator = "mixcloud.creator"
