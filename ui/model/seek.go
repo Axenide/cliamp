@@ -18,6 +18,7 @@ type seekTickMsg struct {
 	err    error
 	resume bool
 	target time.Duration
+	gen    uint64
 }
 
 type ytdlUnpauseReconnectMsg struct{ err error }
@@ -30,17 +31,19 @@ func (m *Model) doSeek(d time.Duration) tea.Cmd {
 
 func (m *Model) streamSeekRelative(delta time.Duration) tea.Cmd {
 	p := m.player
+	gen := m.seek.gen
 	return func() tea.Msg {
 		err := p.Seek(delta)
-		return seekTickMsg{err: err}
+		return seekTickMsg{err: err, gen: gen}
 	}
 }
 
 func (m *Model) streamSeekAbsolute(target time.Duration) tea.Cmd {
 	p := m.player
+	gen := m.seek.gen
 	return func() tea.Msg {
 		err := p.Seek(target - p.Position())
-		return seekTickMsg{err: err, target: target}
+		return seekTickMsg{err: err, target: target, gen: gen}
 	}
 }
 
@@ -133,6 +136,7 @@ func (m *Model) commitPendingSeek() tea.Cmd {
 // and track changes between queueing and execution are respected.
 func (m *Model) seekCmd(target time.Duration, resume bool) tea.Cmd {
 	p := m.player
+	gen := m.seek.gen
 	return func() tea.Msg {
 		var err error
 		if p.IsYTDLSeek() {
@@ -140,7 +144,7 @@ func (m *Model) seekCmd(target time.Duration, resume bool) tea.Cmd {
 		} else {
 			err = p.Seek(target - p.Position())
 		}
-		return seekTickMsg{err: err, resume: resume, target: target}
+		return seekTickMsg{err: err, resume: resume, target: target, gen: gen}
 	}
 }
 

@@ -470,7 +470,9 @@ func (m *Model) beginPlaybackTrack(track playlist.Track) (playlist.Track, tea.Cm
 	m.lyrics.query = ""
 	m.lyrics.scroll = 0
 	m.seek.active = false
+	m.seek.inFlight = false
 	m.seek.pending = false
+	m.seek.gen++
 	m.seek.timer = 0
 	m.seek.timerFor = 0
 	m.seek.grace = 0

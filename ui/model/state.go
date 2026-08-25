@@ -67,6 +67,7 @@ type provSearchState struct {
 type seekState struct {
 	active    bool          // true from first keypress until seek completes
 	inFlight  bool          // a decoder-restarting seek command is running
+	gen       uint64        // bumped per track; completions from older tracks are ignored
 	pending   bool          // targetPos still needs a commit once inFlight clears
 	targetPos time.Duration // absolute target position
 	timer     int           // tick countdown for debounce (0 = idle)
