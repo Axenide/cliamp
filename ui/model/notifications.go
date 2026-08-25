@@ -204,6 +204,9 @@ func (m *Model) findTrackPosition(track playlist.Track) provider.TrackPosition {
 		if !ok {
 			return nil
 		}
+		if !tp.CanTrackPosition(track) {
+			return nil
+		}
 		return tp
 	}
 

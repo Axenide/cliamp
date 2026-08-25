@@ -127,6 +127,8 @@ type ProgressReporter interface {
 // TrackPosition is implemented by providers that can report where a single
 // track should resume from.
 type TrackPosition interface {
+	// CanTrackPosition reports whether track belongs to this provider.
+	CanTrackPosition(track playlist.Track) bool
 	// TrackPosition returns the saved position for track, or 0 to start over.
 	TrackPosition(track playlist.Track) time.Duration
 }

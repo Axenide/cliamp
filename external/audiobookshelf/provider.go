@@ -501,6 +501,10 @@ func (p *Provider) CanReportPlayback(track playlist.Track) bool {
 	return track.Meta(provider.MetaAudiobookshelfID) != ""
 }
 
+func (p *Provider) CanTrackPosition(track playlist.Track) bool {
+	return p.CanReportPlayback(track)
+}
+
 func (p *Provider) ReportNowPlaying(track playlist.Track, position time.Duration, _ bool) error {
 	if position <= 0 {
 		return nil

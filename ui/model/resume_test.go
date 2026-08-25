@@ -57,15 +57,19 @@ func TestStartPosition(t *testing.T) {
 	}
 }
 
-type zeroPositionProv struct{ plainProv }
+type zeroPositionProv struct {
+	plainProv
+	ownsTrack bool
+}
 
+func (p *zeroPositionProv) CanTrackPosition(playlist.Track) bool       { return p.ownsTrack }
 func (p *zeroPositionProv) TrackPosition(playlist.Track) time.Duration { return 0 }
 
 // A provider's 0 means "start over", so it must win over a stale startup hint
 // rather than being read as "no answer".
 func TestStartPositionProviderZeroWins(t *testing.T) {
 	track := playlist.Track{Path: "http://example/item", Stream: true}
-	m := Model{provider: &zeroPositionProv{}}
+	m := Model{provider: &zeroPositionProv{ownsTrack: true}}
 	m.resume.path = track.Path
 	m.resume.secs = 95
 
@@ -78,7 +82,7 @@ func TestStartPositionProviderZeroWins(t *testing.T) {
 // retried at the same position; applyResume clears it once playback starts.
 func TestStartPositionKeepsHintUntilPlaybackStarts(t *testing.T) {
 	track := playlist.Track{Path: "http://example/item", Stream: true}
-	m := Model{provider: &zeroPositionProv{}}
+	m := Model{provider: &zeroPositionProv{ownsTrack: true}}
 	m.resume.path = track.Path
 	m.resume.secs = 95
 
@@ -86,5 +90,16 @@ func TestStartPositionKeepsHintUntilPlaybackStarts(t *testing.T) {
 
 	if m.resume.secs != 95 {
 		t.Errorf("resume.secs = %d, want 95", m.resume.secs)
+	}
+}
+
+func TestStartPositionIgnoresUnrelatedPositionProvider(t *testing.T) {
+	track := playlist.Track{Path: "http://example/item", Stream: true}
+	m := Model{provider: &zeroPositionProv{}}
+	m.resume.path = track.Path
+	m.resume.secs = 95
+
+	if got := m.startPosition(track)(); got != 95*time.Second {
+		t.Errorf("startPosition() = %v, want 1m35s", got)
 	}
 }
