@@ -49,18 +49,6 @@ const podcastItemJSON = `{
 	}
 }`
 
-const otherPodcastItemJSON = `{
-	"id":"pod-2",
-	"mediaType":"podcast",
-	"media":{
-		"numEpisodes":1,
-		"metadata":{"title":"Corecursive","author":"Adam Gordon Bell"},
-		"episodes":[
-			{"id":"ep-9","title":"Only One","index":1,"publishedAt":500,"audioFile":{"ino":"903","duration":3000}}
-		]
-	}
-}`
-
 func TestProviderName(t *testing.T) {
 	p := mockProvider(func(req *http.Request) (*http.Response, error) {
 		t.Fatal("no request expected")
@@ -963,10 +951,8 @@ func TestArtistsMergeBookAuthorsWithPodcastHosts(t *testing.T) {
 }
 
 func TestArtistAlbumsIncludesHostedShows(t *testing.T) {
+	// Deliberately not calling Artists() first.
 	p := mixedCatalogProvider(t)
-	if _, err := p.Artists(); err != nil {
-		t.Fatalf("Artists() error: %v", err)
-	}
 
 	merged, err := p.ArtistAlbums("au-1")
 	if err != nil {

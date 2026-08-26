@@ -60,7 +60,6 @@ type Provider struct {
 	trackCache    map[string][]playlist.Track
 	bookCache     []LibraryItem
 	showCache     []LibraryItem
-	authorNames   map[string]string
 }
 
 func newProvider(client *Client) *Provider {
@@ -87,7 +86,6 @@ func (p *Provider) Refresh() {
 	p.trackCache = nil
 	p.bookCache = nil
 	p.showCache = nil
-	p.authorNames = nil
 	p.mu.Unlock()
 	p.client.ClearCache()
 }
@@ -249,7 +247,6 @@ func (p *Provider) Artists() ([]provider.ArtistInfo, error) {
 
 	var out []provider.ArtistInfo
 	byName := make(map[string]int)
-	names := make(map[string]string)
 	for _, lib := range libs {
 		if lib.MediaType != mediaTypeBook {
 			continue
@@ -259,7 +256,6 @@ func (p *Provider) Artists() ([]provider.ArtistInfo, error) {
 			return nil, fmt.Errorf("audiobookshelf: list authors for library %s: %w", lib.ID, err)
 		}
 		for _, a := range authors {
-			names[a.ID] = a.Name
 			if i, ok := byName[strings.ToLower(a.Name)]; ok {
 				out[i].AlbumCount += a.NumBooks
 				continue
@@ -286,10 +282,6 @@ func (p *Provider) Artists() ([]provider.ArtistInfo, error) {
 		out = append(out, provider.ArtistInfo{ID: hostID(host), Name: host, AlbumCount: 1})
 	}
 
-	p.mu.Lock()
-	p.authorNames = names
-	p.mu.Unlock()
-
 	sort.Slice(out, func(i, j int) bool {
 		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
 	})
@@ -302,14 +294,12 @@ func (p *Provider) ArtistAlbums(artistID string) ([]provider.AlbumInfo, error) {
 	var items []LibraryItem
 	name := strings.TrimPrefix(artistID, prefixHost)
 	if !strings.HasPrefix(artistID, prefixHost) {
-		books, err := p.client.AuthorItems(artistID)
+		author, err := p.client.Author(artistID)
 		if err != nil {
 			return nil, fmt.Errorf("audiobookshelf: list books for author %s: %w", artistID, err)
 		}
-		items = append(items, books...)
-		p.mu.Lock()
-		name = p.authorNames[artistID]
-		p.mu.Unlock()
+		items = append(items, author.LibraryItems...)
+		name = author.Name
 	}
 
 	shows, err := p.shows()
