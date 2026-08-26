@@ -3,10 +3,14 @@ package model
 import (
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/bjarneo/cliamp/favorites"
 	"github.com/bjarneo/cliamp/playlist"
 	"github.com/bjarneo/cliamp/provider"
+	"github.com/bjarneo/cliamp/ui"
 )
 
 func TestRestrictedMarkersAreViewOnly(t *testing.T) {
@@ -142,6 +146,102 @@ func TestFormatTrackRow(t *testing.T) {
 	}
 	if !strings.HasPrefix(row, "3. Song") {
 		t.Errorf("with-duration row %q does not start with %q", row, "3. Song")
+	}
+}
+
+func TestRenderTrackInfoScrollsLongArtistAndTitleOnce(t *testing.T) {
+	oldPanelWidth := ui.PanelWidth
+	ui.PanelWidth = 20
+	t.Cleanup(func() { ui.PanelWidth = oldPanelWidth })
+
+	track := playlist.Track{Artist: "Long Artist", Title: "Long Title", Album: "Long Album"}
+	p := playlist.New()
+	p.Add(track)
+	name := track.DisplayName() + " · " + track.Album
+	nameRunes := []rune(name)
+	maxW := ui.PanelWidth - 4
+
+	tests := []struct {
+		name   string
+		offset int
+		want   string
+	}{
+		{
+			name:   "starts at the artist",
+			offset: 0,
+			want:   string(nameRunes[:maxW]),
+		},
+		{
+			name:   "advances through the title",
+			offset: 1,
+			want:   string(nameRunes[1 : maxW+1]),
+		},
+		{
+			name:   "holds at the end instead of repeating",
+			offset: len(nameRunes),
+			want:   string(nameRunes[len(nameRunes)-maxW:]),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := Model{playlist: p, titleOff: tt.offset}
+			got := strings.TrimPrefix(ansi.Strip(m.renderTrackInfo()), "♫ ")
+			if got != tt.want {
+				t.Errorf("renderTrackInfo() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+
+	track.DurationSecs = 1
+	p.SetTrack(0, track)
+	m := Model{playlist: p, titleOff: len(nameRunes)}
+	got := ansi.Strip(m.renderSimplifiedTrackInfo())
+	wantName := string(nameRunes[len(nameRunes)-(ui.PanelWidth-len("0:01")-1):])
+	if !strings.HasPrefix(got, wantName) {
+		t.Errorf("renderSimplifiedTrackInfo() = %q, want prefix %q", got, wantName)
+	}
+
+	ui.PanelWidth = 80
+	track = playlist.Track{
+		Artist: "An Artist With A Very Long Name",
+		Title:  "An Equally Long Title",
+		Album:  "An Album Too Long To Fit",
+	}
+	p.Replace([]playlist.Track{track})
+	name = track.DisplayName() + " · " + track.Album
+	nameRunes = []rune(name)
+	m = Model{playlist: p, titleOff: 1}
+	got = strings.TrimPrefix(ansi.Strip(m.renderTrackInfo()), "♫ ")
+	if got != string(nameRunes[1:trackInfoMarqueeWidth+1]) {
+		t.Errorf("wide renderTrackInfo() = %q, want marquee offset", got)
+	}
+}
+
+func TestTitleScrollResetsAfterOnePass(t *testing.T) {
+	oldPanelWidth := ui.PanelWidth
+	ui.PanelWidth = 80
+	t.Cleanup(func() { ui.PanelWidth = oldPanelWidth })
+
+	p := playlist.New()
+	p.Add(playlist.Track{
+		Artist: "An Artist With A Very Long Name",
+		Title:  "An Equally Long Title",
+		Album:  "An Album Too Long To Fit",
+	})
+	m := Model{player: &playbackFakeEngine{playing: true}, playlist: p}
+	m.titleOff = m.titleScrollLimit()
+	now := time.Now()
+	m.advanceTitleScroll(now)
+
+	if m.titleOff != 0 {
+		t.Errorf("titleOff = %d, want 0 after a full marquee pass", m.titleOff)
+	}
+	if !m.titleScrolled {
+		t.Fatal("titleScrolled = false, want true after a full marquee pass")
+	}
+	m.advanceTitleScroll(now.Add(time.Second))
+	if m.titleOff != 0 {
+		t.Errorf("titleOff = %d after completion, want marquee to stay at the start", m.titleOff)
 	}
 }
 

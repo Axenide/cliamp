@@ -16,9 +16,7 @@ import (
 	"github.com/bjarneo/cliamp/ui"
 )
 
-// titleScrollSep is the separator runes for cyclic title scrolling,
-// pre-allocated to avoid per-frame conversion.
-var titleScrollSep = []rune("   ♫   ")
+const trackInfoMarqueeWidth = 48
 
 // Pre-built styles for elements created per-render to avoid repeated allocation.
 var (
@@ -279,13 +277,7 @@ func (m Model) mainSections(playlist string, includeTransient, contentFirst bool
 
 func (m Model) renderSimplifiedTrackInfo() string {
 	track, _ := m.currentPlaybackTrack()
-	name := track.DisplayName()
-	if name == "" {
-		name = "No track loaded"
-	}
-	if m.streamTitle != "" && track.Stream {
-		name = m.streamTitle
-	}
+	name := trackInfoName(track, m.streamTitle)
 
 	duration := formatTrackTime(int(m.cachedDur.Seconds()))
 	if duration == "" {
@@ -298,9 +290,59 @@ func (m Model) renderSimplifiedTrackInfo() string {
 		}
 	}
 
-	name = truncate(name, max(1, ui.PanelWidth-lipgloss.Width(duration)-1))
+	maxW := min(max(1, ui.PanelWidth-lipgloss.Width(duration)-1), trackInfoMarqueeWidth)
+	name = scrollTrackNameOnce(name, maxW, m.titleOff)
 	gap := max(1, ui.PanelWidth-lipgloss.Width(name)-lipgloss.Width(duration))
 	return trackStyle.Render(name) + strings.Repeat(" ", gap) + dimStyle.Render(duration)
+}
+
+func trackInfoName(track playlist.Track, streamTitle string) string {
+	if streamTitle != "" && track.Stream {
+		return streamTitle
+	}
+
+	name := trackViewName(track)
+	if name == "" {
+		name = "No track loaded"
+	}
+	if track.Album != "" {
+		name += " · " + track.Album
+	}
+	return name
+}
+
+func scrollTrackNameOnce(name string, maxW, offset int) string {
+	runes := []rune(name)
+	if len(runes) <= maxW {
+		return name
+	}
+	offset = min(max(0, offset), len(runes)-maxW)
+	return string(runes[offset : offset+maxW])
+}
+
+func (m *Model) resetTitleScroll() {
+	m.titleOff = 0
+	m.titleLastScroll = time.Time{}
+	m.titleScrolled = false
+}
+
+func (m Model) titleScrollLimit() int {
+	track, _ := m.currentPlaybackTrack()
+	maxW := min(ui.PanelWidth-4, trackInfoMarqueeWidth)
+	return max(0, len([]rune(trackInfoName(track, m.streamTitle)))-maxW)
+}
+
+func (m *Model) advanceTitleScroll(now time.Time) {
+	if m.player == nil || !m.player.IsPlaying() || m.player.IsPaused() || m.titleScrolled || now.Sub(m.titleLastScroll) < 200*time.Millisecond {
+		return
+	}
+	m.titleLastScroll = now
+	if m.titleOff >= m.titleScrollLimit() {
+		m.titleOff = 0
+		m.titleScrolled = true
+		return
+	}
+	m.titleOff++
 }
 
 func (m Model) renderTierHelp() string {
@@ -404,53 +446,17 @@ func (m Model) renderTitle() string {
 
 func (m Model) renderTrackInfo() string {
 	track, _ := m.currentPlaybackTrack()
-	name := trackViewName(track)
-	if name == "" {
-		name = "No track loaded"
-	}
-	// Show live ICY stream title instead of static track name for radio streams.
-	if m.streamTitle != "" && track.Stream {
-		name = m.streamTitle
-	}
-
-	// Append album to the title line to save vertical space.
-	// The album is truncated (never scrolled) so artist/song stays readable.
-	album := track.Album
-	if m.streamTitle != "" && track.Stream {
-		album = ""
-	}
-
-	maxW := ui.PanelWidth - 4
+	name := trackInfoName(track, m.streamTitle)
+	maxW := min(ui.PanelWidth-4, trackInfoMarqueeWidth)
 	if maxW < 1 {
 		return trackStyle.Render("♫ " + name)
 	}
-	nameRunes := []rune(name)
-
-	if album != "" {
-		sep := " · "
-		sepLen := len([]rune(sep))
-		remaining := maxW - len(nameRunes) - sepLen
-		if remaining >= 4 {
-			name += sep + truncate(album, remaining)
-		}
-		// remaining < 4: drop album, name alone fits or scrolls below.
-	}
-
 	runes := []rune(name)
 
 	if len(runes) <= maxW {
 		return trackStyle.Render("♫ " + name)
 	}
-	// Cyclic scrolling for long titles (only artist/song, album already handled)
-	padded := append(runes, titleScrollSep...)
-	total := len(padded)
-	off := m.titleOff % total
-
-	display := make([]rune, maxW)
-	for i := range maxW {
-		display[i] = padded[(off+i)%total]
-	}
-	return trackStyle.Render("♫ " + string(display))
+	return trackStyle.Render("♫ " + scrollTrackNameOnce(name, maxW, m.titleOff))
 }
 
 func (m Model) renderTimeStatus() string {

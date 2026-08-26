@@ -211,6 +211,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Poll ICY stream title for live radio display.
 		if title := m.player.StreamTitle(); title != "" && title != m.streamTitle {
 			m.streamTitle = title
+			m.resetTitleScroll()
 			m.applyHeightMode()
 			m.adjustScroll()
 			m.notifyAll()
@@ -311,7 +312,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.plCursor = m.playlist.Index()
 			m.adjustScroll()
-			m.titleOff = 0
 			var gaplessLyricCmd tea.Cmd
 			newTrack, gaplessLyricCmd = m.beginPlaybackTrack(newTrack)
 			if gaplessLyricCmd != nil {
@@ -359,12 +359,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.notifyAll()
 		}
-		if m.player.IsPlaying() && !m.player.IsPaused() {
-			if now.Sub(m.titleLastScroll) >= 200*time.Millisecond {
-				m.titleOff++
-				m.titleLastScroll = now
-			}
-		}
+		m.advanceTitleScroll(now)
 		// Retry deferred stream preload: preloadNext() returns nil (defers) when
 		// the current stream has >streamPreloadLeadTime remaining. Poll every tick
 		// until we're within the window and the preload gets armed.

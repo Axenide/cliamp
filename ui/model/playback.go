@@ -74,7 +74,7 @@ func (m *Model) playCurrentLogicalTrack() tea.Cmd {
 	if idx < 0 {
 		return nil
 	}
-	m.titleOff = 0
+	m.resetTitleScroll()
 	m.plCursor = idx
 	m.adjustScroll()
 	return m.playTrack(track)
@@ -83,7 +83,7 @@ func (m *Model) playCurrentLogicalTrack() tea.Cmd {
 // playCurrentTrack starts playing the selected track, skipping forward in
 // playlist order if the selection is unplayable.
 func (m *Model) playCurrentTrack() tea.Cmd {
-	m.titleOff = 0
+	m.resetTitleScroll()
 	if m.playlist.Len() == 0 {
 		return nil
 	}
@@ -456,6 +456,7 @@ func (m *Model) backfillLoadedPlaylistDuration(track playlist.Track) {
 // new active track. It is used both by explicit playback and by gapless
 // transitions, which advance audio without calling playTrack.
 func (m *Model) beginPlaybackTrack(track playlist.Track) (playlist.Track, tea.Cmd) {
+	m.resetTitleScroll()
 	nextRequest(&m.requests.stream)
 	if m.player != nil {
 		m.player.CancelSeekYTDL()

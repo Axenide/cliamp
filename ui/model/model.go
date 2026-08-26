@@ -248,8 +248,9 @@ type Model struct {
 	plCursor        int       // selected playlist item
 	plScroll        int       // scroll offset for playlist view
 	plVisible       int       // desired max visible playlist lines
-	titleOff        int       // scroll offset for long track titles
+	titleOff        int       // scroll offset for the now-playing marquee
 	titleLastScroll time.Time // last time the title scrolled
+	titleScrolled   bool      // whether the current title completed its single pass
 	err             error
 	quitting        bool
 	width           int
