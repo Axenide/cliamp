@@ -30,6 +30,8 @@ const ytdlPipeTimeout = 30 * time.Second
 // when the process is slow to flush and exit.
 const ytdlCauseGrace = 3 * time.Second
 
+const ytdlPipelineMaxAttempts = 3
+
 // YTDLPAvailable reports whether yt-dlp is installed and on PATH.
 func YTDLPAvailable() bool {
 	_, err := exec.LookPath("yt-dlp")
@@ -398,11 +400,32 @@ func decodeYTDLPipe(pageURL string, sr beep.SampleRate, bitDepth, startSec int) 
 func (p *Player) buildYTDLPipeline(pageURL string, startSec int) (*trackPipeline, error) {
 	p.streamTitle.Store("")
 
-	decoder, format, err := decodeYTDLPipe(pageURL, p.sr, p.bitDepth, startSec)
-	if err != nil {
-		return nil, err
-	}
+	for attempt := 1; ; attempt++ {
+		decoder, format, err := decodeYTDLPipe(pageURL, p.sr, p.bitDepth, startSec)
+		if err != nil {
+			return nil, err
+		}
 
+		if err := prefillYTDLPipe(decoder); err != nil {
+			if attempt == ytdlPipelineMaxAttempts || !isTransientYTDL403(err) {
+				return nil, err
+			}
+			continue
+		}
+
+		return &trackPipeline{
+			decoder:      decoder,
+			stream:       decoder,
+			format:       format,
+			seekable:     false,
+			path:         pageURL,
+			ytdlSeek:     true,
+			streamOffset: time.Duration(startSec) * time.Second,
+		}, nil
+	}
+}
+
+func prefillYTDLPipe(decoder *ytdlPipeStreamer) error {
 	// Pre-fill: block until yt-dlp + ffmpeg produce initial audio data.
 	// This runs in a tea.Cmd goroutine (not the UI thread), ensuring the
 	// speaker goroutine won't block on an empty pipe and hold its lock
@@ -423,23 +446,19 @@ func (p *Player) buildYTDLPipeline(pageURL string, startSec int) (*trackPipeline
 			cause := decoder.waitCause(ytdlCauseGrace)
 			decoder.Close()
 			if cause != nil {
-				return nil, cause
+				return cause
 			}
-			return nil, fmt.Errorf("waiting for audio data: %w", err)
+			return fmt.Errorf("waiting for audio data: %w", err)
 		}
 	case <-time.After(ytdlPipeTimeout):
 		decoder.Close()
 		<-peekErr // drain goroutine after Close() unblocks the pipe
-		return nil, fmt.Errorf("timed out waiting for audio data (%v)", ytdlPipeTimeout)
+		return fmt.Errorf("timed out waiting for audio data (%v)", ytdlPipeTimeout)
 	}
+	return nil
+}
 
-	return &trackPipeline{
-		decoder:      decoder,
-		stream:       decoder,
-		format:       format,
-		seekable:     false,
-		path:         pageURL,
-		ytdlSeek:     true,
-		streamOffset: time.Duration(startSec) * time.Second,
-	}, nil
+func isTransientYTDL403(err error) bool {
+	message := err.Error()
+	return strings.Contains(message, "yt-dlp:") && strings.Contains(message, "HTTP Error 403: Forbidden")
 }

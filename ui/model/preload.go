@@ -47,7 +47,8 @@ func (m *Model) preloadNext() tea.Cmd {
 	// Live streams do not have a track boundary. Preloading another station
 	// would turn a transient EOF into a gapless switch instead of reconnecting
 	// the station the user selected.
-	if current, idx := m.currentPlaybackTrack(); idx >= 0 && m.currentPlaybackIsLive(current) {
+	current, currentIdx := m.currentPlaybackTrack()
+	if currentIdx >= 0 && m.currentPlaybackIsLive(current) {
 		return nil
 	}
 
@@ -63,8 +64,12 @@ func (m *Model) preloadNext() tea.Cmd {
 	if !ok {
 		return nil
 	}
+	isYTDL := playlist.IsYTDL(next.Path)
+	if isYTDL && currentIdx >= 0 && next.Path == current.Path {
+		return nil
+	}
 	// Preload yt-dlp tracks with the same lead-time deferral as HTTP streams.
-	if playlist.IsYTDL(next.Path) {
+	if isYTDL {
 		dur := m.player.Duration()
 		if dur > 0 {
 			remaining := dur - m.player.Position()
