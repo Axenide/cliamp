@@ -6,12 +6,16 @@
 <title>CLIAMP - Terminal Music Player</title>
 <meta name="description" content="A terminal music player based on Winamp 2.x. Play local files, YouTube, Spotify, Qobuz, Tidal, Plex, Jellyfin, Emby, Navidrome, Lyrion, SoundCloud, Mixcloud, NetEase, and more than 30,000 radio stations. Use a spectrum visualizer and 10-band equalizer.">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#050505">
 
 <!-- Open Graph -->
 <meta property="og:type" content="website">
 <meta property="og:title" content="CLIAMP - Terminal Music Player">
 <meta property="og:description" content="A terminal music player based on Winamp 2.x. Play YouTube, Spotify, Qobuz, Tidal, Plex, Jellyfin, Emby, Navidrome, Lyrion, SoundCloud, Mixcloud, NetEase, and more than 30,000 radio stations. Use a spectrum visualizer and 10-band equalizer.">
 <meta property="og:image" content="https://cliamp.stream/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta property="og:url" content="https://cliamp.stream">
 
 <!-- Twitter Card -->
@@ -118,6 +122,7 @@ code{font-family:var(--mono)}
 .brand{display:inline-flex;align-items:center;gap:11px;color:var(--fg-hi);
   font-weight:800;font-size:15px;letter-spacing:3px;text-shadow:var(--engrave)}
 .brand b{color:var(--green);text-shadow:0 0 12px var(--green-glow)}
+.brand-logo{display:block;width:30px;height:30px;flex:0 0 auto}
 .led{width:8px;height:8px;border-radius:50%;background:var(--green);
   box-shadow:0 0 10px var(--green-glow),0 0 2px #fff inset;animation:blink 2.4s ease-in-out infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
@@ -186,6 +191,8 @@ kbd{color:var(--ink);background:var(--fg-hi);padding:1px 6px;border-radius:3px;
 @media (max-width:900px){.hero-grid{grid-template-columns:1fr;gap:36px}}
 .hero-eyebrow{font-size:11px;letter-spacing:5px;text-transform:uppercase;color:var(--amber);
   font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:9px}
+.hero-lockup{display:flex;align-items:center;gap:16px;margin-bottom:18px}
+.hero-logo{display:block;width:clamp(56px,5.5vw,68px);height:auto;flex:0 0 auto}
 .hero-word{font-size:clamp(52px,9vw,104px);line-height:.86;font-weight:800;letter-spacing:-3px;
   color:var(--fg-max);text-shadow:var(--engrave);margin-bottom:6px}
 .hero-word span{color:var(--green);text-shadow:0 0 34px var(--green-glow),0 0 90px rgba(55,245,160,.15)}
@@ -602,7 +609,7 @@ section{padding:74px 0;border-top:1px solid var(--line)}
 .hero-grid>div:first-child{border-left:4px solid var(--green);padding:8px 0 8px 24px}
 .hero-eyebrow{margin-bottom:22px;color:var(--green);font-size:10px;letter-spacing:2px}
 .hero-eyebrow::before{content:"root@localhost:";color:var(--mute)}
-.hero-word{margin:0 0 18px;font-size:clamp(54px,7.5vw,88px);line-height:.82;letter-spacing:-5px;color:var(--fg-max);text-shadow:none}
+.hero-word{margin:0;font-size:clamp(50px,6.5vw,78px);line-height:.82;letter-spacing:-5px;color:var(--fg-max);text-shadow:none}
 .hero-word span{color:var(--green);text-shadow:none}
 .hero-sub{margin:0 0 16px;color:var(--amber);font-size:15px;letter-spacing:0}
 .hero-sub em{color:inherit}
@@ -774,7 +781,9 @@ footer{padding:26px 0;border-top:1px solid var(--green);background:var(--ink)}
 }
 @media (max-width:560px){
   .brand::after{display:none}
-  .hero-word{font-size:50px}
+  .hero-lockup{gap:12px}
+  .hero-logo{width:52px}
+  .hero-word{font-size:46px;letter-spacing:-3px}
   .hero-desc{font-size:12px}
   .install-grid{grid-template-columns:1fr}
   .install-grid .install-box:last-child{grid-column:auto}
@@ -809,7 +818,7 @@ footer{padding:26px 0;border-top:1px solid var(--green);background:var(--ink)}
 <!-- ═══ NAV ═══ -->
 <nav class="nav" aria-label="Primary navigation">
   <div class="nav-in">
-    <a href="#top" class="brand"><span class="led"></span>CLI<b>AMP</b></a>
+    <a href="#top" class="brand"><img class="brand-logo" src="logo-small.svg" alt="">CLI<b>AMP</b></a>
     <button class="nav-toggle" aria-label="Toggle menu" aria-controls="nl" aria-expanded="false" onclick="var n=document.getElementById('nl');n.classList.toggle('open');this.setAttribute('aria-expanded',n.classList.contains('open'))">menu</button>
     <div class="nav-links" id="nl" onclick="this.classList.remove('open');document.querySelector('.nav-toggle').setAttribute('aria-expanded','false')">
       <a href="#install">Install</a>
@@ -832,7 +841,7 @@ footer{padding:26px 0;border-top:1px solid var(--green);background:var(--ink)}
     <div class="hero-grid">
       <div>
         <div class="hero-eyebrow"><span class="led"></span>~/audio/cliamp</div>
-        <h1 class="hero-word">cli<span>amp</span></h1>
+        <div class="hero-lockup"><img class="hero-logo" src="logo.svg" alt=""><h1 class="hero-word">cli<span>amp</span></h1></div>
         <p class="hero-sub"><em>Winamp</em> for the shell. No browser tab required.</p>
         <p class="hero-desc">Use playlists, a 10-band EQ, visualizers, synced lyrics, remote control, and Lua plugins. Stream from <em>Spotify, Qobuz, Tidal, YouTube Music, Plex, Jellyfin, Emby, Navidrome, Lyrion</em>, and more than 30,000 radio stations.</p>
         <div class="hero-cta">
