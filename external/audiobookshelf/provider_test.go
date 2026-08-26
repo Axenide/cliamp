@@ -259,6 +259,8 @@ func TestArtistsListsAuthorsFromBookLibraries(t *testing.T) {
 				{"id":"au-2","name":"andy weir","numBooks":2},
 				{"id":"au-1","name":"Brandon Sanderson","numBooks":9}
 			]}`), nil
+		case "/api/libraries/lib-p/items":
+			return jsonResponse(`{"total":0,"results":[]}`), nil
 		default:
 			t.Fatalf("unexpected path %s", req.URL.Path)
 			return nil, nil
@@ -282,13 +284,18 @@ func TestArtistsListsAuthorsFromBookLibraries(t *testing.T) {
 
 func TestArtistAlbumsPrefixesBookIDs(t *testing.T) {
 	p := mockProvider(func(req *http.Request) (*http.Response, error) {
-		if req.URL.Path != "/api/authors/au-1" {
+		switch req.URL.Path {
+		case "/api/authors/au-1":
+			return jsonResponse(`{"id":"au-1","name":"Brandon Sanderson","libraryItems":[
+				{"id":"book-2","media":{"numTracks":3,"metadata":{"title":"Warbreaker","authorName":"Brandon Sanderson","publishedYear":"2009"}}},
+				{"id":"book-1","media":{"numTracks":2,"metadata":{"title":"Mistborn","authorName":"Brandon Sanderson","publishedYear":"2006"}}}
+			]}`), nil
+		case "/api/libraries":
+			return jsonResponse(`{"libraries":[{"id":"lib-b","name":"Audiobooks","mediaType":"book"}]}`), nil
+		default:
 			t.Fatalf("unexpected path %s", req.URL.Path)
+			return nil, nil
 		}
-		return jsonResponse(`{"id":"au-1","name":"Brandon Sanderson","libraryItems":[
-			{"id":"book-2","media":{"numTracks":3,"metadata":{"title":"Warbreaker","authorName":"Brandon Sanderson","publishedYear":"2009"}}},
-			{"id":"book-1","media":{"numTracks":2,"metadata":{"title":"Mistborn","authorName":"Brandon Sanderson","publishedYear":"2006"}}}
-		]}`), nil
 	})
 
 	albums, err := p.ArtistAlbums("au-1")
@@ -774,8 +781,8 @@ func TestResumeTargetInterface(t *testing.T) {
 func TestBrowseLabels(t *testing.T) {
 	p := newProvider(NewClient("https://abs.example.com", "tok", "", "", nil))
 	artist, album := p.BrowseLabels()
-	if artist != "Author" || album != "Book" {
-		t.Fatalf("BrowseLabels() = (%q, %q), want (Author, Book)", artist, album)
+	if artist != "Author" || album != "Title" {
+		t.Fatalf("BrowseLabels() = (%q, %q), want (Author, Title)", artist, album)
 	}
 	var any_ any = p
 	if _, ok := any_.(provider.BrowseLabeler); !ok {
@@ -858,5 +865,188 @@ func TestReportProgressReturnsTheFailure(t *testing.T) {
 	// A track this provider does not own is not an error.
 	if err := p.ReportProgress(playlist.Track{}, 120*time.Second); err != nil {
 		t.Fatalf("ReportProgress() for a foreign track = %v, want nil", err)
+	}
+}
+
+func mixedCatalogProvider(t *testing.T) *Provider {
+	t.Helper()
+	return mockProvider(func(req *http.Request) (*http.Response, error) {
+		switch req.URL.Path {
+		case "/api/libraries":
+			return jsonResponse(`{"libraries":[
+				{"id":"lib-b","name":"Audiobooks","mediaType":"book"},
+				{"id":"lib-p","name":"Podcasts","mediaType":"podcast"}
+			]}`), nil
+		case "/api/libraries/lib-b/items":
+			return jsonResponse(`{"total":1,"results":[
+				{"id":"book-1","addedAt":100,"media":{"numTracks":2,"metadata":{"title":"Mistborn","authorName":"Brandon Sanderson","publishedYear":"2006"}}}
+			]}`), nil
+		case "/api/libraries/lib-p/items":
+			return jsonResponse(`{"total":2,"results":[
+				{"id":"pod-1","addedAt":300,"media":{"numEpisodes":89,"metadata":{"title":"Darknet Diaries","author":"Jack Rhysider"}}},
+				{"id":"pod-2","addedAt":200,"media":{"numEpisodes":42,"metadata":{"title":"Corecursive","author":"Brandon Sanderson"}}}
+			]}`), nil
+		case "/api/libraries/lib-b/authors":
+			return jsonResponse(`{"authors":[{"id":"au-1","name":"Brandon Sanderson","numBooks":1}]}`), nil
+		case "/api/authors/au-1":
+			return jsonResponse(`{"id":"au-1","name":"Brandon Sanderson","libraryItems":[
+				{"id":"book-1","media":{"numTracks":2,"metadata":{"title":"Mistborn","authorName":"Brandon Sanderson","publishedYear":"2006"}}}
+			]}`), nil
+		default:
+			t.Fatalf("unexpected path %s", req.URL.Path)
+			return nil, nil
+		}
+	})
+}
+
+func TestAlbumListMixesBooksAndPodcastShows(t *testing.T) {
+	p := mixedCatalogProvider(t)
+
+	albums, err := p.AlbumList(SortBooksByTitle, 0, 0)
+	if err != nil {
+		t.Fatalf("AlbumList() error: %v", err)
+	}
+	got := make([]string, len(albums))
+	for i, a := range albums {
+		got[i] = a.ID + "|" + a.Name
+	}
+	want := "p:pod-2|Corecursive,p:pod-1|Darknet Diaries,b:book-1|Mistborn"
+	if strings.Join(got, ",") != want {
+		t.Fatalf("album list = %v, want %s", got, want)
+	}
+
+	show := albums[1]
+	if show.Artist != "Jack Rhysider" || show.ArtistID != "h:Jack Rhysider" {
+		t.Fatalf("show album = %+v", show)
+	}
+	if show.TrackCount != 89 || show.Year != 0 {
+		t.Fatalf("show counts = %+v", show)
+	}
+
+	byAuthor, err := p.AlbumList(SortBooksByAuthor, 0, 0)
+	if err != nil {
+		t.Fatalf("AlbumList(author) error: %v", err)
+	}
+	if byAuthor[0].Name != "Corecursive" || byAuthor[2].Name != "Darknet Diaries" {
+		t.Fatalf("author sort ignored podcast hosts: %+v", byAuthor)
+	}
+}
+
+func TestArtistsMergeBookAuthorsWithPodcastHosts(t *testing.T) {
+	p := mixedCatalogProvider(t)
+
+	artists, err := p.Artists()
+	if err != nil {
+		t.Fatalf("Artists() error: %v", err)
+	}
+	if len(artists) != 2 {
+		t.Fatalf("got %d artists, want 2 (one merged author/host, one host)", len(artists))
+	}
+	if artists[0].ID != "au-1" || artists[0].Name != "Brandon Sanderson" || artists[0].AlbumCount != 2 {
+		t.Fatalf("merged author = %+v, want the server id and both titles", artists[0])
+	}
+	if artists[1].ID != "h:Jack Rhysider" || artists[1].AlbumCount != 1 {
+		t.Fatalf("host-only artist = %+v", artists[1])
+	}
+}
+
+func TestArtistAlbumsIncludesHostedShows(t *testing.T) {
+	// Deliberately not calling Artists() first.
+	p := mixedCatalogProvider(t)
+
+	merged, err := p.ArtistAlbums("au-1")
+	if err != nil {
+		t.Fatalf("ArtistAlbums() error: %v", err)
+	}
+	if len(merged) != 2 || merged[0].ID != "p:pod-2" || merged[1].ID != "b:book-1" {
+		t.Fatalf("author albums = %+v, want the show and the book", merged)
+	}
+
+	hosted, err := p.ArtistAlbums("h:Jack Rhysider")
+	if err != nil {
+		t.Fatalf("ArtistAlbums(host) error: %v", err)
+	}
+	if len(hosted) != 1 || hosted[0].ID != "p:pod-1" {
+		t.Fatalf("host albums = %+v", hosted)
+	}
+}
+
+func TestBrowseHandlesSingleMediaTypeServers(t *testing.T) {
+	tests := []struct {
+		name       string
+		libraries  string
+		items      map[string]string
+		wantAlbums []string
+		wantArtist provider.ArtistInfo
+	}{
+		{
+			name:      "podcasts only",
+			libraries: `{"libraries":[{"id":"lib-p","name":"Podcasts","mediaType":"podcast"}]}`,
+			items: map[string]string{
+				"/api/libraries/lib-p/items": `{"total":1,"results":[
+					{"id":"pod-1","media":{"numEpisodes":89,"metadata":{"title":"Darknet Diaries","author":"Jack Rhysider"}}}
+				]}`,
+			},
+			wantAlbums: []string{"p:pod-1"},
+			wantArtist: provider.ArtistInfo{ID: "h:Jack Rhysider", Name: "Jack Rhysider", AlbumCount: 1},
+		},
+		{
+			name:      "audiobooks only",
+			libraries: `{"libraries":[{"id":"lib-b","name":"Audiobooks","mediaType":"book"}]}`,
+			items: map[string]string{
+				"/api/libraries/lib-b/items": `{"total":1,"results":[
+					{"id":"book-1","media":{"numTracks":2,"metadata":{"title":"Mistborn","authorName":"Brandon Sanderson"}}}
+				]}`,
+				"/api/libraries/lib-b/authors": `{"authors":[{"id":"au-1","name":"Brandon Sanderson","numBooks":1}]}`,
+			},
+			wantAlbums: []string{"b:book-1"},
+			wantArtist: provider.ArtistInfo{ID: "au-1", Name: "Brandon Sanderson", AlbumCount: 1},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p := mockProvider(func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path == "/api/libraries" {
+					return jsonResponse(tc.libraries), nil
+				}
+				body, ok := tc.items[req.URL.Path]
+				if !ok {
+					t.Fatalf("unexpected path %s", req.URL.Path)
+				}
+				return jsonResponse(body), nil
+			})
+
+			albums, err := p.AlbumList(SortBooksByTitle, 0, 0)
+			if err != nil {
+				t.Fatalf("AlbumList() error: %v", err)
+			}
+			got := make([]string, len(albums))
+			for i, a := range albums {
+				got[i] = a.ID
+			}
+			if strings.Join(got, ",") != strings.Join(tc.wantAlbums, ",") {
+				t.Fatalf("albums = %v, want %v", got, tc.wantAlbums)
+			}
+
+			artists, err := p.Artists()
+			if err != nil {
+				t.Fatalf("Artists() error: %v", err)
+			}
+			if len(artists) != 1 || artists[0] != tc.wantArtist {
+				t.Fatalf("artists = %+v, want %+v", artists, tc.wantArtist)
+			}
+
+			lists, err := p.Playlists()
+			if err != nil {
+				t.Fatalf("Playlists() error: %v", err)
+			}
+			sections := make(map[string]bool)
+			for _, l := range lists {
+				sections[l.Section] = true
+			}
+			if len(sections) != 1 {
+				t.Fatalf("provider pane sections = %v, want exactly one", sections)
+			}
+		})
 	}
 }

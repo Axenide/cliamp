@@ -310,12 +310,15 @@ func TestItemAndAuthors(t *testing.T) {
 		t.Fatalf("authors = %+v", authors)
 	}
 
-	items, err := c.AuthorItems("au-1")
+	author, err := c.Author("au-1")
 	if err != nil {
-		t.Fatalf("AuthorItems() error: %v", err)
+		t.Fatalf("Author() error: %v", err)
 	}
-	if len(items) != 1 || items[0].ID != "item-1" {
-		t.Fatalf("author items = %+v", items)
+	if len(author.LibraryItems) != 1 || author.LibraryItems[0].ID != "item-1" {
+		t.Fatalf("author items = %+v", author.LibraryItems)
+	}
+	if author.Name == "" {
+		t.Fatal("Author() dropped the author name")
 	}
 }
 

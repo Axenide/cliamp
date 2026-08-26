@@ -280,14 +280,14 @@ func (c *Client) Authors(libraryID string) ([]Author, error) {
 	return resp.Authors, nil
 }
 
-// AuthorItems returns the books written by one author.
-func (c *Client) AuthorItems(authorID string) ([]LibraryItem, error) {
+// Author returns one author with the books they wrote.
+func (c *Client) Author(authorID string) (Author, error) {
 	var a Author
 	params := url.Values{"include": {"items"}}
 	if err := c.get("/api/authors/"+url.PathEscape(authorID), params, &a); err != nil {
-		return nil, err
+		return Author{}, err
 	}
-	return a.LibraryItems, nil
+	return a, nil
 }
 
 // Search returns library items matching query, books first.
