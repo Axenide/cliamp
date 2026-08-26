@@ -79,10 +79,11 @@ func (f *playbackFakeEngine) PreloadForGeneration(path string, dur time.Duration
 	}
 	return f.Preload(path, dur)
 }
-func (f *playbackFakeEngine) PreloadYTDLForGeneration(_ string, _ time.Duration, generation uint64) error {
+func (f *playbackFakeEngine) PreloadYTDLForGeneration(path string, _ time.Duration, generation uint64) error {
 	if f.preloadGeneration != generation {
 		return nil
 	}
+	f.preloadCalls = append(f.preloadCalls, path)
 	return nil
 }
 func (f *playbackFakeEngine) ClearPreload() {
@@ -580,6 +581,46 @@ func TestPreloadAfterProviderPlaylistLoadUsesFirstNewTrack(t *testing.T) {
 
 	if len(player.preloadCalls) != 1 || player.preloadCalls[0] != "new1.mp3" {
 		t.Fatalf("preloadCalls = %v, want first new track", player.preloadCalls)
+	}
+}
+
+func TestPreloadNextSkipsCurrentYTDLTrackInRepeatOne(t *testing.T) {
+	const path = "https://www.youtube.com/watch?v=current"
+	player := &playbackFakeEngine{playing: true, duration: time.Minute, position: 50 * time.Second}
+	p := playlist.New()
+	p.Replace([]playlist.Track{{Title: "Current", Path: path, DurationSecs: 60}})
+	p.SetIndex(0)
+	p.SetRepeat(playlist.RepeatOne)
+
+	m := Model{player: player, playlist: p}
+	if cmd := m.preloadNext(); cmd != nil {
+		t.Fatal("preloadNext() returned a command for the current repeat-one yt-dlp track")
+	}
+	if m.preloading {
+		t.Fatal("preloading = true for the current repeat-one yt-dlp track")
+	}
+	if len(player.preloadCalls) != 0 {
+		t.Fatalf("preloadCalls = %v, want none", player.preloadCalls)
+	}
+}
+
+func TestPreloadNextKeepsDistinctYTDLTrack(t *testing.T) {
+	player := &playbackFakeEngine{playing: true, duration: time.Minute, position: 50 * time.Second}
+	p := playlist.New()
+	p.Replace([]playlist.Track{
+		{Title: "Current", Path: "https://www.youtube.com/watch?v=current", DurationSecs: 60},
+		{Title: "Next", Path: "https://www.youtube.com/watch?v=next", DurationSecs: 60},
+	})
+	p.SetIndex(0)
+
+	m := Model{player: player, playlist: p}
+	cmd := m.preloadNext()
+	if cmd == nil {
+		t.Fatal("preloadNext() = nil, want distinct yt-dlp preload command")
+	}
+	_ = cmd()
+	if len(player.preloadCalls) != 1 || player.preloadCalls[0] != "https://www.youtube.com/watch?v=next" {
+		t.Fatalf("preloadCalls = %v, want distinct next URL", player.preloadCalls)
 	}
 }
 
