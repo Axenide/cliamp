@@ -77,6 +77,7 @@ body{
     radial-gradient(140% 120% at 50% 40%,transparent 55%,rgba(0,0,0,.55) 100%);
   background-attachment:fixed;
 }
+body.globe-open{overflow:hidden}
 ::selection{background:var(--green);color:var(--ink)}
 
 /* CRT atmosphere */
@@ -476,12 +477,46 @@ kbd{color:var(--ink);background:var(--fg-hi);padding:1px 6px;border-radius:3px;
 .radio-chart-labels{display:flex;justify-content:space-between;margin-top:8px;font-size:9px;color:var(--mute-2);letter-spacing:1px}
 
 .radio-globe-wrap{display:flex;gap:26px;align-items:center;flex-wrap:wrap}
-.radio-globe-canvas{width:300px;max-width:100%;aspect-ratio:1;opacity:0;transition:opacity .5s}
+.radio-globe-button{position:relative;width:300px;max-width:100%;padding:0;border:1px solid var(--line);background:#050806;color:var(--green);font:inherit;cursor:zoom-in}
+.radio-globe-button:hover{border-color:var(--green)}
+.radio-globe-canvas{display:block;width:100%;max-width:100%;aspect-ratio:1;opacity:0;transition:opacity .5s}
 .radio-globe-canvas.loaded{opacity:1}
-.radio-countries{flex:1;min-width:220px;display:flex;flex-direction:column;gap:9px}
-.radio-country{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--fg)}
+.radio-globe-open-label{position:absolute;right:8px;bottom:8px;padding:4px 7px;background:var(--green);color:var(--ink);font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase}
+.radio-countries{flex:1;min-width:220px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 22px}
+.radio-country{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px dotted var(--line);font-size:12.5px;color:var(--fg)}
 .radio-country-flag{font-size:15px;line-height:1}
+.radio-country-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .radio-country-sessions{margin-left:auto;color:var(--mute);font-variant-numeric:tabular-nums;font-size:11px}
+.radio-country-more{grid-column:1/-1;border-bottom:0;color:var(--amber);font-size:11px;letter-spacing:.5px}
+
+.globe-dialog{width:100%;height:100dvh;max-width:none;max-height:none;margin:0;padding:0;border:0;border-top:3px solid var(--green);background:var(--ink);color:var(--fg);overflow:hidden}
+.globe-dialog::backdrop{background:rgba(0,0,0,.88)}
+.globe-dialog[open]{display:grid;grid-template-rows:auto minmax(0,1fr)}
+.globe-dialog-head{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--line-hi);background:var(--green);color:var(--ink)}
+.globe-dialog-title{font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase}
+.globe-dialog-status{font-size:10px;opacity:.65}
+.globe-dialog-close{margin-left:auto;padding:6px 9px;border:1px solid var(--ink);background:var(--ink);color:var(--green);font:inherit;font-size:10px;font-weight:800;cursor:pointer}
+.globe-dialog-body{display:grid;grid-template-columns:minmax(0,1fr) 340px;min-height:0}
+.globe-dialog-map{position:relative;display:grid;place-items:center;min-width:0;min-height:0;padding:20px;border-right:1px solid var(--line);background:#030604}
+.globe-dialog-canvas{display:block;width:min(100%,680px);max-height:100%;aspect-ratio:1;cursor:crosshair;touch-action:none}
+.globe-spin-toggle{position:absolute;top:12px;left:12px;z-index:2;padding:6px 8px;border:1px solid var(--line-hi);background:rgba(5,8,6,.9);color:var(--green);font:inherit;font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer}
+.globe-spin-toggle.paused{border-color:var(--amber);color:var(--amber)}
+.globe-dialog-side{display:grid;grid-template-rows:auto minmax(0,1fr);min-height:0;background:var(--panel)}
+.globe-detail{padding:22px;border-bottom:1px solid var(--line-hi)}
+.globe-detail-label{display:block;margin-bottom:8px;color:var(--green);font-size:9px;font-weight:800;letter-spacing:2px;text-transform:uppercase}
+.globe-detail-country{display:block;color:var(--fg-max);font-size:20px;line-height:1.2}
+.globe-detail-count{display:block;margin-top:7px;color:var(--amber);font-size:34px;font-weight:800;line-height:1}
+.globe-detail-unit{color:var(--mute);font-size:10px;letter-spacing:1px;text-transform:uppercase}
+.globe-rank-list{min-height:0;overflow-y:auto;padding:8px;scrollbar-width:thin;scrollbar-color:var(--line-hi) var(--panel)}
+.globe-rank-list::-webkit-scrollbar{width:7px}
+.globe-rank-list::-webkit-scrollbar-track{background:var(--panel)}
+.globe-rank-list::-webkit-scrollbar-thumb{background:var(--line-hi)}
+.globe-rank-item{display:grid;width:100%;grid-template-columns:28px 24px minmax(0,1fr) auto;gap:8px;align-items:center;padding:9px 8px;border:0;border-bottom:1px dotted var(--line);background:transparent;color:var(--fg);font:inherit;font-size:11px;text-align:left;cursor:pointer}
+.globe-rank-item:hover,.globe-rank-item.active{background:var(--green-dim);color:var(--fg-hi)}
+.globe-rank-item.active{box-shadow:inset 2px 0 0 var(--green)}
+.globe-rank-num{color:var(--mute-2)}
+.globe-rank-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.globe-rank-count{color:var(--amber);font-variant-numeric:tabular-nums}
 
 /* ═══════════ FOOTER ═══════════ */
 footer{border-top:1px solid var(--line);background:var(--ink-2);padding:46px 0 56px;position:relative}
@@ -496,9 +531,274 @@ footer{border-top:1px solid var(--line);background:var(--ink-2);padding:46px 0 5
 .footer-link{display:inline-flex;align-items:center;gap:7px;color:var(--mute);font-size:11px;letter-spacing:.5px}
 .footer-link:hover{color:var(--green)}
 .footer-link svg{width:14px;height:14px;fill:currentColor}
+
+/* Terminal manual redesign: hard edges, dense data, restrained motion. */
+:root{
+  --ink:#050806;
+  --ink-2:#080c09;
+  --panel:#0c120e;
+  --panel-2:#101812;
+  --panel-3:#152019;
+  --line:#203026;
+  --line-hi:#385342;
+  --fg:#aab7ac;
+  --fg-hi:#d9e3da;
+  --fg-max:#f4fff5;
+  --mute:#667568;
+  --mute-2:#405046;
+  --green:#42ff88;
+  --green-hi:#91ffb8;
+  --green-glow:rgba(66,255,136,.14);
+  --green-dim:rgba(66,255,136,.07);
+  --amber:#ffb000;
+  --amber-hi:#ffd166;
+  --amber-glow:rgba(255,176,0,.12);
+  --amber-dim:rgba(255,176,0,.07);
+  --cyan:#4bdbff;
+  --red:#ff4260;
+  --wrap:1180px;
+  --engrave:none;
+}
+
+body{
+  background:var(--ink);
+  background-image:linear-gradient(90deg,transparent calc(50% - 590px),rgba(66,255,136,.025) calc(50% - 590px),rgba(66,255,136,.025) calc(50% - 589px),transparent calc(50% - 589px));
+  background-attachment:scroll;
+  color:var(--fg);
+}
+
+.crt-scan,.crt-grain,.chassis,.screw{display:none}
+main{display:block}
+.skip-link{position:fixed;top:8px;left:8px;z-index:10000;padding:8px 12px;background:var(--green);color:var(--ink);font-weight:800;transform:translateY(-150%)}
+.skip-link:focus{transform:none}
+a{transition:none}
+a:hover{text-decoration:underline;text-underline-offset:3px}
+.wrap{padding-inline:28px}
+
+.nav{
+  background:rgba(5,8,6,.97);
+  border-top:3px solid var(--green);
+  border-bottom:1px solid var(--line-hi);
+  box-shadow:none;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+}
+.nav-in{height:48px;padding-inline:28px}
+.brand{gap:9px;font-size:13px;letter-spacing:2px;text-shadow:none}
+.brand:hover{text-decoration:none}
+.brand::after{content:"/usr/bin";color:var(--mute-2);font-size:9px;letter-spacing:1px;font-weight:500}
+.led{width:8px;height:8px;border-radius:0;box-shadow:none;animation:none}
+.nav-links{gap:0;height:100%}
+.nav-links a{display:flex;align-items:center;height:100%;padding:0 9px;color:var(--mute);font-size:10px;letter-spacing:1px;text-transform:lowercase}
+.nav-links a::before{content:"[";color:var(--mute-2)}
+.nav-links a::after{content:"]";color:var(--mute-2)}
+.nav-links a:hover{color:var(--green);text-shadow:none;text-decoration:none;background:var(--green-dim)}
+.nav-links .ext{color:var(--cyan)}
+.nav-toggle{width:auto;height:30px;padding:0 9px;border-radius:0;background:transparent;border-color:var(--line-hi);font-size:10px;letter-spacing:1px}
+
+section{padding:74px 0;border-top:1px solid var(--line)}
+.hero{padding:64px 0 52px;border-top:0;overflow:visible}
+.hero-grid{grid-template-columns:minmax(300px,.78fr) minmax(0,1.22fr);gap:54px;align-items:start}
+.hero-grid>div:first-child{border-left:4px solid var(--green);padding:8px 0 8px 24px}
+.hero-eyebrow{margin-bottom:22px;color:var(--green);font-size:10px;letter-spacing:2px}
+.hero-eyebrow::before{content:"root@localhost:";color:var(--mute)}
+.hero-word{margin:0 0 18px;font-size:clamp(54px,7.5vw,88px);line-height:.82;letter-spacing:-5px;color:var(--fg-max);text-shadow:none}
+.hero-word span{color:var(--green);text-shadow:none}
+.hero-sub{margin:0 0 16px;color:var(--amber);font-size:15px;letter-spacing:0}
+.hero-sub em{color:inherit}
+.hero-desc{margin-bottom:26px;color:var(--fg);font-size:13px;line-height:1.75}
+.hero-desc em{color:var(--fg-hi)}
+.hero-cta{gap:8px}
+.btn{border-radius:0;padding:11px 17px;font-size:10px;letter-spacing:1px;box-shadow:none;transition:none}
+.btn-go,.btn-go:hover{color:var(--ink);border-color:var(--green);background:var(--green);box-shadow:none;text-decoration:none}
+.btn-go:hover{background:var(--amber);border-color:var(--amber)}
+.btn-ghost{color:var(--fg-hi);background:transparent;border-color:var(--line-hi);box-shadow:none}
+.btn-ghost:hover{color:var(--green);border-color:var(--green);text-shadow:none;text-decoration:none}
+.hero-facts{display:grid;grid-template-columns:repeat(3,max-content);gap:8px 16px;margin-top:25px;color:var(--mute);font-size:10px;text-transform:uppercase;letter-spacing:1px}
+.hero-facts b{color:var(--amber);font-weight:700}
+
+.tty{border:1px solid var(--line-hi);border-radius:0;padding:0;background:var(--ink-2);box-shadow:10px 10px 0 #020302;animation:none}
+.tty-head{min-height:36px;padding:0 9px;background:var(--green);color:var(--ink);gap:8px}
+.tty-head-prompt,.tty-head-cmd,.tty-head-flag,.tty-head-pid{color:var(--ink);text-shadow:none}
+.tty-head-flag,.tty-head-pid{opacity:.66}
+.rp-play{height:24px;width:30px;border:1px solid var(--ink);border-radius:0;background:var(--ink);color:var(--green);box-shadow:none}
+.rp-play:hover{border-color:var(--ink);box-shadow:none;color:var(--amber)}
+.tty-body{border:0;border-top:1px solid var(--line-hi);border-radius:0;padding:16px 18px;background:#060a07}
+.tty-body::after{display:none}
+.t-title,.t-track-sym,.t-status-playing,.t-pl-mark{color:var(--green);text-shadow:none}
+.t-time-row,.t-pl-item{border-radius:0}
+.t-time-row:hover,.t-pl-item:hover{background:var(--green-dim)}
+#ascii-viz{filter:none}
+.t-seek,.t-active,.t-pl-header{color:var(--amber);text-shadow:none}
+.rp-vol::-webkit-slider-thumb{box-shadow:none}
+.rp-vol::-moz-range-thumb,.rp-vol::-moz-range-progress{box-shadow:none}
+.tune-hint::before{content:">  "}
+.tty-hint code{display:inline-block;border-bottom:1px solid var(--line-hi);padding-bottom:4px}
+
+.sponsor{margin-top:42px;padding-top:20px;border-top:1px dotted var(--line);text-align:left}
+.sponsor img{width:280px;opacity:.58}
+
+.ticker{padding:12px 0;border-block:1px solid var(--amber);background:#0b0b06}
+.ticker::before,.ticker::after{display:none}
+.ticker-track{width:100%;animation:none}
+.ticker-track span{width:100%;padding:0 28px;justify-content:center;color:var(--amber);font-size:10px;line-height:1.7;letter-spacing:.7px;white-space:normal;text-align:center}
+.ticker-track span::after{display:none}
+.ticker-track span:nth-child(n+2){display:none}
+
+.strip{gap:12px;margin-bottom:28px}
+.strip.rev{flex-direction:row}
+.strip-idx{padding:0;border:0;border-radius:0;background:none;box-shadow:none;color:var(--amber);font-size:11px;text-shadow:none}
+.strip-idx::before{content:"[";color:var(--mute-2)}
+.strip-idx::after{content:"]";color:var(--mute-2)}
+.strip-name{color:var(--fg-hi);font-size:clamp(19px,3vw,25px);letter-spacing:-1px;text-shadow:none}
+.strip-name::before{content:"./";color:var(--green)}
+.strip-name em{color:var(--amber);text-shadow:none}
+.strip-rule,.strip.rev .strip-rule{height:1px;background:var(--line);box-shadow:none}
+.strip-meter{display:none}
+.reveal{opacity:1;transform:none;transition:none}
+
+.demo-frame{padding:0;border:1px solid var(--line-hi);border-radius:0;background:var(--ink-2);box-shadow:8px 8px 0 #020302}
+.demo-frame::before{content:"demo@cliamp: playback";display:block;padding:8px 12px;border-bottom:1px solid var(--line-hi);background:var(--panel);color:var(--green);font-size:10px;letter-spacing:1px}
+.demo-wrap{border:0;border-radius:0}
+.demo-wrap::after{display:none}
+.sound-toggle{right:12px;bottom:12px;width:36px;height:32px;border-radius:0;background:var(--ink);box-shadow:none}
+.sound-toggle:hover{background:var(--green);color:var(--ink)}
+
+.install-grid{grid-template-columns:repeat(2,1fr);gap:1px;border:1px solid var(--line);background:var(--line)}
+.install-box{width:100%;min-width:0;padding:17px 18px;border:0;border-radius:0;background:var(--panel);color:var(--fg);font:inherit;text-align:left;box-shadow:none;transition:none}
+.install-box:hover{transform:none;border-color:transparent;background:var(--panel-2);box-shadow:inset 3px 0 0 var(--green)}
+.install-grid .install-box:last-child{grid-column:1/-1}
+.install-platform{display:block;margin-bottom:7px;color:var(--amber);font-size:9px;letter-spacing:1px}
+.install-box code{font-size:12px}
+.copied-msg{top:9px;right:10px;padding:2px 5px;background:var(--green);color:var(--ink)}
+.install-note{margin-top:18px;padding-left:14px;border-left:2px solid var(--line-hi);color:var(--mute)}
+.next-step{display:grid;grid-template-columns:1fr minmax(280px,340px);gap:28px;align-items:center;margin-top:34px;padding:24px 26px;border:1px solid var(--line-hi);border-radius:0;background:var(--ink-2);box-shadow:none}
+.next-step::before{display:none}
+.next-step-label{grid-column:1;margin:0;color:var(--green);font-size:9px;letter-spacing:2px}
+.next-step h3{grid-column:1;margin:-22px 0 0;color:var(--fg-hi);font-size:18px;text-shadow:none}
+.next-step p{grid-column:1;margin:0;font-size:12px}
+.next-step .install-box{grid-column:2;grid-row:1/4;width:100%;border:1px solid var(--line-hi)}
+
+.sources-intro{margin-bottom:25px;padding-left:15px;border-left:2px solid var(--amber);font-size:13px}
+.sources-grid{grid-template-columns:repeat(2,1fr);gap:1px;border:1px solid var(--line);background:var(--line)}
+.source{display:grid;grid-template-columns:142px minmax(0,1fr);grid-template-areas:"name desc" "badge desc";align-content:start;gap:4px 18px;padding:16px 18px;border:0;border-radius:0;background:var(--panel);box-shadow:none;transition:none}
+.source:last-child{grid-column:1/-1}
+.source::before{width:2px;box-shadow:none}
+.source:hover{transform:none;border-color:transparent;background:var(--panel-2);box-shadow:none}
+.source-badge{grid-area:badge;align-self:start;margin:0;padding:0;border:0;border-radius:0;color:var(--src-color,var(--green));font-size:8px;line-height:1.4;letter-spacing:1px}
+.source-badge::before{content:"["}.source-badge::after{content:"]"}
+.source-name{grid-area:name;margin:0;color:var(--fg-hi);font-size:14px;letter-spacing:0;text-shadow:none}
+.source-name::after{display:none}
+.source-desc{grid-area:desc;color:var(--mute);font-size:11px;line-height:1.65}
+.source-config{margin-top:28px;padding:22px 24px;border:1px solid var(--line-hi);border-radius:0;background:var(--ink-2);box-shadow:none}
+.source-config h3{font-size:16px;text-shadow:none}
+.source-config pre{border-radius:0;background:#030604}
+
+.features-grid{display:block;border:1px solid var(--line);border-radius:0;background:var(--line)}
+.feature{display:grid;grid-template-columns:38px 210px minmax(0,1fr);gap:14px;align-items:start;padding:14px 16px;border-bottom:1px solid var(--line);background:var(--panel);transition:none}
+.feature:last-child{border-bottom:0}
+.feature:hover{background:var(--panel-2)}
+.feature-icon{width:30px;height:24px;margin:0;border:0;border-radius:0;background:transparent;color:var(--green);box-shadow:none;font-size:13px}
+.feature:nth-child(3n+2) .feature-icon{background:transparent;box-shadow:none;color:var(--amber)}
+.feature-icon::before{content:"[";color:var(--mute-2)}
+.feature-icon::after{content:"]";color:var(--mute-2)}
+.feature-name{margin:1px 0 0;color:var(--fg-hi);font-size:12px;letter-spacing:0;text-shadow:none}
+.feature p{color:var(--mute);font-size:11px;line-height:1.65}
+
+.community-plugins{grid-template-columns:repeat(2,1fr);gap:1px;border:1px solid var(--line);background:var(--line)}
+.community-plugin{min-width:0;padding:14px 16px;border:0;border-radius:0;background:var(--panel);box-shadow:none;transition:none}
+.community-plugin:hover{transform:none;border-color:transparent;background:var(--panel-2);box-shadow:none}
+.community-plugin-jack{width:12px;height:12px;border:1px solid var(--green);border-radius:0;background:transparent;box-shadow:none}
+.community-plugin-jack::after{inset:3px;border-radius:0;background:var(--green);box-shadow:none}
+.community-plugin-name{font-size:12px}
+.community-plugin-desc,.community-plugin-author{font-size:10px}
+
+.radio-header{padding-bottom:12px;border-bottom:1px solid var(--line)}
+.radio-tabs{gap:0}
+.radio-tab{padding:7px 10px;border-color:var(--line);border-radius:0;background:var(--panel);font-size:9px;letter-spacing:.5px;transition:none}
+.radio-tab.active{border-color:var(--green);background:var(--green);color:var(--ink);box-shadow:none}
+.radio-live-dot,.radio-stat-dot{border-radius:0;box-shadow:none;animation:none}
+.radio-stats-row{gap:1px;border:1px solid var(--line);background:var(--line)}
+.radio-stat{padding:18px;border:0;border-radius:0;background:var(--panel);box-shadow:none;text-align:left}
+.radio-stat-peak{background:var(--panel)}
+.radio-stat-value{justify-content:flex-start;color:var(--fg-max);font-size:34px;letter-spacing:-2px;text-shadow:none}
+.radio-stat-peak .radio-stat-value{color:var(--amber);text-shadow:none}
+.radio-stat-label{font-size:9px;letter-spacing:1px}
+.radio-card{padding:20px;border:1px solid var(--line);border-radius:0;background:var(--panel);box-shadow:none}
+.radio-chart{gap:2px}
+.radio-chart-bar{border-radius:0;box-shadow:none}
+.radio-chart-bar .tooltip{border-radius:0;background:var(--ink)}
+.radio-globe-canvas{filter:saturate(1.15)}
+
+footer{padding:26px 0;border-top:1px solid var(--green);background:var(--ink)}
+.footer-inner{padding-inline:28px}
+.footer-brand,.footer-ascii{font-size:10px}
+.footer-brand{color:var(--green)}
+.footer-links{gap:14px}
+
+@media (max-width:900px){
+  .hero-grid{grid-template-columns:1fr;gap:42px}
+  .hero-grid>div:first-child{max-width:700px}
+  .source{grid-template-columns:118px minmax(0,1fr)}
+}
+@media (max-width:820px){
+  .nav-in{padding-inline:18px}
+  .nav-links{top:48px;height:auto;background:var(--ink);border-bottom:1px solid var(--green);padding:0}
+  .nav-links.open{max-height:560px}
+  .nav-links a{width:100%;height:auto;padding:11px 18px;border-bottom:1px solid var(--line)}
+  .sources-grid{grid-template-columns:1fr}
+  .source{grid-template-columns:145px minmax(0,1fr)}
+  .feature{grid-template-columns:38px 170px minmax(0,1fr)}
+}
+@media (max-width:720px){
+  .wrap{padding-inline:18px}
+  section{padding:54px 0}
+  .hero{padding-top:42px}
+  .hero-grid>div:first-child{padding-left:18px}
+  .hero-word{letter-spacing:-3px}
+  .hero-facts{grid-template-columns:1fr}
+  .tty{box-shadow:5px 5px 0 #020302}
+  .t-eq-bands{display:none}
+  .ticker-track span{padding-inline:18px;text-align:left}
+  .next-step{display:block;padding:20px}
+  .next-step h3{margin:8px 0}
+  .next-step p{margin-bottom:18px}
+  .community-plugins{grid-template-columns:1fr}
+  .footer-inner{padding-inline:18px}
+  .globe-dialog-body{grid-template-columns:1fr;grid-template-rows:minmax(280px,48dvh) minmax(0,1fr)}
+  .globe-dialog-map{padding:10px;border-right:0;border-bottom:1px solid var(--line)}
+  .globe-dialog-side{grid-template-columns:138px minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+  .globe-detail{padding:14px 12px;border-right:1px solid var(--line-hi);border-bottom:0}
+  .globe-detail-country{font-size:14px}
+  .globe-detail-count{font-size:27px}
+}
+@media (max-width:560px){
+  .brand::after{display:none}
+  .hero-word{font-size:50px}
+  .hero-desc{font-size:12px}
+  .install-grid{grid-template-columns:1fr}
+  .install-grid .install-box:last-child{grid-column:auto}
+  .source{display:block;padding-left:16px}
+  .source:last-child{grid-column:auto}
+  .source-badge{display:block;margin:5px 0 9px}
+  .feature{grid-template-columns:32px minmax(0,1fr);gap:8px}
+  .feature-name{align-self:center}
+  .feature p{grid-column:2}
+  .radio-stats-row{grid-template-columns:repeat(2,1fr)}
+  .radio-stat{padding:14px}
+  .radio-stat-value{font-size:27px}
+  .radio-countries{gap:0 12px}
+  .radio-country{gap:6px;font-size:11px}
+  .radio-country-flag{font-size:13px}
+  .radio-country-sessions{font-size:10px}
+  .radio-chart{overflow:hidden}
+  .footer-ascii{display:none}
+}
 </style>
 </head>
 <body>
+
+<a class="skip-link" href="#main">Skip to content</a>
 
 <div class="crt-scan"></div>
 <div class="crt-grain"></div>
@@ -507,34 +807,39 @@ footer{border-top:1px solid var(--line);background:var(--ink-2);padding:46px 0 5
 <span class="screw bl"></span><span class="screw br"></span>
 
 <!-- ═══ NAV ═══ -->
-<nav class="nav">
+<nav class="nav" aria-label="Primary navigation">
   <div class="nav-in">
     <a href="#top" class="brand"><span class="led"></span>CLI<b>AMP</b></a>
-    <button class="nav-toggle" aria-label="Menu" onclick="document.getElementById('nl').classList.toggle('open')">≡</button>
-    <div class="nav-links" id="nl" onclick="this.classList.remove('open')">
+    <button class="nav-toggle" aria-label="Toggle menu" aria-controls="nl" aria-expanded="false" onclick="var n=document.getElementById('nl');n.classList.toggle('open');this.setAttribute('aria-expanded',n.classList.contains('open'))">menu</button>
+    <div class="nav-links" id="nl" onclick="this.classList.remove('open');document.querySelector('.nav-toggle').setAttribute('aria-expanded','false')">
       <a href="#install">Install</a>
+      <a href="#demo">Demo</a>
       <a href="#sources">Sources</a>
       <a href="#features">Features</a>
+      <a href="#plugins">Plugins</a>
       <a href="#radio">Radio</a>
-      <a href="https://whiterose.org.contextowl.co/docs/cliamp" class="ext">Docs ↗</a>
-      <a href="https://github.com/bjarneo/cliamp" class="ext">GitHub ↗</a>
+      <a href="https://whiterose.org.contextowl.co/docs/cliamp" class="ext">Docs</a>
+      <a href="https://github.com/bjarneo/cliamp" class="ext">GitHub</a>
     </div>
   </div>
 </nav>
+
+<main id="main">
 
 <!-- ═══ HERO ═══ -->
 <section class="hero" id="top">
   <div class="wrap">
     <div class="hero-grid">
       <div>
-        <div class="hero-eyebrow"><span class="led"></span>Terminal music player</div>
+        <div class="hero-eyebrow"><span class="led"></span>~/audio/cliamp</div>
         <h1 class="hero-word">cli<span>amp</span></h1>
-        <p class="hero-sub"><em>Winamp</em> for the shell.</p>
+        <p class="hero-sub"><em>Winamp</em> for the shell. No browser tab required.</p>
         <p class="hero-desc">Use playlists, a 10-band EQ, visualizers, synced lyrics, remote control, and Lua plugins. Stream from <em>Spotify, Qobuz, Tidal, YouTube Music, Plex, Jellyfin, Emby, Navidrome, Lyrion</em>, and more than 30,000 radio stations.</p>
         <div class="hero-cta">
-          <a href="#install" class="btn btn-go">Install<span class="ar">→</span></a>
-          <a href="https://github.com/bjarneo/cliamp" class="btn btn-ghost">Source<span class="ar">↗</span></a>
+          <a href="#install" class="btn btn-go">Install</a>
+          <a href="https://github.com/bjarneo/cliamp" class="btn btn-ghost">View source</a>
         </div>
+        <div class="hero-facts" aria-label="Project details"><span><b>MIT</b> licensed</span><span><b>Go</b> 1.26</span><span><b>Linux / macOS / Windows</b></span></div>
       </div>
 
       <!-- CRT terminal — live radio player -->
@@ -638,11 +943,61 @@ footer{border-top:1px solid var(--line);background:var(--ink-2);padding:46px 0 5
   </div>
 </div>
 
-<!-- ═══ 01 DEMO ═══ -->
-<section>
+<!-- ═══ 01 INSTALL ═══ -->
+<section id="install">
+  <div class="wrap">
+    <div class="strip rev reveal">
+      <span class="strip-idx">01</span><h2 class="strip-name">install<em>.sh</em></h2><span class="strip-rule"></span>
+      <span class="strip-meter"><i></i><i></i><i></i><i></i><i></i></span>
+    </div>
+    <div class="install-grid reveal">
+      <button class="install-box" type="button" onclick="copyCmd(this,'curl -fsSL https://raw.githubusercontent.com/bjarneo/cliamp/HEAD/install.sh | sh')">
+        <span class="install-platform">Direct</span>
+        <code><span class="prompt">$ </span>curl -fsSL …/install.sh | sh</code>
+        <span class="copied-msg">COPIED</span>
+      </button>
+      <button class="install-box" type="button" onclick="copyCmd(this,'brew install bjarneo/cliamp/cliamp')">
+        <span class="install-platform">Homebrew</span>
+        <code><span class="prompt">$ </span>brew install bjarneo/cliamp/cliamp</code>
+        <span class="copied-msg">COPIED</span>
+      </button>
+      <button class="install-box" type="button" onclick="copyCmd(this,'yay -S cliamp')">
+        <span class="install-platform">Arch (AUR)</span>
+        <code><span class="prompt">$ </span>yay -S cliamp</code>
+        <span class="copied-msg">COPIED</span>
+      </button>
+      <button class="install-box" type="button" onclick="copyCmd(this,'nix run github:bjarneo/cliamp')">
+        <span class="install-platform">Nix</span>
+        <code><span class="prompt">$ </span>nix run github:bjarneo/cliamp</code>
+        <span class="copied-msg">COPIED</span>
+      </button>
+      <button class="install-box" type="button" onclick="copyCmd(this,'go install github.com/bjarneo/cliamp@latest')">
+        <span class="install-platform">Go</span>
+        <code><span class="prompt">$ </span>go install github.com/bjarneo/cliamp@latest</code>
+        <span class="copied-msg">COPIED</span>
+      </button>
+    </div>
+    <div class="install-note reveal">
+      Build from source. <a href="https://github.com/bjarneo/cliamp">See the README.</a> Windows builds are in Releases. If <code>HOME</code> is not set, the config is in <code>%APPDATA%\cliamp</code>.
+    </div>
+    <div class="next-step reveal">
+      <div class="next-step-label">Next: configure providers</div>
+      <h3>Run setup</h3>
+      <p>Use the interactive TUI to configure Navidrome, Lyrion, Plex, Jellyfin, Emby, Spotify, Qobuz, Tidal, Mixcloud, NetEase, and YouTube Music. The TUI opens each provider credential page and writes the required block to the config file. The TUI tests supported server connections during setup. Mixcloud browser-session or OAuth credentials are optional and are tested when you use them.</p>
+      <button class="install-box" type="button" onclick="copyCmd(this,'cliamp setup')">
+        <span class="install-platform">Setup</span>
+        <code><span class="prompt">$ </span>cliamp setup</code>
+        <span class="copied-msg">COPIED</span>
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 02 DEMO ═══ -->
+<section id="demo">
   <div class="wrap">
     <div class="strip reveal">
-      <span class="strip-idx">01</span><span class="strip-name">demo<em>.mp4</em></span><span class="strip-rule"></span>
+      <span class="strip-idx">02</span><h2 class="strip-name">demo<em>.mp4</em></h2><span class="strip-rule"></span>
       <span class="strip-meter"><i></i><i></i><i></i><i></i><i></i></span>
     </div>
     <div class="demo-frame reveal">
@@ -659,61 +1014,11 @@ footer{border-top:1px solid var(--line);background:var(--ink-2);padding:46px 0 5
   </div>
 </section>
 
-<!-- ═══ 02 INSTALL ═══ -->
-<section id="install">
-  <div class="wrap">
-    <div class="strip rev reveal">
-      <span class="strip-idx">02</span><span class="strip-name">install<em>.sh</em></span><span class="strip-rule"></span>
-      <span class="strip-meter"><i></i><i></i><i></i><i></i><i></i></span>
-    </div>
-    <div class="install-grid reveal">
-      <div class="install-box" onclick="copyCmd(this,'curl -fsSL https://raw.githubusercontent.com/bjarneo/cliamp/HEAD/install.sh | sh')">
-        <div class="install-platform">Direct</div>
-        <code><span class="prompt">$ </span>curl -fsSL …/install.sh | sh</code>
-        <span class="copied-msg">COPIED</span>
-      </div>
-      <div class="install-box" onclick="copyCmd(this,'brew install bjarneo/cliamp/cliamp')">
-        <div class="install-platform">Homebrew</div>
-        <code><span class="prompt">$ </span>brew install bjarneo/cliamp/cliamp</code>
-        <span class="copied-msg">COPIED</span>
-      </div>
-      <div class="install-box" onclick="copyCmd(this,'yay -S cliamp')">
-        <div class="install-platform">Arch (AUR)</div>
-        <code><span class="prompt">$ </span>yay -S cliamp</code>
-        <span class="copied-msg">COPIED</span>
-      </div>
-      <div class="install-box" onclick="copyCmd(this,'nix run github:bjarneo/cliamp')">
-        <div class="install-platform">Nix</div>
-        <code><span class="prompt">$ </span>nix run github:bjarneo/cliamp</code>
-        <span class="copied-msg">COPIED</span>
-      </div>
-      <div class="install-box" onclick="copyCmd(this,'go install github.com/bjarneo/cliamp@latest')">
-        <div class="install-platform">Go</div>
-        <code><span class="prompt">$ </span>go install github.com/bjarneo/cliamp@latest</code>
-        <span class="copied-msg">COPIED</span>
-      </div>
-    </div>
-    <div class="install-note reveal">
-      Build from source. <a href="https://github.com/bjarneo/cliamp">See the README.</a> Windows builds are in Releases. If <code>HOME</code> is not set, the config is in <code>%APPDATA%\cliamp</code>.
-    </div>
-    <div class="next-step reveal">
-      <div class="next-step-label">Next: configure providers</div>
-      <h3>Run setup</h3>
-      <p>Use the interactive TUI to configure Navidrome, Lyrion, Plex, Jellyfin, Emby, Spotify, Qobuz, Tidal, Mixcloud, NetEase, and YouTube Music. The TUI opens each provider credential page and writes the required block to the config file. The TUI tests supported server connections during setup. Mixcloud browser-session or OAuth credentials are optional and are tested when you use them.</p>
-      <div class="install-box" onclick="copyCmd(this,'cliamp setup')">
-        <div class="install-platform">Setup</div>
-        <code><span class="prompt">$ </span>cliamp setup</code>
-        <span class="copied-msg">COPIED</span>
-      </div>
-    </div>
-  </div>
-</section>
-
 <!-- ═══ 03 SOURCES ═══ -->
 <section id="sources">
   <div class="wrap">
     <div class="strip reveal">
-      <span class="strip-idx">03</span><span class="strip-name">sources</span><span class="strip-rule"></span>
+      <span class="strip-idx">03</span><h2 class="strip-name">sources</h2><span class="strip-rule"></span>
       <span class="strip-meter"><i></i><i></i><i></i><i></i><i></i></span>
     </div>
     <p class="sources-intro reveal">
@@ -757,7 +1062,7 @@ user_id = "your-account-user-id"</code></pre>
 <section id="features">
   <div class="wrap">
     <div class="strip rev reveal">
-      <span class="strip-idx">04</span><span class="strip-name">features</span><span class="strip-rule"></span>
+      <span class="strip-idx">04</span><h2 class="strip-name">features</h2><span class="strip-rule"></span>
       <span class="strip-meter"><i></i><i></i><i></i><i></i><i></i></span>
     </div>
     <div class="features-grid reveal">
@@ -788,10 +1093,10 @@ user_id = "your-account-user-id"</code></pre>
 </section>
 
 <!-- ═══ 05 COMMUNITY PLUGINS ═══ -->
-<section>
+<section id="plugins">
   <div class="wrap">
     <div class="strip reveal">
-      <span class="strip-idx">05</span><span class="strip-name">community<em>-plugins</em></span><span class="strip-rule"></span>
+      <span class="strip-idx">05</span><h2 class="strip-name">community<em>-plugins</em></h2><span class="strip-rule"></span>
       <span class="strip-meter"><i></i><i></i><i></i><i></i><i></i></span>
     </div>
     <div class="community-plugins reveal">
@@ -811,7 +1116,7 @@ user_id = "your-account-user-id"</code></pre>
 <section id="radio">
   <div class="wrap">
     <div class="strip rev reveal">
-      <span class="strip-idx">06</span><span class="strip-name">radio<em>.stats</em></span><span class="strip-rule"></span>
+      <span class="strip-idx">06</span><h2 class="strip-name">radio<em>.stats</em></h2><span class="strip-rule"></span>
       <span class="strip-meter"><i></i><i></i><i></i><i></i><i></i></span>
     </div>
     <div class="radio-header reveal">
@@ -858,7 +1163,10 @@ user_id = "your-account-user-id"</code></pre>
     <div class="radio-card reveal">
       <div class="radio-card-title">Listeners by country</div>
       <div class="radio-globe-wrap">
-        <canvas class="radio-globe-canvas" id="radio-globe"></canvas>
+        <button class="radio-globe-button" type="button" onclick="openGlobe()" aria-haspopup="dialog" aria-controls="globe-dialog" aria-label="Open detailed listener globe">
+          <canvas class="radio-globe-canvas" id="radio-globe" aria-hidden="true"></canvas>
+          <span class="radio-globe-open-label">Open map</span>
+        </button>
         <div class="radio-countries" id="radio-countries"></div>
       </div>
     </div>
@@ -866,13 +1174,38 @@ user_id = "your-account-user-id"</code></pre>
       <div class="radio-card-title">Top Countries</div>
       <div class="radio-countries" id="radio-total-countries"></div>
     </div>
-    <div class="install-box" id="radio-cmd-box" onclick="copyCmd(this,'cliamp https://radio.cliamp.stream/lofi/stream.pls')" style="display:none">
+    <button class="install-box" type="button" id="radio-cmd-box" onclick="copyCmd(this,'cliamp https://radio.cliamp.stream/lofi/stream.pls')" style="display:none">
       <span class="copied-msg">COPIED</span>
-      <div class="install-platform">Tune in</div>
+      <span class="install-platform">Tune in</span>
       <code><span class="prompt">$ </span><span id="radio-cmd-text">cliamp https://radio.cliamp.stream/lofi/stream.pls</span></code>
-    </div>
+    </button>
   </div>
 </section>
+
+<dialog class="globe-dialog" id="globe-dialog" aria-labelledby="globe-dialog-title">
+  <div class="globe-dialog-head">
+    <span class="globe-dialog-title" id="globe-dialog-title">Listeners by country</span>
+    <span class="globe-dialog-status">live radio telemetry</span>
+    <button class="globe-dialog-close" type="button" onclick="closeGlobe()">Close [Esc]</button>
+  </div>
+  <div class="globe-dialog-body">
+    <div class="globe-dialog-map">
+      <button class="globe-spin-toggle" id="globe-spin-toggle" type="button" onclick="toggleGlobeSpin()">Auto-spin: on</button>
+      <canvas class="globe-dialog-canvas" id="radio-globe-full" tabindex="0" aria-label="Interactive globe of current radio listeners. Drag or use the arrow keys to rotate it."></canvas>
+    </div>
+    <aside class="globe-dialog-side" aria-label="Country listener details">
+      <div class="globe-detail" aria-live="polite">
+        <span class="globe-detail-label">Selected</span>
+        <strong class="globe-detail-country" id="globe-detail-country">No active listeners</strong>
+        <strong class="globe-detail-count" id="globe-detail-count">0</strong>
+        <span class="globe-detail-unit">listeners now</span>
+      </div>
+      <div class="globe-rank-list" id="globe-rank-list"></div>
+    </aside>
+  </div>
+</dialog>
+
+</main>
 
 <!-- ═══ FOOTER ═══ -->
 <footer>
@@ -1051,6 +1384,96 @@ function formatDate(iso){
   return months[parseInt(parts[1],10)-1]+" "+parseInt(parts[2],10);
 }
 
+function renderCountryList(el,countries,limit){
+  el.textContent="";
+  countries.slice(0,limit).forEach(function(c){
+    var flag=countryFlags[c.country_code]||"🌐";
+    var div=document.createElement("div");
+    div.className="radio-country";
+    var flagSpan=document.createElement("span");
+    flagSpan.className="radio-country-flag";
+    flagSpan.textContent=flag;
+    var nameSpan=document.createElement("span");
+    nameSpan.className="radio-country-name";
+    nameSpan.textContent=c.country;
+    var sessSpan=document.createElement("span");
+    sessSpan.className="radio-country-sessions";
+    sessSpan.textContent=c.sessions;
+    div.appendChild(flagSpan);
+    div.appendChild(nameSpan);
+    div.appendChild(sessSpan);
+    el.appendChild(div);
+  });
+  if(countries.length>limit){
+    var more=document.createElement("div");
+    more.className="radio-country radio-country-more";
+    more.textContent="+ "+(countries.length-limit)+" more countries";
+    el.appendChild(more);
+  }
+}
+
+function updateGlobeDetail(country){
+  var name=document.getElementById("globe-detail-country");
+  var count=document.getElementById("globe-detail-count");
+  if(!country){
+    name.textContent="No active listeners";
+    count.textContent="0";
+    return;
+  }
+  name.textContent=country.country;
+  count.textContent=country.sessions.toLocaleString();
+  document.querySelectorAll(".globe-rank-item").forEach(function(item){
+    item.classList.toggle("active",item.dataset.country===country.country_code);
+  });
+}
+
+function renderGlobeRankList(countries){
+  var list=document.getElementById("globe-rank-list");
+  list.textContent="";
+  countries.forEach(function(country,index){
+    var button=document.createElement("button");
+    button.type="button";
+    button.className="globe-rank-item";
+    button.dataset.country=country.country_code;
+    button.innerHTML='<span class="globe-rank-num">'+String(index+1).padStart(2,"0")+'</span><span>'+(countryFlags[country.country_code]||"🌐")+'</span><span class="globe-rank-name"></span><strong class="globe-rank-count"></strong>';
+    button.querySelector(".globe-rank-name").textContent=country.country;
+    button.querySelector(".globe-rank-count").textContent=country.sessions.toLocaleString();
+    button.addEventListener("click",function(){
+      updateGlobeDetail(country);
+      var canvas=document.getElementById("radio-globe-full");
+      if(canvas._selectCountry)canvas._selectCountry(country);
+    });
+    list.appendChild(button);
+  });
+  updateGlobeDetail(countries[0]||null);
+}
+
+function setGlobeSpinButton(spinning){
+  var button=document.getElementById("globe-spin-toggle");
+  button.textContent=spinning?"Auto-spin: on":"Resume auto-spin";
+  button.classList.toggle("paused",!spinning);
+}
+
+function toggleGlobeSpin(){
+  var canvas=document.getElementById("radio-globe-full");
+  if(canvas._toggleAutoSpin)canvas._toggleAutoSpin();
+}
+
+function openGlobe(){
+  var dialog=document.getElementById("globe-dialog");
+  var countries=window._radioCountries||[];
+  renderGlobeRankList(countries);
+  document.body.classList.add("globe-open");
+  dialog.showModal();
+  requestAnimationFrame(function(){
+    initGlobe(countries,document.getElementById("radio-globe-full"),true);
+  });
+}
+
+function closeGlobe(){
+  document.getElementById("globe-dialog").close();
+}
+
 function renderStationStats(data,stationKey){
   var station;
   if(stationKey==='total'){
@@ -1124,46 +1547,22 @@ function renderStationStats(data,stationKey){
 
   var activeCountries=station.active_listener_countries||[];
   var cEl=document.getElementById("radio-countries");
-  cEl.textContent="";
-  activeCountries.forEach(function(c){
-    var flag=countryFlags[c.country_code]||"🌐";
-    var div=document.createElement("div");
-    div.className="radio-country";
-    var flagSpan=document.createElement("span");
-    flagSpan.className="radio-country-flag";
-    flagSpan.textContent=flag;
-    var sessSpan=document.createElement("span");
-    sessSpan.className="radio-country-sessions";
-    sessSpan.textContent=c.sessions;
-    div.appendChild(flagSpan);
-    div.appendChild(document.createTextNode(c.country));
-    div.appendChild(sessSpan);
-    cEl.appendChild(div);
-  });
+  renderCountryList(cEl,activeCountries,8);
 
   var totalCountries=station.top_countries||[];
   var tEl=document.getElementById("radio-total-countries");
-  tEl.textContent="";
-  totalCountries.forEach(function(c){
-    var flag=countryFlags[c.country_code]||"🌐";
-    var div=document.createElement("div");
-    div.className="radio-country";
-    var flagSpan=document.createElement("span");
-    flagSpan.className="radio-country-flag";
-    flagSpan.textContent=flag;
-    var sessSpan=document.createElement("span");
-    sessSpan.className="radio-country-sessions";
-    sessSpan.textContent=c.sessions;
-    div.appendChild(flagSpan);
-    div.appendChild(document.createTextNode(c.country));
-    div.appendChild(sessSpan);
-    tEl.appendChild(div);
-  });
+  renderCountryList(tEl,totalCountries,10);
 
-  if(!window._globeInitialized){
-    window._radioCountries=activeCountries;
+  window._radioCountries=activeCountries;
+  var globeSignature=activeCountries.map(function(c){return c.country_code+":"+c.sessions}).join(",");
+  if(window._globeSignature!==globeSignature){
     initGlobe(activeCountries);
-    window._globeInitialized=true;
+    window._globeSignature=globeSignature;
+    var dialog=document.getElementById("globe-dialog");
+    if(dialog.open){
+      renderGlobeRankList(activeCountries);
+      initGlobe(activeCountries,document.getElementById("radio-globe-full"),true);
+    }
   }
 }
 
@@ -1205,7 +1604,6 @@ var countryCoords={
 };
 
 /* ── Canvas globe with land outlines ── */
-var _globeAnim=null;
 var _globeResizeTimer=null;
 var _landPolygons=null;
 
@@ -1261,15 +1659,18 @@ function loadLand(cb){
     .catch(function(){cb([])});
 }
 
-function initGlobe(countries){
-  var canvas=document.getElementById("radio-globe");
+function initGlobe(countries,canvas,interactive){
+  canvas=canvas||document.getElementById("radio-globe");
   if(!canvas)return;
   var ctx=canvas.getContext("2d");
   if(!ctx)return;
-  if(_globeAnim){cancelAnimationFrame(_globeAnim);_globeAnim=null;}
+  if(canvas._globeAnim){cancelAnimationFrame(canvas._globeAnim);canvas._globeAnim=null;}
+  var previousState=canvas._globeState||null;
 
-  var size=canvas.offsetWidth||300;
+  var size=interactive?Math.min(canvas.parentElement.clientWidth-40,canvas.parentElement.clientHeight-40):canvas.offsetWidth;
+  size=Math.min(size||300,680);
   if(size<10)return;
+  if(interactive){canvas.style.width=size+"px";canvas.style.height=size+"px";}
   var dpr=Math.min(window.devicePixelRatio||1,2);
   if(size<200)dpr=1;
   var buf=size*dpr;
@@ -1278,7 +1679,7 @@ function initGlobe(countries){
 
   var R=buf*0.42;
   var cx=buf/2,cy=buf/2;
-  var tilt=0.15;
+  var tilt=previousState?previousState.tilt:0.15;
 
   var maxSessions=Math.max.apply(null,countries.map(function(c){return c.sessions}))||1;
   var markers=[];
@@ -1287,11 +1688,96 @@ function initGlobe(countries){
     if(!coords)return;
     var lat=coords[0]*Math.PI/180;
     var lng=coords[1]*Math.PI/180;
-    var s=3+6*(c.sessions/maxSessions);
-    markers.push({lat:lat,lng:lng,size:s*dpr});
+    var s=(interactive?5:3)+(interactive?8:6)*(c.sessions/maxSessions);
+    markers.push({lat:lat,lng:lng,size:s*dpr,country:c,screen:null});
   });
 
-  var rotation=0;
+  var rotation=previousState?previousState.rotation:0;
+  var targetRotation=null;
+  var selectedCode=previousState?previousState.selectedCode:(interactive&&countries[0]?countries[0].country_code:"");
+  if(selectedCode&&!countries.some(function(c){return c.country_code===selectedCode}))selectedCode=countries[0]?countries[0].country_code:"";
+  var hoverPaused=false;
+  var manualPaused=interactive&&previousState?previousState.manualPaused:false;
+  var dragging=false;
+  var lastPointerX=0;
+  var lastPointerY=0;
+
+  function selectCountry(country,rotate){
+    selectedCode=country.country_code;
+    updateGlobeDetail(country);
+    if(rotate){
+      for(var i=0;i<markers.length;i++){
+        if(markers[i].country.country_code===country.country_code){
+          targetRotation=-markers[i].lng;
+          break;
+        }
+      }
+    }
+  }
+
+  if(interactive){
+    canvas._selectCountry=function(country){selectCountry(country,true)};
+    canvas._toggleAutoSpin=function(){
+      manualPaused=!manualPaused;
+      setGlobeSpinButton(!manualPaused);
+    };
+    setGlobeSpinButton(!manualPaused);
+    canvas.onpointerenter=function(){hoverPaused=true};
+    canvas.onpointerleave=function(){hoverPaused=false;if(!dragging)canvas.style.cursor="crosshair"};
+    canvas.onpointerdown=function(event){
+      dragging=true;
+      manualPaused=true;
+      targetRotation=null;
+      lastPointerX=event.clientX;
+      lastPointerY=event.clientY;
+      canvas.setPointerCapture(event.pointerId);
+      canvas.style.cursor="grabbing";
+      setGlobeSpinButton(false);
+      event.preventDefault();
+    };
+    canvas.onpointerup=canvas.onpointercancel=function(event){
+      dragging=false;
+      if(canvas.hasPointerCapture(event.pointerId))canvas.releasePointerCapture(event.pointerId);
+      canvas.style.cursor="crosshair";
+    };
+    canvas.onkeydown=function(event){
+      if(event.key!=="ArrowLeft"&&event.key!=="ArrowRight"&&event.key!=="ArrowUp"&&event.key!=="ArrowDown")return;
+      manualPaused=true;
+      targetRotation=null;
+      if(event.key==="ArrowLeft")rotation-=0.16;
+      if(event.key==="ArrowRight")rotation+=0.16;
+      if(event.key==="ArrowUp")tilt=Math.max(-1.1,tilt-0.12);
+      if(event.key==="ArrowDown")tilt=Math.min(1.1,tilt+0.12);
+      setGlobeSpinButton(false);
+      event.preventDefault();
+    };
+    canvas.onpointermove=function(event){
+      if(dragging){
+        rotation+=(event.clientX-lastPointerX)/size*Math.PI*2;
+        tilt=Math.max(-1.1,Math.min(1.1,tilt+(event.clientY-lastPointerY)/size*Math.PI));
+        lastPointerX=event.clientX;
+        lastPointerY=event.clientY;
+        return;
+      }
+      var rect=canvas.getBoundingClientRect();
+      var x=(event.clientX-rect.left)*(canvas.width/rect.width);
+      var y=(event.clientY-rect.top)*(canvas.height/rect.height);
+      var hit=null;
+      var nearest=Infinity;
+      markers.forEach(function(marker){
+        if(!marker.screen||marker.screen.z<0)return;
+        var dx=marker.screen.x-x;
+        var dy=marker.screen.y-y;
+        var distance=Math.sqrt(dx*dx+dy*dy);
+        if(distance<Math.max(marker.size*2.5,14*dpr)&&distance<nearest){hit=marker;nearest=distance}
+      });
+      canvas.style.cursor=hit?"pointer":"crosshair";
+      if(hit)selectCountry(hit.country,false);
+    };
+    var selectedCountry=countries.find(function(c){return c.country_code===selectedCode})||countries[0];
+    if(selectedCountry)selectCountry(selectedCountry,!previousState);
+  }
+
   function project(latD,lngD){
     var lat=latD*Math.PI/180;
     var lng=lngD*Math.PI/180+rotation;
@@ -1356,9 +1842,11 @@ function initGlobe(countries){
       ctx.restore();
 
       /* Markers */
+      var selectedMarker=null;
       for(var j=0;j<markers.length;j++){
         var m=markers[j];
         var p=projectRad(m.lat,m.lng);
+        m.screen=p;
         if(p.z<0)continue;
         var alpha=0.3+0.7*p.z;
 
@@ -1371,10 +1859,36 @@ function initGlobe(countries){
         ctx.arc(p.x,p.y,m.size,0,Math.PI*2);
         ctx.fillStyle="rgba(255,180,84,"+alpha+")";
         ctx.fill();
+        if(m.country.country_code===selectedCode)selectedMarker={marker:m,point:p};
       }
 
-      rotation+=0.003;
-      _globeAnim=requestAnimationFrame(draw);
+      if(interactive&&selectedMarker){
+        var label=selectedMarker.marker.country.country+"  "+selectedMarker.marker.country.sessions.toLocaleString();
+        ctx.font="700 "+11*dpr+"px monospace";
+        var labelWidth=ctx.measureText(label).width+16*dpr;
+        var labelX=Math.min(Math.max(selectedMarker.point.x+14*dpr,4*dpr),buf-labelWidth-4*dpr);
+        var labelY=Math.max(selectedMarker.point.y-28*dpr,4*dpr);
+        ctx.fillStyle="rgba(5,8,6,0.94)";
+        ctx.fillRect(labelX,labelY,labelWidth,24*dpr);
+        ctx.strokeStyle="#42ff88";
+        ctx.lineWidth=1*dpr;
+        ctx.strokeRect(labelX,labelY,labelWidth,24*dpr);
+        ctx.fillStyle="#f4fff5";
+        ctx.textBaseline="middle";
+        ctx.fillText(label,labelX+8*dpr,labelY+12*dpr);
+      }
+
+      if(targetRotation!==null){
+        var delta=targetRotation-rotation;
+        while(delta>Math.PI)delta-=Math.PI*2;
+        while(delta<-Math.PI)delta+=Math.PI*2;
+        rotation+=delta*0.08;
+        if(Math.abs(delta)<0.002)targetRotation=null;
+      }else if(!hoverPaused&&!manualPaused&&!dragging){
+        rotation+=0.003;
+      }
+      canvas._globeState={rotation:rotation,tilt:tilt,manualPaused:manualPaused,selectedCode:selectedCode};
+      canvas._globeAnim=requestAnimationFrame(draw);
     }
     draw();
     canvas.classList.add("loaded");
@@ -1384,8 +1898,17 @@ function initGlobe(countries){
 window.addEventListener("resize",function(){
   clearTimeout(_globeResizeTimer);
   _globeResizeTimer=setTimeout(function(){
-    if(window._radioCountries)initGlobe(window._radioCountries);
+    if(!window._radioCountries)return;
+    initGlobe(window._radioCountries);
+    var dialog=document.getElementById("globe-dialog");
+    if(dialog.open)initGlobe(window._radioCountries,document.getElementById("radio-globe-full"),true);
   },300);
+});
+
+document.getElementById("globe-dialog").addEventListener("close",function(){
+  document.body.classList.remove("globe-open");
+  var canvas=document.getElementById("radio-globe-full");
+  if(canvas._globeAnim){cancelAnimationFrame(canvas._globeAnim);canvas._globeAnim=null;}
 });
 
 /* ── Playlist: keyboard activation (click plays via inline onclick) ── */
