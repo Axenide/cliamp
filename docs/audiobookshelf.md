@@ -61,7 +61,11 @@ The provider pane has two sections:
 
 Select a book to queue one track for each audio file. Select a podcast show to queue one track for each episode, newest first.
 
-Press `N` to open the browse overlay. Browse Authors, Books, then tracks. This provider uses "Authors" and "Books" instead of Artists and Albums. In the album list, cycle through By Title (default), Recently Added, and By Author.
+Press `N` to open the browse overlay. Browse Authors, Titles, then tracks. This provider uses "Authors" and "Titles" instead of Artists and Albums.
+
+Both media types share those levels. Titles lists every book and every podcast show; a show reports its episode count where a book reports its file count, and selecting one lists its episodes, newest first. Authors lists book authors and podcast hosts together. Audiobookshelf has no host entity, so hosts come from each show's author field; a host who is also a book author appears once, with their books and shows under the same entry.
+
+In the title list, cycle through By Title (default), Recently Added, and By Author. By Author sorts shows by host.
 
 Press `Ctrl+F` to search the configured libraries. cliamp expands each matching book or podcast show into tracks, up to the search-result limit. If the server cannot return tracks for an item, cliamp skips the item. Shorter partial results are not an error.
 

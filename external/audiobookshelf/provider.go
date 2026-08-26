@@ -29,6 +29,7 @@ var (
 const (
 	prefixBook    = "b:"
 	prefixPodcast = "p:"
+	prefixHost    = "h:"
 
 	sectionAudiobooks = "Audiobooks"
 	sectionPodcasts   = "Podcasts"
@@ -58,6 +59,8 @@ type Provider struct {
 	playlistCache []playlist.PlaylistInfo
 	trackCache    map[string][]playlist.Track
 	bookCache     []LibraryItem
+	showCache     []LibraryItem
+	authorNames   map[string]string
 }
 
 func newProvider(client *Client) *Provider {
@@ -83,6 +86,8 @@ func (p *Provider) Refresh() {
 	p.playlistCache = nil
 	p.trackCache = nil
 	p.bookCache = nil
+	p.showCache = nil
+	p.authorNames = nil
 	p.mu.Unlock()
 	p.client.ClearCache()
 }
@@ -234,7 +239,8 @@ func (p *Provider) episodeTracks(item LibraryItem) []playlist.Track {
 	return out
 }
 
-// Artists returns the authors across every book library, sorted by name.
+// Artists returns book authors merged with podcast hosts, sorted by name. A
+// host who is also a book author keeps the server's author id.
 func (p *Provider) Artists() ([]provider.ArtistInfo, error) {
 	libs, err := p.client.Libraries()
 	if err != nil {
@@ -242,6 +248,8 @@ func (p *Provider) Artists() ([]provider.ArtistInfo, error) {
 	}
 
 	var out []provider.ArtistInfo
+	byName := make(map[string]int)
+	names := make(map[string]string)
 	for _, lib := range libs {
 		if lib.MediaType != mediaTypeBook {
 			continue
@@ -251,38 +259,90 @@ func (p *Provider) Artists() ([]provider.ArtistInfo, error) {
 			return nil, fmt.Errorf("audiobookshelf: list authors for library %s: %w", lib.ID, err)
 		}
 		for _, a := range authors {
+			names[a.ID] = a.Name
+			if i, ok := byName[strings.ToLower(a.Name)]; ok {
+				out[i].AlbumCount += a.NumBooks
+				continue
+			}
+			byName[strings.ToLower(a.Name)] = len(out)
 			out = append(out, provider.ArtistInfo{ID: a.ID, Name: a.Name, AlbumCount: a.NumBooks})
 		}
 	}
+
+	shows, err := p.shows()
+	if err != nil {
+		return nil, err
+	}
+	for _, it := range shows {
+		host := itemAuthor(it)
+		if host == "" {
+			continue
+		}
+		if i, ok := byName[strings.ToLower(host)]; ok {
+			out[i].AlbumCount++
+			continue
+		}
+		byName[strings.ToLower(host)] = len(out)
+		out = append(out, provider.ArtistInfo{ID: hostID(host), Name: host, AlbumCount: 1})
+	}
+
+	p.mu.Lock()
+	p.authorNames = names
+	p.mu.Unlock()
+
 	sort.Slice(out, func(i, j int) bool {
 		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
 	})
 	return out, nil
 }
 
-// ArtistAlbums returns one author's books, sorted by title.
+// ArtistAlbums returns one author's books and the shows they host, sorted by
+// title.
 func (p *Provider) ArtistAlbums(artistID string) ([]provider.AlbumInfo, error) {
-	items, err := p.client.AuthorItems(artistID)
-	if err != nil {
-		return nil, fmt.Errorf("audiobookshelf: list books for author %s: %w", artistID, err)
+	var items []LibraryItem
+	name := strings.TrimPrefix(artistID, prefixHost)
+	if !strings.HasPrefix(artistID, prefixHost) {
+		books, err := p.client.AuthorItems(artistID)
+		if err != nil {
+			return nil, fmt.Errorf("audiobookshelf: list books for author %s: %w", artistID, err)
+		}
+		items = append(items, books...)
+		p.mu.Lock()
+		name = p.authorNames[artistID]
+		p.mu.Unlock()
 	}
-	sorted := append([]LibraryItem(nil), items...)
-	sortItems(sorted, SortBooksByTitle)
 
-	out := make([]provider.AlbumInfo, 0, len(sorted))
-	for _, it := range sorted {
+	shows, err := p.shows()
+	if err != nil {
+		return nil, err
+	}
+	for _, it := range shows {
+		if name != "" && strings.EqualFold(itemAuthor(it), name) {
+			items = append(items, it)
+		}
+	}
+	sortItems(items, SortBooksByTitle)
+
+	out := make([]provider.AlbumInfo, 0, len(items))
+	for _, it := range items {
 		out = append(out, albumInfo(it, artistID))
 	}
 	return out, nil
 }
 
-// AlbumList returns one page of the full book catalog.
+// AlbumList returns one page of the full catalog: books and podcast shows.
 func (p *Provider) AlbumList(sortType string, offset, size int) ([]provider.AlbumInfo, error) {
-	items, err := p.books()
+	books, err := p.books()
 	if err != nil {
 		return nil, err
 	}
-	sorted := append([]LibraryItem(nil), items...)
+	shows, err := p.shows()
+	if err != nil {
+		return nil, err
+	}
+	sorted := make([]LibraryItem, 0, len(books)+len(shows))
+	sorted = append(sorted, books...)
+	sorted = append(sorted, shows...)
 	sortItems(sorted, sortType)
 
 	if offset < 0 {
@@ -307,7 +367,7 @@ func (p *Provider) AlbumSortTypes() []provider.SortType { return bookSortTypes }
 
 func (p *Provider) DefaultAlbumSort() string { return SortBooksByTitle }
 
-// AlbumTracks returns the audio files of one book.
+// AlbumTracks returns the audio files of one book or the episodes of one show.
 func (p *Provider) AlbumTracks(albumID string) ([]playlist.Track, error) {
 	return p.Tracks(albumID)
 }
@@ -365,21 +425,9 @@ func (p *Provider) books() ([]LibraryItem, error) {
 		return cached, nil
 	}
 
-	libs, err := p.client.Libraries()
+	out, err := p.itemsOfType(mediaTypeBook)
 	if err != nil {
-		return nil, fmt.Errorf("audiobookshelf: list libraries: %w", err)
-	}
-
-	out := make([]LibraryItem, 0)
-	for _, lib := range libs {
-		if lib.MediaType != mediaTypeBook {
-			continue
-		}
-		items, err := p.client.Items(lib.ID)
-		if err != nil {
-			return nil, fmt.Errorf("audiobookshelf: list items for library %s: %w", lib.ID, err)
-		}
-		out = append(out, items...)
+		return nil, err
 	}
 
 	p.mu.Lock()
@@ -388,8 +436,72 @@ func (p *Provider) books() ([]LibraryItem, error) {
 	return out, nil
 }
 
+func (p *Provider) itemsOfType(mediaType string) ([]LibraryItem, error) {
+	libs, err := p.client.Libraries()
+	if err != nil {
+		return nil, fmt.Errorf("audiobookshelf: list libraries: %w", err)
+	}
+
+	out := make([]LibraryItem, 0)
+	for _, lib := range libs {
+		if lib.MediaType != mediaType {
+			continue
+		}
+		items, err := p.client.Items(lib.ID)
+		if err != nil {
+			return nil, fmt.Errorf("audiobookshelf: list items for library %s: %w", lib.ID, err)
+		}
+		for _, it := range items {
+			// The list endpoint may omit mediaType.
+			if it.MediaType == "" {
+				it.MediaType = mediaType
+			}
+			out = append(out, it)
+		}
+	}
+	return out, nil
+}
+
+func (p *Provider) shows() ([]LibraryItem, error) {
+	p.mu.Lock()
+	cached := p.showCache
+	p.mu.Unlock()
+	if cached != nil {
+		return cached, nil
+	}
+
+	out, err := p.itemsOfType(mediaTypePodcast)
+	if err != nil {
+		return nil, err
+	}
+
+	p.mu.Lock()
+	p.showCache = out
+	p.mu.Unlock()
+	return out, nil
+}
+
+func hostID(name string) string { return prefixHost + name }
+
+// itemAuthor returns a book's author or a show's host.
+func itemAuthor(it LibraryItem) string {
+	if name := strings.TrimSpace(it.Media.Metadata.AuthorName); name != "" {
+		return name
+	}
+	return strings.TrimSpace(it.Media.Metadata.Author)
+}
+
 func albumInfo(it LibraryItem, artistID string) provider.AlbumInfo {
 	md := it.Media.Metadata
+	if it.MediaType == mediaTypePodcast {
+		return provider.AlbumInfo{
+			ID:         prefixPodcast + it.ID,
+			Name:       md.Title,
+			Artist:     itemAuthor(it),
+			ArtistID:   hostID(itemAuthor(it)),
+			TrackCount: it.Media.NumEpisodes,
+		}
+	}
 	if artistID == "" && len(md.Authors) > 0 {
 		artistID = md.Authors[0].ID
 	}
@@ -409,8 +521,8 @@ func sortItems(items []LibraryItem, sortType string) {
 		sort.SliceStable(items, func(i, j int) bool { return items[i].AddedAt > items[j].AddedAt })
 	case SortBooksByAuthor:
 		sort.SliceStable(items, func(i, j int) bool {
-			ai := strings.ToLower(items[i].Media.Metadata.AuthorName)
-			aj := strings.ToLower(items[j].Media.Metadata.AuthorName)
+			ai := strings.ToLower(itemAuthor(items[i]))
+			aj := strings.ToLower(itemAuthor(items[j]))
 			if ai == aj {
 				return strings.ToLower(items[i].Media.Metadata.Title) < strings.ToLower(items[j].Media.Metadata.Title)
 			}
@@ -617,5 +729,5 @@ func findProgress(list []MediaProgress, itemID, episodeID string) (MediaProgress
 	return MediaProgress{}, false
 }
 
-// BrowseLabels returns the audiobook vocabulary for the browse overlay.
-func (p *Provider) BrowseLabels() (string, string) { return "Author", "Book" }
+// BrowseLabels returns vocabulary covering both media types.
+func (p *Provider) BrowseLabels() (string, string) { return "Author", "Title" }
