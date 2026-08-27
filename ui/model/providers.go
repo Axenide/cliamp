@@ -31,6 +31,7 @@ func (m *Model) StartInProvider() {
 	if m.provider != nil {
 		m.focus = focusProvider
 		m.resetProviderNav()
+		_, m.openDefaultProviderOnce = m.provider.(provider.DefaultBrowseModeProvider)
 	}
 }
 
@@ -47,7 +48,11 @@ func (m *Model) switchProvider(idx int) tea.Cmd {
 	m.activeProviderPlaylistID = ""
 	m.resetProviderNav()
 	m.focus = focusProvider
-	return m.fetchProviderPlaylists()
+	listsCmd := m.fetchProviderPlaylists()
+	if _, ok := m.provider.(provider.DefaultBrowseModeProvider); ok {
+		return tea.Batch(listsCmd, m.openDefaultProviderBrowser())
+	}
+	return listsCmd
 }
 
 func (m *Model) fetchProviderPlaylists() tea.Cmd {
@@ -396,6 +401,14 @@ func (m *Model) SetLoadedPlaylist(name string) {
 // or genre browsing, preferring the active provider.
 func (m *Model) findBrowseProvider() playlist.Provider {
 	return m.findProviderWith(providerSupportsBrowse)
+}
+
+func (m *Model) openDefaultProviderBrowser() tea.Cmd {
+	preferred, ok := m.provider.(provider.DefaultBrowseModeProvider)
+	if !ok {
+		return nil
+	}
+	return m.openNavBrowserAt(m.provider, preferred.DefaultBrowseMode())
 }
 
 func providerSupportsBrowse(prov playlist.Provider) bool {

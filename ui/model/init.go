@@ -16,6 +16,8 @@ import (
 	"github.com/bjarneo/cliamp/ui"
 )
 
+type openDefaultProviderBrowserMsg struct{}
+
 // applyThemeAll updates colors, spectrum styles, and model-specific styles.
 func applyThemeAll(t theme.Theme) {
 	ui.ApplyThemeColors(t)
@@ -215,6 +217,9 @@ func (m Model) Init() tea.Cmd {
 		// on its private model copy. The initial zero generation is current until
 		// the user starts another provider request.
 		cmds = append(cmds, fetchPlaylistsCmd(m.provider, m.requests.provider))
+	}
+	if m.openDefaultProviderOnce {
+		cmds = append(cmds, func() tea.Msg { return openDefaultProviderBrowserMsg{} })
 	}
 	if len(m.pendingURLs) > 0 {
 		cmds = append(cmds, resolveRemoteCmd(m.pendingURLs, m.autoPlay))

@@ -65,6 +65,13 @@ type BrowseEntryProvider interface {
 	BrowseEntries() []BrowseEntry
 }
 
+// DefaultBrowseModeProvider is implemented by providers that should open a
+// hierarchical browse route immediately when selected instead of landing on
+// their flat playlist pane.
+type DefaultBrowseModeProvider interface {
+	DefaultBrowseMode() BrowseMode
+}
+
 // GenreBrowser is implemented by providers that expose a category catalogue.
 type GenreBrowser interface {
 	Genres() ([]GenreInfo, error)
