@@ -98,6 +98,8 @@ func buildApp() *cli.Command {
 			eqCommand(),
 			deviceCommand(),
 			remoteCommand(),
+			openCommand(),
+			protocolCommand(),
 		},
 	}
 }
@@ -329,6 +331,40 @@ func pluginsCommand() *cli.Command {
 						fmt.Println(item)
 					}
 					return nil
+				},
+			},
+		},
+	}
+}
+
+func protocolCommand() *cli.Command {
+	return &cli.Command{
+		Name:  "protocol",
+		Usage: "register cliamp:// links with the desktop",
+		Description: "Makes cliamp the handler for cliamp:// links, so clicking one plays\n" +
+			"or queues its target. install.sh already registers the scheme; use\n" +
+			"these commands after a go install build, to point the scheme at a\n" +
+			"different binary, or to remove the registration.",
+		Commands: []*cli.Command{
+			{
+				Name:  "register",
+				Usage: "make cliamp the handler for cliamp:// links",
+				Action: func(ctx context.Context, c *cli.Command) error {
+					return cmd.ProtocolRegister(os.Stdout)
+				},
+			},
+			{
+				Name:  "unregister",
+				Usage: "remove the cliamp:// handler registration",
+				Action: func(ctx context.Context, c *cli.Command) error {
+					return cmd.ProtocolUnregister(os.Stdout)
+				},
+			},
+			{
+				Name:  "status",
+				Usage: "report whether cliamp:// is registered",
+				Action: func(ctx context.Context, c *cli.Command) error {
+					return cmd.ProtocolStatus(os.Stdout)
 				},
 			},
 		},
