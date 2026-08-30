@@ -79,6 +79,20 @@ type Player struct {
 // function, the poll interval, and ok=false when the URL is not recognized.
 type StreamMetadataResolver func(streamURL string) (fetch func(ctx context.Context) (string, error), interval time.Duration, ok bool)
 
+// maxAnalysisWindow is the largest window the visualizer asks for in one read
+// (the classic peak meter's 4096-sample FFT). The package cannot import ui, so
+// the value is duplicated here; it only needs to be an upper bound.
+const maxAnalysisWindow = 4096
+
+// tapRingFrames sizes the tap's ring buffer. The waveform read position sits
+// speakerFrames behind the newest frame — that is where audio is actually
+// audible — so the ring has to hold that lag *plus* a full analysis window on
+// top of it. Sized to the backend buffer alone, the oldest end of the window
+// would read frames that have already been overwritten.
+func tapRingFrames(speakerFrames int) int {
+	return max(4096, speakerFrames+maxAnalysisWindow)
+}
+
 // New creates a Player and initializes the speaker with the given quality settings.
 func New(q Quality) (*Player, error) {
 	if q.SampleRate <= 0 || q.BufferMs <= 0 || q.ResampleQuality <= 0 {
@@ -97,7 +111,7 @@ func New(q Quality) (*Player, error) {
 		sr:                  sr,
 		resampleQuality:     q.ResampleQuality,
 		bitDepth:            bitDepth,
-		tapBufferFrames:     max(4096, sr.N(time.Duration(q.BufferMs)*time.Millisecond)),
+		tapBufferFrames:     tapRingFrames(sr.N(time.Duration(q.BufferMs) * time.Millisecond)),
 		speakerBufferFrames: sr.N(time.Duration(q.BufferMs) * time.Millisecond),
 	}
 	p.volMin.Store(math.Float64bits(-50))
