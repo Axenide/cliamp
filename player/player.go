@@ -53,6 +53,9 @@ type Player struct {
 	resampleQuality int
 	bitDepth        int // 16 or 32
 	tapBufferFrames int
+	// speakerBufferFrames is the audio backend's buffer, in frames: the latency
+	// between a frame reaching the tap and the same frame being heard.
+	speakerBufferFrames int
 
 	gaplessAdvance atomic.Bool   // set when gapless transition fires
 	seekGen        atomic.Int64  // generation counter for yt-dlp seeks; incremented to cancel stale seeks
@@ -91,10 +94,11 @@ func New(q Quality) (*Player, error) {
 		bitDepth = 16
 	}
 	p := &Player{
-		sr:              sr,
-		resampleQuality: q.ResampleQuality,
-		bitDepth:        bitDepth,
-		tapBufferFrames: max(4096, sr.N(time.Duration(q.BufferMs)*time.Millisecond)),
+		sr:                  sr,
+		resampleQuality:     q.ResampleQuality,
+		bitDepth:            bitDepth,
+		tapBufferFrames:     max(4096, sr.N(time.Duration(q.BufferMs)*time.Millisecond)),
+		speakerBufferFrames: sr.N(time.Duration(q.BufferMs) * time.Millisecond),
 	}
 	p.volMin.Store(math.Float64bits(-50))
 	p.speed.Store(math.Float64bits(1.0))
@@ -302,7 +306,7 @@ func (p *Player) playPipelineForGeneration(tp *trackPipeline, generation uint64)
 			s = newBiquad(s, eqFreqs[i], 1.4, &p.eqBands[i], float64(p.sr))
 		}
 
-		p.tap = newTap(s, p.tapBufferFrames, int(p.sr))
+		p.tap = newTap(s, p.tapBufferFrames, int(p.sr), p.speakerBufferFrames)
 		s = &volumeStreamer{s: p.tap, vol: &p.volume, mono: &p.mono, cachedDB: math.NaN()}
 		p.ctrl = &beep.Ctrl{Streamer: s}
 		p.started = true
