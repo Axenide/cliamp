@@ -193,7 +193,8 @@ func trimTrailingEmpty(sections []string) []string {
 }
 
 // mainSections builds the stacked rows of the playback screen for the active
-// layout tier, ending with the hint bar and status line.
+// layout tier, ending with the status line and, unless it is hidden, the hint
+// bar above it.
 func (m Model) mainSections(playlist string, includeTransient, contentFirst bool) []string {
 	if m.usesSimplifiedLayout() {
 		sections := []string{
