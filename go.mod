@@ -15,6 +15,7 @@ require (
 	github.com/urfave/cli/v3 v3.8.0
 	github.com/yuin/gopher-lua v1.1.2
 	golang.org/x/oauth2 v0.36.0
+	golang.org/x/sys v0.45.0
 	golang.org/x/text v0.39.0
 	google.golang.org/api v0.274.0
 )
@@ -75,7 +76,6 @@ require (
 	golang.org/x/exp v0.0.0-20251209150349-8475f28825e9 // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/sync v0.21.0 // indirect
-	golang.org/x/sys v0.45.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478 // indirect
 	google.golang.org/grpc v1.82.1 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
