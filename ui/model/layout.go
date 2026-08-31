@@ -75,6 +75,11 @@ func (m *Model) recomputeLayout() {
 		layout.visualizerRows = 0
 		layout.fixedRows = 3
 	}
+	// The simplified view never draws the hint bar, so its fixedRows budget
+	// does not include that row and must not be reduced here.
+	if m.hideHelpBar && !simplified {
+		layout.fixedRows = max(0, layout.fixedRows-1)
+	}
 
 	layout.fullVisualizerRows = max(1, height-6-2*paddingV)
 	if !layout.tooSmall() {

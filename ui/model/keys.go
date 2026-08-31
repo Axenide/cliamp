@@ -847,6 +847,10 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.toggleAlbumHeadersManual()
 		m.adjustScroll()
 
+	case "ctrl+g":
+		m.toggleHelpBar()
+		m.adjustScroll()
+
 	case "v":
 		if m.simplified {
 			break

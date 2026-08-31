@@ -264,7 +264,11 @@ func (m Model) mainSections(playlist string, includeTransient, contentFirst bool
 	if playlist != "" {
 		sections = append(sections, playlist)
 	}
-	sections = append(sections, "", m.renderTierHelp(), m.renderBottomStatus())
+	sections = append(sections, "")
+	if !m.hideHelpBar {
+		sections = append(sections, m.renderTierHelp())
+	}
+	sections = append(sections, m.renderBottomStatus())
 
 	if includeTransient {
 		if line := m.renderTransient(); line != "" {

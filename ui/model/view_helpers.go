@@ -188,6 +188,12 @@ func (m *Model) toggleAlbumHeadersManual() {
 	m.headerManual = true
 }
 
+// toggleHelpBar shows or hides the key-binding hint bar for this session. The
+// persistent choice is the hide_help_bar config key.
+func (m *Model) toggleHelpBar() {
+	m.SetHideHelpBar(!m.hideHelpBar)
+}
+
 // minTracksPerAlbum is the threshold at which a list is considered cohesive
 // enough to default to showing album headers; below this average tracks/album,
 // the list looks like a fragmented mixtape and headers add noise.
