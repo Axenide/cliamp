@@ -28,6 +28,9 @@ func (l frameLayout) tooSmall() bool {
 	return l.tier == layoutTooSmall
 }
 
+// recomputeLayout picks the layout tier for the current terminal size and
+// derives the row budget from it: fixed chrome, the visualizer, and whatever
+// is left for the body.
 func (m *Model) recomputeLayout() {
 	width, height := m.width, m.height
 	if width <= 0 {

@@ -6,9 +6,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// Hiding the hint bar must hand its row back to the body across every tier
-// that draws it. bodyRows is asserted in TestToggleHelpBar, where the terminal
-// is large enough that the row is not clamped by the one-row floor.
+// TestHideHelpBarReleasesFixedRow checks that hiding the hint bar hands its row
+// back to the body on every tier that draws it. bodyRows is asserted in
+// TestToggleHelpBar, where the terminal is large enough that the row is not
+// clamped by the one-row floor.
 func TestHideHelpBarReleasesFixedRow(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -36,8 +37,8 @@ func TestHideHelpBarReleasesFixedRow(t *testing.T) {
 	}
 }
 
-// The simplified view never draws the hint bar, so its row budget must not
-// shift when the option is set.
+// TestHideHelpBarLeavesSimplifiedLayoutAlone checks that the simplified view,
+// which never draws the hint bar, keeps its row budget when the option is set.
 func TestHideHelpBarLeavesSimplifiedLayoutAlone(t *testing.T) {
 	shown := newLayoutTestModel(80, 24)
 	shown.simplified = true
@@ -52,6 +53,8 @@ func TestHideHelpBarLeavesSimplifiedLayoutAlone(t *testing.T) {
 	}
 }
 
+// TestHideHelpBarOmitsHelpSection checks that the hint bar is absent from the
+// rendered sections, rather than rendered as a blank row.
 func TestHideHelpBarOmitsHelpSection(t *testing.T) {
 	shown := newLayoutTestModel(80, 24)
 	hidden := newLayoutTestModel(80, 24)
@@ -75,7 +78,8 @@ func TestHideHelpBarOmitsHelpSection(t *testing.T) {
 	}
 }
 
-// Ctrl+G must reach the toggle through the main key path, not just the helper.
+// TestCtrlGTogglesHelpBar checks that Ctrl+G reaches the toggle through the
+// main key path, not just through the helper.
 func TestCtrlGTogglesHelpBar(t *testing.T) {
 	m := newLayoutTestModel(80, 24)
 	m.handleKey(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl})
@@ -88,6 +92,8 @@ func TestCtrlGTogglesHelpBar(t *testing.T) {
 	}
 }
 
+// TestToggleHelpBar checks that toggling restores both the hint bar and the
+// row it borrowed from the body.
 func TestToggleHelpBar(t *testing.T) {
 	m := newLayoutTestModel(80, 24)
 	rows := m.layout.bodyRows
