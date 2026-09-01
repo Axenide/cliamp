@@ -267,6 +267,7 @@ type Model struct {
 	provScroll    int
 	provLoading   bool
 	provSignIn    bool            // true when provider needs interactive sign-in
+	provAskLoc    bool            // true while the location question is on screen
 	provAuthURL   string          // OAuth URL to display while interactive auth is in flight
 	providers     []ProviderEntry // all available providers
 	provPillIdx   int             // selected pill index
@@ -413,6 +414,7 @@ type Model struct {
 	lowPower        bool // lower UI/render cadences in low-power mode
 	visualizer60FPS bool // render a visible visualizer at the animation cadence
 	simplified      bool // simplified playback view: track summary and time strip
+	hideHelpBar     bool // hide the key-binding hint bar above the status line
 	heightExpanded  bool // tracks whether manual 'x' expansion is active
 
 	// Cached per-tick to avoid repeated speaker.Lock() calls in View().

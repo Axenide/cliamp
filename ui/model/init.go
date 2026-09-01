@@ -115,6 +115,13 @@ func (m *Model) SetSimplified(v bool) {
 	m.normalizeMainFocus()
 }
 
+// SetHideHelpBar hides the key-binding hint bar and gives the row back to the
+// body. The full keymap stays reachable with "?".
+func (m *Model) SetHideHelpBar(v bool) {
+	m.hideHelpBar = v
+	m.refreshChrome()
+}
+
 // SetInitialDirectory sets the initial directory for the file browser.
 func (m *Model) SetInitialDirectory(dir string) { m.initialDir = dir }
 
