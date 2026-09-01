@@ -126,6 +126,7 @@ cliamp track.mp3 --repeat all --mono ~/Music
 | `--mono` / `--no-mono` | bool | false | |
 | `--auto-play` | bool | false | |
 | `--simplified` | bool | false | artist/title and time strip; no visualizer or playlist |
+| `--no-help-bar` | bool | false | hide the key-binding hint bar; `?` still opens the full keymap |
 | `--visualizer-60fps` | bool | false | render a visible visualizer at about 60 FPS |
 | `--start-theme` | string | | theme name |
 | `--eq-preset` | string | | preset name |

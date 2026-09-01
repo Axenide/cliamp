@@ -83,6 +83,9 @@ low_power = false
 # No visualizer or playback controls are shown.
 simplified = false
 
+# Hide the key-binding hint bar above the status line.
+hide_help_bar = false
+
 # UI theme name (see available themes in ~/.config/cliamp/themes/)
 theme = "Tokyo Night"
 
@@ -109,6 +112,12 @@ cliamp adapts its playback screen to the terminal size:
 artist/title, time, and seek-progress strip. It hides the visualizer, playback
 controls, and playlist. Provider browsing and overlays keep their list-focused
 layout. Start one session with `cliamp --simplified`.
+
+`hide_help_bar = true` removes the key-binding hint bar above the status line
+and gives that row back to the playlist. The full keymap stays available with
+`?`, and `Ctrl+G` toggles the bar for the current session. Start one session
+with `cliamp --no-help-bar`. Simplified mode draws neither the hint bar nor a
+playlist, so it is unaffected by this setting.
 
 List views such as provider browsing, file selection, queues, playlists, search
 results, themes, and keybindings use a content-first layout. This layout replaces
