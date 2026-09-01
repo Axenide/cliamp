@@ -1,6 +1,0 @@
-<RCC>
-  <qresource prefix="/qt/qml/CliampGui/">
-    <file alias="qml/qmldir">/home/bjarneo/Code/cliamp/gui/build/CliampGui/qml/qmldir</file>
-  </qresource>
-</RCC>
-
