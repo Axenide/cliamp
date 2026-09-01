@@ -293,6 +293,7 @@ func run(overrides config.Overrides, positional []string, daemon, visualizer60FP
 			playlist.Track{Path: "http://radio.cliamp.stream/lofi/stream", Title: "Lofi Stream", Stream: true, Realtime: true},
 			playlist.Track{Path: "http://radio.cliamp.stream/synthwave/stream", Title: "Synthwave Stream", Stream: true, Realtime: true},
 			playlist.Track{Path: "http://radio.cliamp.stream/edm/stream", Title: "EDM Stream", Stream: true, Realtime: true},
+			playlist.Track{Path: "http://radio.cliamp.stream/omarchy/stream", Title: "Omarchy Radio", Stream: true, Realtime: true},
 			playlist.Track{Path: "http://radio.cliamp.stream/ncs/stream", Title: "NCS Stream", Stream: true, Realtime: true},
 			playlist.Track{Path: "http://radio.cliamp.stream/ncs-house/stream", Title: "NCS House Stream", Stream: true, Realtime: true},
 			playlist.Track{Path: "http://radio.cliamp.stream/ncs-dubstep/stream", Title: "NCS Dubstep Stream", Stream: true, Realtime: true},
