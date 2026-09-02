@@ -81,6 +81,7 @@ body{
     radial-gradient(140% 120% at 50% 40%,transparent 55%,rgba(0,0,0,.55) 100%);
   background-attachment:fixed;
 }
+body.globe-open{overflow:hidden}
 ::selection{background:var(--green);color:var(--ink)}
 
 /* CRT atmosphere */
@@ -444,6 +445,86 @@ kbd{color:var(--ink);background:var(--fg-hi);padding:1px 6px;border-radius:3px;
 .community-plugin-author a{color:var(--mute)}
 .community-plugin-author a:hover{color:var(--cyan)}
 
+/* ═══════════ RADIO ═══════════ */
+.radio-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+.radio-tabs{display:flex;gap:6px;flex-wrap:wrap}
+.radio-tab{font-family:inherit;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;
+  color:var(--mute);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:6px 13px;cursor:pointer;transition:all .16s}
+.radio-tab:hover{color:var(--fg-hi);border-color:var(--line-hi)}
+.radio-tab.active{color:var(--ink);background:var(--green);border-color:var(--green);box-shadow:0 0 14px var(--green-glow)}
+.radio-live{display:inline-flex;align-items:center;gap:8px;color:var(--red);font-size:11px;letter-spacing:2px;font-weight:800}
+.radio-live-dot{width:8px;height:8px;border-radius:50%;background:var(--red);box-shadow:0 0 10px rgba(255,93,108,.6);animation:blink 1.4s infinite}
+.radio-error{color:var(--red);font-size:12px}
+
+.radio-stats-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:20px}
+@media (max-width:860px){.radio-stats-row{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:640px){.radio-stats-row{grid-template-columns:1fr}}
+.radio-stat{padding:22px;border-radius:10px;text-align:center;
+  background:radial-gradient(120% 120% at 50% 0%,var(--green-dim),transparent 60%),linear-gradient(to bottom,var(--panel-2),var(--panel));
+  border:1px solid var(--line);box-shadow:var(--engrave),inset 0 0 24px rgba(0,0,0,.35)}
+.radio-stat-value{font-size:42px;font-weight:800;color:var(--fg-max);letter-spacing:-1px;
+  font-variant-numeric:tabular-nums;text-shadow:0 0 24px var(--green-glow);line-height:1;
+  display:flex;align-items:center;justify-content:center;gap:8px}
+.radio-stat-dot{width:11px;height:11px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green-glow);animation:blink 2s infinite}
+.radio-stat-label{margin-top:10px;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--mute);font-weight:700}
+.radio-stat-peak{background:radial-gradient(120% 120% at 50% 0%,var(--amber-dim),transparent 60%),linear-gradient(to bottom,var(--panel-2),var(--panel))}
+.radio-stat-peak .radio-stat-value{color:var(--amber-hi);text-shadow:0 0 24px var(--amber-glow)}
+.radio-stat-peak .radio-stat-label{color:var(--amber)}
+
+.radio-card{padding:22px 24px;border-radius:10px;margin-bottom:16px;
+  background:linear-gradient(to bottom,var(--panel-2),var(--panel));border:1px solid var(--line);box-shadow:var(--engrave)}
+.radio-card-title{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--amber);font-weight:800;margin-bottom:18px}
+.radio-chart{display:flex;align-items:flex-end;gap:5px;height:120px}
+.radio-chart-bar{flex:1;min-height:4px;border-radius:3px 3px 0 0;background:var(--green);
+  box-shadow:0 0 10px var(--green-glow);position:relative;transition:height .6s ease}
+.radio-chart-bar .tooltip{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:6px;
+  background:var(--panel-3);border:1px solid var(--line-hi);border-radius:5px;padding:5px 9px;font-size:10px;
+  color:var(--fg-hi);white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s;z-index:5}
+.radio-chart-bar:hover .tooltip{opacity:1}
+.radio-chart-labels{display:flex;justify-content:space-between;margin-top:8px;font-size:9px;color:var(--mute-2);letter-spacing:1px}
+
+.radio-globe-wrap{display:flex;gap:26px;align-items:center;flex-wrap:wrap}
+.radio-globe-button{position:relative;width:300px;max-width:100%;padding:0;border:1px solid var(--line);background:#050806;color:var(--green);font:inherit;cursor:zoom-in}
+.radio-globe-button:hover{border-color:var(--green)}
+.radio-globe-canvas{display:block;width:100%;max-width:100%;aspect-ratio:1;opacity:0;transition:opacity .5s}
+.radio-globe-canvas.loaded{opacity:1}
+.radio-globe-open-label{position:absolute;right:8px;bottom:8px;padding:4px 7px;background:var(--green);color:var(--ink);font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase}
+.radio-countries{flex:1;min-width:220px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 22px}
+.radio-country{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px dotted var(--line);font-size:12.5px;color:var(--fg)}
+.radio-country-flag{font-size:15px;line-height:1}
+.radio-country-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.radio-country-sessions{margin-left:auto;color:var(--mute);font-variant-numeric:tabular-nums;font-size:11px}
+.radio-country-more{grid-column:1/-1;border-bottom:0;color:var(--amber);font-size:11px;letter-spacing:.5px}
+
+.globe-dialog{width:100%;height:100dvh;max-width:none;max-height:none;margin:0;padding:0;border:0;border-top:3px solid var(--green);background:var(--ink);color:var(--fg);overflow:hidden}
+.globe-dialog::backdrop{background:rgba(0,0,0,.88)}
+.globe-dialog[open]{display:grid;grid-template-rows:auto minmax(0,1fr)}
+.globe-dialog-head{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--line-hi);background:var(--green);color:var(--ink)}
+.globe-dialog-title{font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase}
+.globe-dialog-status{font-size:10px;opacity:.65}
+.globe-dialog-close{margin-left:auto;padding:6px 9px;border:1px solid var(--ink);background:var(--ink);color:var(--green);font:inherit;font-size:10px;font-weight:800;cursor:pointer}
+.globe-dialog-body{display:grid;grid-template-columns:minmax(0,1fr) 340px;min-height:0}
+.globe-dialog-map{position:relative;display:grid;place-items:center;min-width:0;min-height:0;padding:20px;border-right:1px solid var(--line);background:#030604}
+.globe-dialog-canvas{display:block;width:min(100%,680px);max-height:100%;aspect-ratio:1;cursor:crosshair;touch-action:none}
+.globe-spin-toggle{position:absolute;top:12px;left:12px;z-index:2;padding:6px 8px;border:1px solid var(--line-hi);background:rgba(5,8,6,.9);color:var(--green);font:inherit;font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer}
+.globe-spin-toggle.paused{border-color:var(--amber);color:var(--amber)}
+.globe-dialog-side{display:grid;grid-template-rows:auto minmax(0,1fr);min-height:0;background:var(--panel)}
+.globe-detail{padding:22px;border-bottom:1px solid var(--line-hi)}
+.globe-detail-label{display:block;margin-bottom:8px;color:var(--green);font-size:9px;font-weight:800;letter-spacing:2px;text-transform:uppercase}
+.globe-detail-country{display:block;color:var(--fg-max);font-size:20px;line-height:1.2}
+.globe-detail-count{display:block;margin-top:7px;color:var(--amber);font-size:34px;font-weight:800;line-height:1}
+.globe-detail-unit{color:var(--mute);font-size:10px;letter-spacing:1px;text-transform:uppercase}
+.globe-rank-list{min-height:0;overflow-y:auto;padding:8px;scrollbar-width:thin;scrollbar-color:var(--line-hi) var(--panel)}
+.globe-rank-list::-webkit-scrollbar{width:7px}
+.globe-rank-list::-webkit-scrollbar-track{background:var(--panel)}
+.globe-rank-list::-webkit-scrollbar-thumb{background:var(--line-hi)}
+.globe-rank-item{display:grid;width:100%;grid-template-columns:28px 24px minmax(0,1fr) auto;gap:8px;align-items:center;padding:9px 8px;border:0;border-bottom:1px dotted var(--line);background:transparent;color:var(--fg);font:inherit;font-size:11px;text-align:left;cursor:pointer}
+.globe-rank-item:hover,.globe-rank-item.active{background:var(--green-dim);color:var(--fg-hi)}
+.globe-rank-item.active{box-shadow:inset 2px 0 0 var(--green)}
+.globe-rank-num{color:var(--mute-2)}
+.globe-rank-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.globe-rank-count{color:var(--amber);font-variant-numeric:tabular-nums}
+
 /* ═══════════ FOOTER ═══════════ */
 footer{border-top:1px solid var(--line);background:var(--ink-2);padding:46px 0 56px;position:relative}
 .footer-inner{max-width:var(--wrap);margin:0 auto;padding:0 40px;
@@ -639,6 +720,23 @@ section{padding:74px 0;border-top:1px solid var(--line)}
 .community-plugin-name{font-size:12px}
 .community-plugin-desc,.community-plugin-author{font-size:10px}
 
+.radio-header{padding-bottom:12px;border-bottom:1px solid var(--line)}
+.radio-tabs{gap:0}
+.radio-tab{padding:7px 10px;border-color:var(--line);border-radius:0;background:var(--panel);font-size:9px;letter-spacing:.5px;transition:none}
+.radio-tab.active{border-color:var(--green);background:var(--green);color:var(--ink);box-shadow:none}
+.radio-live-dot,.radio-stat-dot{border-radius:0;box-shadow:none;animation:none}
+.radio-stats-row{gap:1px;border:1px solid var(--line);background:var(--line)}
+.radio-stat{padding:18px;border:0;border-radius:0;background:var(--panel);box-shadow:none;text-align:left}
+.radio-stat-peak{background:var(--panel)}
+.radio-stat-value{justify-content:flex-start;color:var(--fg-max);font-size:34px;letter-spacing:-2px;text-shadow:none}
+.radio-stat-peak .radio-stat-value{color:var(--amber);text-shadow:none}
+.radio-stat-label{font-size:9px;letter-spacing:1px}
+.radio-card{padding:20px;border:1px solid var(--line);border-radius:0;background:var(--panel);box-shadow:none}
+.radio-chart{gap:2px}
+.radio-chart-bar{border-radius:0;box-shadow:none}
+.radio-chart-bar .tooltip{border-radius:0;background:var(--ink)}
+.radio-globe-canvas{filter:saturate(1.15)}
+
 footer{padding:26px 0;border-top:1px solid var(--green);background:var(--ink)}
 .footer-inner{padding-inline:28px}
 .footer-brand,.footer-ascii{font-size:10px}
@@ -674,6 +772,12 @@ footer{padding:26px 0;border-top:1px solid var(--green);background:var(--ink)}
   .next-step p{margin-bottom:18px}
   .community-plugins{grid-template-columns:1fr}
   .footer-inner{padding-inline:18px}
+  .globe-dialog-body{grid-template-columns:1fr;grid-template-rows:minmax(280px,48dvh) minmax(0,1fr)}
+  .globe-dialog-map{padding:10px;border-right:0;border-bottom:1px solid var(--line)}
+  .globe-dialog-side{grid-template-columns:138px minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+  .globe-detail{padding:14px 12px;border-right:1px solid var(--line-hi);border-bottom:0}
+  .globe-detail-country{font-size:14px}
+  .globe-detail-count{font-size:27px}
 }
 @media (max-width:560px){
   .brand::after{display:none}
@@ -689,6 +793,14 @@ footer{padding:26px 0;border-top:1px solid var(--green);background:var(--ink)}
   .feature{grid-template-columns:32px minmax(0,1fr);gap:8px}
   .feature-name{align-self:center}
   .feature p{grid-column:2}
+  .radio-stats-row{grid-template-columns:repeat(2,1fr)}
+  .radio-stat{padding:14px}
+  .radio-stat-value{font-size:27px}
+  .radio-countries{gap:0 12px}
+  .radio-country{gap:6px;font-size:11px}
+  .radio-country-flag{font-size:13px}
+  .radio-country-sessions{font-size:10px}
+  .radio-chart{overflow:hidden}
   .footer-ascii{display:none}
 }
 </style>
@@ -714,7 +826,7 @@ footer{padding:26px 0;border-top:1px solid var(--green);background:var(--ink)}
       <a href="#sources">Sources</a>
       <a href="#features">Features</a>
       <a href="#plugins">Plugins</a>
-      <a href="#radio-player">Radio</a>
+      <a href="#radio">Radio</a>
       <a href="https://whiterose.org.contextowl.co/docs/cliamp" class="ext">Docs</a>
       <a href="https://github.com/bjarneo/cliamp" class="ext">GitHub</a>
     </div>
@@ -792,20 +904,21 @@ footer{padding:26px 0;border-top:1px solid var(--green);background:var(--ink)}
               <span>▸─ Playlist ──</span>
               <span class="t-active">[Shuffle]</span>
               <span class="t-dim">[Repeat: Off]</span>
-              <span class="t-dim">[1/11]</span>
+              <span class="t-dim">[1/12]</span>
               <span>──</span>
             </div>
             <div class="t-pl-item active" data-station="lofi" role="button" tabindex="0" onclick="switchChannel('lofi')"><span class="t-pl-mark">▶</span><span class="t-pl-num">&nbsp;1.</span> Lofi Hip Hop Radio</div>
             <div class="t-pl-item" data-station="edm" role="button" tabindex="0" onclick="switchChannel('edm')"><span class="t-pl-mark">▶</span><span class="t-pl-num">&nbsp;2.</span> EDM Pulse</div>
             <div class="t-pl-item" data-station="synthwave" role="button" tabindex="0" onclick="switchChannel('synthwave')"><span class="t-pl-mark">▶</span><span class="t-pl-num">&nbsp;3.</span> Synthwave Nights</div>
-            <div class="t-pl-item" data-station="ncs" role="button" tabindex="0" onclick="switchChannel('ncs')"><span class="t-pl-mark">▶</span><span class="t-pl-num">&nbsp;4.</span> NCS Radio</div>
-            <div class="t-pl-item" data-station="ncs-house" role="button" tabindex="0" onclick="switchChannel('ncs-house')"><span class="t-pl-mark">▶</span><span class="t-pl-num">&nbsp;5.</span> NCS House</div>
-            <div class="t-pl-item" data-station="ncs-dubstep" role="button" tabindex="0" onclick="switchChannel('ncs-dubstep')"><span class="t-pl-mark">▶</span><span class="t-pl-num">&nbsp;6.</span> NCS Dubstep</div>
-            <div class="t-pl-item" data-station="ncs-dnb" role="button" tabindex="0" onclick="switchChannel('ncs-dnb')"><span class="t-pl-mark">▶</span><span class="t-pl-num">&nbsp;7.</span> NCS Drum &amp; Bass</div>
-            <div class="t-pl-item" data-station="ncs-trap" role="button" tabindex="0" onclick="switchChannel('ncs-trap')"><span class="t-pl-mark">▶</span><span class="t-pl-num">&nbsp;8.</span> NCS Trap</div>
-            <div class="t-pl-item" data-station="ncs-phonk" role="button" tabindex="0" onclick="switchChannel('ncs-phonk')"><span class="t-pl-mark">▶</span><span class="t-pl-num">&nbsp;9.</span> NCS Phonk</div>
-            <div class="t-pl-item" data-station="ncs-pop" role="button" tabindex="0" onclick="switchChannel('ncs-pop')"><span class="t-pl-mark">▶</span><span class="t-pl-num">10.</span> NCS Pop</div>
-            <div class="t-pl-item" data-station="ncs-chill" role="button" tabindex="0" onclick="switchChannel('ncs-chill')"><span class="t-pl-mark">▶</span><span class="t-pl-num">11.</span> NCS Chill</div>
+            <div class="t-pl-item" data-station="omarchy" role="button" tabindex="0" onclick="switchChannel('omarchy')"><span class="t-pl-mark">▶</span><span class="t-pl-num">&nbsp;4.</span> Omarchy Radio</div>
+            <div class="t-pl-item" data-station="ncs" role="button" tabindex="0" onclick="switchChannel('ncs')"><span class="t-pl-mark">▶</span><span class="t-pl-num">&nbsp;5.</span> NCS Radio</div>
+            <div class="t-pl-item" data-station="ncs-house" role="button" tabindex="0" onclick="switchChannel('ncs-house')"><span class="t-pl-mark">▶</span><span class="t-pl-num">&nbsp;6.</span> NCS House</div>
+            <div class="t-pl-item" data-station="ncs-dubstep" role="button" tabindex="0" onclick="switchChannel('ncs-dubstep')"><span class="t-pl-mark">▶</span><span class="t-pl-num">&nbsp;7.</span> NCS Dubstep</div>
+            <div class="t-pl-item" data-station="ncs-dnb" role="button" tabindex="0" onclick="switchChannel('ncs-dnb')"><span class="t-pl-mark">▶</span><span class="t-pl-num">&nbsp;8.</span> NCS Drum &amp; Bass</div>
+            <div class="t-pl-item" data-station="ncs-trap" role="button" tabindex="0" onclick="switchChannel('ncs-trap')"><span class="t-pl-mark">▶</span><span class="t-pl-num">&nbsp;9.</span> NCS Trap</div>
+            <div class="t-pl-item" data-station="ncs-phonk" role="button" tabindex="0" onclick="switchChannel('ncs-phonk')"><span class="t-pl-mark">▶</span><span class="t-pl-num">10.</span> NCS Phonk</div>
+            <div class="t-pl-item" data-station="ncs-pop" role="button" tabindex="0" onclick="switchChannel('ncs-pop')"><span class="t-pl-mark">▶</span><span class="t-pl-num">11.</span> NCS Pop</div>
+            <div class="t-pl-item" data-station="ncs-chill" role="button" tabindex="0" onclick="switchChannel('ncs-chill')"><span class="t-pl-mark">▶</span><span class="t-pl-num">12.</span> NCS Chill</div>
             <div class="t-spacer"></div>
             <div class="t-row t-help">
               <span class="t-help-item"><kbd>↑↓</kbd> Scroll</span>
@@ -1011,6 +1124,100 @@ user_id = "your-account-user-id"</code></pre>
   </div>
 </section>
 
+<!-- ═══ 06 RADIO STATS ═══ -->
+<section id="radio">
+  <div class="wrap">
+    <div class="strip rev reveal">
+      <span class="strip-idx">06</span><h2 class="strip-name">radio<em>.stats</em></h2><span class="strip-rule"></span>
+      <span class="strip-meter"><i></i><i></i><i></i><i></i><i></i></span>
+    </div>
+    <div class="radio-header reveal">
+      <div class="radio-tabs" id="radio-stat-tabs">
+        <button class="radio-tab active" data-station="total" onclick="switchStatTab('total')">Total</button>
+        <button class="radio-tab" data-station="edm" onclick="switchStatTab('edm')">EDM</button>
+        <button class="radio-tab" data-station="lofi" onclick="switchStatTab('lofi')">Lofi</button>
+        <button class="radio-tab" data-station="synthwave" onclick="switchStatTab('synthwave')">Synthwave</button>
+        <button class="radio-tab" data-station="omarchy" onclick="switchStatTab('omarchy')">Omarchy</button>
+        <button class="radio-tab" data-station="ncs" onclick="switchStatTab('ncs')">NCS</button>
+        <button class="radio-tab" data-station="ncs-house" onclick="switchStatTab('ncs-house')">NCS House</button>
+        <button class="radio-tab" data-station="ncs-dubstep" onclick="switchStatTab('ncs-dubstep')">NCS Dubstep</button>
+        <button class="radio-tab" data-station="ncs-dnb" onclick="switchStatTab('ncs-dnb')">NCS DnB</button>
+        <button class="radio-tab" data-station="ncs-trap" onclick="switchStatTab('ncs-trap')">NCS Trap</button>
+        <button class="radio-tab" data-station="ncs-phonk" onclick="switchStatTab('ncs-phonk')">NCS Phonk</button>
+        <button class="radio-tab" data-station="ncs-pop" onclick="switchStatTab('ncs-pop')">NCS Pop</button>
+        <button class="radio-tab" data-station="ncs-chill" onclick="switchStatTab('ncs-chill')">NCS Chill</button>
+      </div>
+      <div class="radio-live"><span class="radio-live-dot"></span> LIVE</div>
+    </div>
+    <div id="radio-error"></div>
+    <div class="radio-stats-row reveal">
+      <div class="radio-stat">
+        <div class="radio-stat-value"><span class="radio-stat-dot"></span><span id="radio-now">-</span></div>
+        <div class="radio-stat-label">listening now</div>
+      </div>
+      <div class="radio-stat radio-stat-peak" title="Highest number of listeners online at one time">
+        <div class="radio-stat-value" id="radio-peak">-</div>
+        <div class="radio-stat-label">all-time high</div>
+      </div>
+      <div class="radio-stat">
+        <div class="radio-stat-value" id="radio-sessions">-</div>
+        <div class="radio-stat-label">total sessions</div>
+      </div>
+      <div class="radio-stat">
+        <div class="radio-stat-value" id="radio-hours">-</div>
+        <div class="radio-stat-label">listening hours</div>
+      </div>
+    </div>
+    <div class="radio-card reveal">
+      <div class="radio-card-title">Daily activity</div>
+      <div class="radio-chart" id="radio-chart"></div>
+      <div class="radio-chart-labels" id="radio-chart-labels"></div>
+    </div>
+    <div class="radio-card reveal">
+      <div class="radio-card-title">Listeners by country</div>
+      <div class="radio-globe-wrap">
+        <button class="radio-globe-button" type="button" onclick="openGlobe()" aria-haspopup="dialog" aria-controls="globe-dialog" aria-label="Open detailed listener globe">
+          <canvas class="radio-globe-canvas" id="radio-globe" aria-hidden="true"></canvas>
+          <span class="radio-globe-open-label">Open map</span>
+        </button>
+        <div class="radio-countries" id="radio-countries"></div>
+      </div>
+    </div>
+    <div class="radio-card reveal">
+      <div class="radio-card-title">Top Countries</div>
+      <div class="radio-countries" id="radio-total-countries"></div>
+    </div>
+    <button class="install-box" type="button" id="radio-cmd-box" onclick="copyCmd(this,'cliamp https://radio.cliamp.stream/lofi/stream.pls')" style="display:none">
+      <span class="copied-msg">COPIED</span>
+      <span class="install-platform">Tune in</span>
+      <code><span class="prompt">$ </span><span id="radio-cmd-text">cliamp https://radio.cliamp.stream/lofi/stream.pls</span></code>
+    </button>
+  </div>
+</section>
+
+<dialog class="globe-dialog" id="globe-dialog" aria-labelledby="globe-dialog-title">
+  <div class="globe-dialog-head">
+    <span class="globe-dialog-title" id="globe-dialog-title">Listeners by country</span>
+    <span class="globe-dialog-status">live radio telemetry</span>
+    <button class="globe-dialog-close" type="button" onclick="closeGlobe()">Close [Esc]</button>
+  </div>
+  <div class="globe-dialog-body">
+    <div class="globe-dialog-map">
+      <button class="globe-spin-toggle" id="globe-spin-toggle" type="button" onclick="toggleGlobeSpin()">Auto-spin: on</button>
+      <canvas class="globe-dialog-canvas" id="radio-globe-full" tabindex="0" aria-label="Interactive globe of current radio listeners. Drag or use the arrow keys to rotate it."></canvas>
+    </div>
+    <aside class="globe-dialog-side" aria-label="Country listener details">
+      <div class="globe-detail" aria-live="polite">
+        <span class="globe-detail-label">Selected</span>
+        <strong class="globe-detail-country" id="globe-detail-country">No active listeners</strong>
+        <strong class="globe-detail-count" id="globe-detail-count">0</strong>
+        <span class="globe-detail-unit">listeners now</span>
+      </div>
+      <div class="globe-rank-list" id="globe-rank-list"></div>
+    </aside>
+  </div>
+</dialog>
+
 </main>
 
 <!-- ═══ FOOTER ═══ -->
@@ -1093,9 +1300,9 @@ function toggleSound(btn){
 
 /* ── Radio Player ── */
 var currentChannel='lofi';
-var radioStreams={edm:'https://radio.cliamp.stream/edm/stream',lofi:'https://radio.cliamp.stream/lofi/stream',synthwave:'https://radio.cliamp.stream/synthwave/stream','ncs':'https://radio.cliamp.stream/ncs/stream','ncs-house':'https://radio.cliamp.stream/ncs-house/stream','ncs-dubstep':'https://radio.cliamp.stream/ncs-dubstep/stream','ncs-dnb':'https://radio.cliamp.stream/ncs-dnb/stream','ncs-trap':'https://radio.cliamp.stream/ncs-trap/stream','ncs-phonk':'https://radio.cliamp.stream/ncs-phonk/stream','ncs-pop':'https://radio.cliamp.stream/ncs-pop/stream','ncs-chill':'https://radio.cliamp.stream/ncs-chill/stream'};
-var radioPls={edm:'https://radio.cliamp.stream/edm/stream.pls',lofi:'https://radio.cliamp.stream/lofi/stream.pls',synthwave:'https://radio.cliamp.stream/synthwave/stream.pls','ncs':'https://radio.cliamp.stream/ncs/stream.pls','ncs-house':'https://radio.cliamp.stream/ncs-house/stream.pls','ncs-dubstep':'https://radio.cliamp.stream/ncs-dubstep/stream.pls','ncs-dnb':'https://radio.cliamp.stream/ncs-dnb/stream.pls','ncs-trap':'https://radio.cliamp.stream/ncs-trap/stream.pls','ncs-phonk':'https://radio.cliamp.stream/ncs-phonk/stream.pls','ncs-pop':'https://radio.cliamp.stream/ncs-pop/stream.pls','ncs-chill':'https://radio.cliamp.stream/ncs-chill/stream.pls'};
-var radioNames={edm:'EDM Pulse',lofi:'Lofi Hip Hop Radio',synthwave:'Synthwave Nights','ncs':'NCS Radio','ncs-house':'NCS House','ncs-dubstep':'NCS Dubstep','ncs-dnb':'NCS Drum & Bass','ncs-trap':'NCS Trap','ncs-phonk':'NCS Phonk','ncs-pop':'NCS Pop','ncs-chill':'NCS Chill'};
+var radioStreams={edm:'https://radio.cliamp.stream/edm/stream',lofi:'https://radio.cliamp.stream/lofi/stream',synthwave:'https://radio.cliamp.stream/synthwave/stream',omarchy:'https://radio.cliamp.stream/omarchy/stream','ncs':'https://radio.cliamp.stream/ncs/stream','ncs-house':'https://radio.cliamp.stream/ncs-house/stream','ncs-dubstep':'https://radio.cliamp.stream/ncs-dubstep/stream','ncs-dnb':'https://radio.cliamp.stream/ncs-dnb/stream','ncs-trap':'https://radio.cliamp.stream/ncs-trap/stream','ncs-phonk':'https://radio.cliamp.stream/ncs-phonk/stream','ncs-pop':'https://radio.cliamp.stream/ncs-pop/stream','ncs-chill':'https://radio.cliamp.stream/ncs-chill/stream'};
+var radioPls={edm:'https://radio.cliamp.stream/edm/stream.pls',lofi:'https://radio.cliamp.stream/lofi/stream.pls',synthwave:'https://radio.cliamp.stream/synthwave/stream.pls',omarchy:'https://radio.cliamp.stream/omarchy/stream.pls','ncs':'https://radio.cliamp.stream/ncs/stream.pls','ncs-house':'https://radio.cliamp.stream/ncs-house/stream.pls','ncs-dubstep':'https://radio.cliamp.stream/ncs-dubstep/stream.pls','ncs-dnb':'https://radio.cliamp.stream/ncs-dnb/stream.pls','ncs-trap':'https://radio.cliamp.stream/ncs-trap/stream.pls','ncs-phonk':'https://radio.cliamp.stream/ncs-phonk/stream.pls','ncs-pop':'https://radio.cliamp.stream/ncs-pop/stream.pls','ncs-chill':'https://radio.cliamp.stream/ncs-chill/stream.pls'};
+var radioNames={edm:'EDM Pulse',lofi:'Lofi Hip Hop Radio',synthwave:'Synthwave Nights',omarchy:'Omarchy Radio','ncs':'NCS Radio','ncs-house':'NCS House','ncs-dubstep':'NCS Dubstep','ncs-dnb':'NCS Drum & Bass','ncs-trap':'NCS Trap','ncs-phonk':'NCS Phonk','ncs-pop':'NCS Pop','ncs-chill':'NCS Chill'};
 
 function updateChannelUI(ch){
   document.querySelectorAll('.t-pl-item[data-station]').forEach(function(it){it.classList.toggle('active',it.dataset.station===ch)});
@@ -1154,6 +1361,569 @@ function setRadioVol(v){
   document.getElementById('radio-audio').volume=v/100;
 }
 
+/* ── Radio Statistics ── */
+var currentStatTab='total';
+var radioStatsData=null;
+
+function switchStatTab(ch){
+  currentStatTab=ch;
+  document.querySelectorAll('.radio-tab').forEach(function(b){b.classList.toggle('active',b.dataset.station===ch)});
+  var box=document.getElementById('radio-cmd-box');
+  if(ch==='total'){
+    box.style.display='none';
+  }else{
+    var cmd='cliamp '+radioPls[ch];
+    box.style.display='';
+    box.setAttribute('onclick',"copyCmd(this,'"+cmd+"')");
+    document.getElementById('radio-cmd-text').textContent=cmd;
+  }
+  if(radioStatsData)renderStationStats(radioStatsData,ch);
+}
+
+var countryFlags={
+  AF:"🇦🇫",AL:"🇦🇱",DZ:"🇩🇿",AR:"🇦🇷",AU:"🇦🇺",AT:"🇦🇹",BE:"🇧🇪",BR:"🇧🇷",
+  BG:"🇧🇬",CA:"🇨🇦",CL:"🇨🇱",CN:"🇨🇳",CO:"🇨🇴",HR:"🇭🇷",CZ:"🇨🇿",DK:"🇩🇰",
+  EG:"🇪🇬",EE:"🇪🇪",FI:"🇫🇮",FR:"🇫🇷",DE:"🇩🇪",GR:"🇬🇷",HK:"🇭🇰",HU:"🇭🇺",
+  IN:"🇮🇳",ID:"🇮🇩",IE:"🇮🇪",IL:"🇮🇱",IT:"🇮🇹",JP:"🇯🇵",KR:"🇰🇷",LV:"🇱🇻",
+  LT:"🇱🇹",MY:"🇲🇾",MX:"🇲🇽",NL:"🇳🇱",NZ:"🇳🇿",NO:"🇳🇴",PK:"🇵🇰",PE:"🇵🇪",
+  PH:"🇵🇭",PL:"🇵🇱",PT:"🇵🇹",RO:"🇷🇴",RU:"🇷🇺",SA:"🇸🇦",RS:"🇷🇸",SG:"🇸🇬",
+  SK:"🇸🇰",SI:"🇸🇮",ZA:"🇿🇦",ES:"🇪🇸",SE:"🇸🇪",CH:"🇨🇭",TW:"🇹🇼",TH:"🇹🇭",
+  TR:"🇹🇷",UA:"🇺🇦",AE:"🇦🇪",GB:"🇬🇧",US:"🇺🇸",VN:"🇻🇳",BD:"🇧🇩",NG:"🇳🇬"
+};
+
+function formatDate(iso){
+  var parts=iso.split("-");
+  var months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return months[parseInt(parts[1],10)-1]+" "+parseInt(parts[2],10);
+}
+
+function renderCountryList(el,countries,limit){
+  el.textContent="";
+  countries.slice(0,limit).forEach(function(c){
+    var flag=countryFlags[c.country_code]||"🌐";
+    var div=document.createElement("div");
+    div.className="radio-country";
+    var flagSpan=document.createElement("span");
+    flagSpan.className="radio-country-flag";
+    flagSpan.textContent=flag;
+    var nameSpan=document.createElement("span");
+    nameSpan.className="radio-country-name";
+    nameSpan.textContent=c.country;
+    var sessSpan=document.createElement("span");
+    sessSpan.className="radio-country-sessions";
+    sessSpan.textContent=c.sessions;
+    div.appendChild(flagSpan);
+    div.appendChild(nameSpan);
+    div.appendChild(sessSpan);
+    el.appendChild(div);
+  });
+  if(countries.length>limit){
+    var more=document.createElement("div");
+    more.className="radio-country radio-country-more";
+    more.textContent="+ "+(countries.length-limit)+" more countries";
+    el.appendChild(more);
+  }
+}
+
+function updateGlobeDetail(country){
+  var name=document.getElementById("globe-detail-country");
+  var count=document.getElementById("globe-detail-count");
+  if(!country){
+    name.textContent="No active listeners";
+    count.textContent="0";
+    return;
+  }
+  name.textContent=country.country;
+  count.textContent=country.sessions.toLocaleString();
+  document.querySelectorAll(".globe-rank-item").forEach(function(item){
+    item.classList.toggle("active",item.dataset.country===country.country_code);
+  });
+}
+
+function renderGlobeRankList(countries){
+  var list=document.getElementById("globe-rank-list");
+  list.textContent="";
+  countries.forEach(function(country,index){
+    var button=document.createElement("button");
+    button.type="button";
+    button.className="globe-rank-item";
+    button.dataset.country=country.country_code;
+    button.innerHTML='<span class="globe-rank-num">'+String(index+1).padStart(2,"0")+'</span><span>'+(countryFlags[country.country_code]||"🌐")+'</span><span class="globe-rank-name"></span><strong class="globe-rank-count"></strong>';
+    button.querySelector(".globe-rank-name").textContent=country.country;
+    button.querySelector(".globe-rank-count").textContent=country.sessions.toLocaleString();
+    button.addEventListener("click",function(){
+      updateGlobeDetail(country);
+      var canvas=document.getElementById("radio-globe-full");
+      if(canvas._selectCountry)canvas._selectCountry(country);
+    });
+    list.appendChild(button);
+  });
+  updateGlobeDetail(countries[0]||null);
+}
+
+function setGlobeSpinButton(spinning){
+  var button=document.getElementById("globe-spin-toggle");
+  button.textContent=spinning?"Auto-spin: on":"Resume auto-spin";
+  button.classList.toggle("paused",!spinning);
+}
+
+function toggleGlobeSpin(){
+  var canvas=document.getElementById("radio-globe-full");
+  if(canvas._toggleAutoSpin)canvas._toggleAutoSpin();
+}
+
+function openGlobe(){
+  var dialog=document.getElementById("globe-dialog");
+  var countries=window._radioCountries||[];
+  renderGlobeRankList(countries);
+  document.body.classList.add("globe-open");
+  dialog.showModal();
+  requestAnimationFrame(function(){
+    initGlobe(countries,document.getElementById("radio-globe-full"),true);
+  });
+}
+
+function closeGlobe(){
+  document.getElementById("globe-dialog").close();
+}
+
+function renderStationStats(data,stationKey){
+  var station;
+  if(stationKey==='total'){
+    station={total_sessions:0,total_listen_hours:0,peak_listeners:data.peak_listeners||0,active_listeners:0,top_countries:[],active_listener_countries:[],daily:[]};
+    var allStations=data.stations||{};
+    var dailyMap={};
+    var activeCountryMap={};
+    var totalCountryMap={};
+    Object.keys(allStations).forEach(function(k){
+      var s=allStations[k];
+      station.total_sessions+=s.total_sessions||0;
+      station.total_listen_hours+=s.total_listen_hours||0;
+      station.active_listeners+=s.active_listeners||0;
+      (s.daily||[]).forEach(function(d){
+        if(!dailyMap[d.date])dailyMap[d.date]={date:d.date,sessions:0,listen_hours:0};
+        dailyMap[d.date].sessions+=d.sessions;
+        dailyMap[d.date].listen_hours+=d.listen_hours;
+      });
+      (s.active_listener_countries||[]).forEach(function(c){
+        if(!activeCountryMap[c.country_code])activeCountryMap[c.country_code]={country:c.country,country_code:c.country_code,sessions:0};
+        activeCountryMap[c.country_code].sessions+=c.sessions;
+      });
+      (s.top_countries||[]).forEach(function(c){
+        if(!totalCountryMap[c.country_code])totalCountryMap[c.country_code]={country:c.country,country_code:c.country_code,sessions:0};
+        totalCountryMap[c.country_code].sessions+=c.sessions;
+      });
+    });
+    station.daily=Object.keys(dailyMap).sort().map(function(k){return dailyMap[k]});
+    station.active_listener_countries=Object.keys(activeCountryMap).map(function(k){return activeCountryMap[k]}).sort(function(a,b){return b.sessions-a.sessions});
+    station.top_countries=Object.keys(totalCountryMap).map(function(k){return totalCountryMap[k]}).sort(function(a,b){return b.sessions-a.sessions});
+  }else{
+    station=data.stations&&data.stations[stationKey];
+    if(!station) station={total_sessions:0,total_listen_hours:0,peak_listeners:0,active_listeners:0,top_countries:[],active_listener_countries:[],daily:[]};
+  }
+
+  document.getElementById("radio-now").textContent=station.active_listeners;
+  document.getElementById("radio-peak").textContent=(station.peak_listeners||0).toLocaleString();
+  document.getElementById("radio-sessions").textContent=station.total_sessions.toLocaleString();
+  document.getElementById("radio-hours").textContent=station.total_listen_hours.toFixed(1);
+
+  var daily=station.daily||[];
+  var chart=document.getElementById("radio-chart");
+  var labels=document.getElementById("radio-chart-labels");
+  chart.textContent="";
+  labels.textContent="";
+
+  var barColors={total:"var(--fg-hi)",edm:"var(--cyan)",lofi:"var(--amber)",synthwave:"#ff66cc",omarchy:"var(--green)","ncs":"#ff5d6c","ncs-house":"#00d1b2","ncs-dubstep":"#7b5cff","ncs-dnb":"#22c55e","ncs-trap":"#f59e0b","ncs-phonk":"#ec4899","ncs-pop":"#38bdf8","ncs-chill":"#a3e635"};
+
+  if(daily.length>0){
+    var maxHours=Math.max.apply(null,daily.map(function(d){return d.listen_hours}))||1;
+    daily.forEach(function(d){
+      var pct=Math.max((d.listen_hours/maxHours)*100,3);
+      var bar=document.createElement("div");
+      bar.className="radio-chart-bar";
+      bar.style.height=pct+"%";
+      bar.style.background=barColors[stationKey]||barColors.lofi;
+      bar.style.opacity="0.85";
+      var tip=document.createElement("div");
+      tip.className="tooltip";
+      tip.textContent=d.date+" · "+d.listen_hours.toFixed(1)+"h, "+d.sessions+" sessions";
+      bar.appendChild(tip);
+      chart.appendChild(bar);
+    });
+    var lStart=document.createElement("span");
+    lStart.textContent=formatDate(daily[0].date);
+    var lEnd=document.createElement("span");
+    lEnd.textContent=formatDate(daily[daily.length-1].date);
+    labels.appendChild(lStart);
+    labels.appendChild(lEnd);
+  }
+
+  var activeCountries=station.active_listener_countries||[];
+  var cEl=document.getElementById("radio-countries");
+  renderCountryList(cEl,activeCountries,8);
+
+  var totalCountries=station.top_countries||[];
+  var tEl=document.getElementById("radio-total-countries");
+  renderCountryList(tEl,totalCountries,10);
+
+  window._radioCountries=activeCountries;
+  var globeSignature=activeCountries.map(function(c){return c.country_code+":"+c.sessions}).join(",");
+  if(window._globeSignature!==globeSignature){
+    initGlobe(activeCountries);
+    window._globeSignature=globeSignature;
+    var dialog=document.getElementById("globe-dialog");
+    if(dialog.open){
+      renderGlobeRankList(activeCountries);
+      initGlobe(activeCountries,document.getElementById("radio-globe-full"),true);
+    }
+  }
+}
+
+function renderRadioStats(){
+  fetch("https://radio.cliamp.stream/statistics")
+    .then(function(r){return r.json()})
+    .then(function(data){
+      radioStatsData=data;
+      document.getElementById("radio-error").textContent="";
+      renderStationStats(data,currentStatTab);
+    })
+    .catch(function(){
+      var el=document.getElementById("radio-error");
+      el.textContent="";
+      var err=document.createElement("span");
+      err.className="radio-error";
+      err.textContent="Cannot load radio statistics.";
+      el.appendChild(err);
+    });
+}
+
+/* ── Country coords for globe ── */
+var countryCoords={
+  US:[37.09,-95.71],BR:[-14.24,-51.93],GB:[55.38,-3.44],DE:[51.17,10.45],
+  NO:[60.47,8.47],FR:[46.23,2.21],CZ:[49.82,15.47],MX:[23.63,-102.55],
+  HU:[47.16,19.50],SE:[60.13,18.64],CA:[56.13,-106.35],AU:[-25.27,133.78],
+  IN:[20.59,78.96],JP:[36.20,138.25],KR:[35.91,127.77],NL:[52.13,5.29],
+  IT:[41.87,12.57],ES:[40.46,-3.75],PL:[51.92,19.15],PT:[39.40,-8.22],
+  CH:[46.82,8.23],AT:[47.52,14.55],BE:[50.50,4.47],FI:[61.92,25.75],
+  DK:[56.26,9.50],IE:[53.14,-7.69],RO:[45.94,24.97],BG:[42.73,25.49],
+  HR:[45.10,15.20],SK:[48.67,19.70],SI:[46.15,14.99],EE:[58.60,25.01],
+  LV:[56.88,24.60],LT:[55.17,23.88],GR:[39.07,21.82],TR:[38.96,35.24],
+  UA:[48.38,31.17],RU:[61.52,105.32],ZA:[-30.56,22.94],IL:[31.05,34.85],
+  AE:[23.42,53.85],SA:[23.89,45.08],EG:[26.82,30.80],NG:[9.08,8.68],
+  KE:[-0.02,37.91],AR:[-38.42,-63.62],CL:[-35.68,-71.54],CO:[4.57,-74.30],
+  PE:[-9.19,-75.02],PH:[12.88,121.77],TH:[15.87,100.99],VN:[14.06,108.28],
+  MY:[4.21,101.98],SG:[1.35,103.82],ID:[-0.79,113.92],TW:[23.70,120.96],
+  HK:[22.40,114.11],NZ:[-40.90,174.89],PK:[30.38,69.35],BD:[23.68,90.36]
+};
+
+/* ── Canvas globe with land outlines ── */
+var _globeResizeTimer=null;
+var _landPolygons=null;
+
+function topoToPolygons(topo,objectName){
+  var obj=topo.objects[objectName];
+  var arcs=topo.arcs;
+  var tf=topo.transform;
+  var polys=[];
+  function decodeArc(arcIdx){
+    var reverse=arcIdx<0;
+    var idx=reverse?~arcIdx:arcIdx;
+    var arc=arcs[idx];
+    var coords=[];
+    var x=0,y=0;
+    for(var i=0;i<arc.length;i++){
+      x+=arc[i][0];y+=arc[i][1];
+      coords.push([tf.scale[0]*x+tf.translate[0],tf.scale[1]*y+tf.translate[1]]);
+    }
+    if(reverse)coords.reverse();
+    return coords;
+  }
+  function ringFromArcs(arcRefs){
+    var pts=[];
+    for(var i=0;i<arcRefs.length;i++){
+      var c=decodeArc(arcRefs[i]);
+      for(var j=(i>0?1:0);j<c.length;j++)pts.push(c[j]);
+    }
+    return pts;
+  }
+  function extract(geom){
+    if(geom.type==="GeometryCollection"){
+      geom.geometries.forEach(extract);
+    }else if(geom.type==="Polygon"){
+      geom.arcs.forEach(function(ring){polys.push(ringFromArcs(ring))});
+    }else if(geom.type==="MultiPolygon"){
+      geom.arcs.forEach(function(polygon){
+        polygon.forEach(function(ring){polys.push(ringFromArcs(ring))});
+      });
+    }
+  }
+  extract(obj);
+  return polys;
+}
+
+function loadLand(cb){
+  if(_landPolygons)return cb(_landPolygons);
+  fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/land-110m.json")
+    .then(function(r){return r.json()})
+    .then(function(topo){
+      _landPolygons=topoToPolygons(topo,"land");
+      cb(_landPolygons);
+    })
+    .catch(function(){cb([])});
+}
+
+function initGlobe(countries,canvas,interactive){
+  canvas=canvas||document.getElementById("radio-globe");
+  if(!canvas)return;
+  var ctx=canvas.getContext("2d");
+  if(!ctx)return;
+  if(canvas._globeAnim){cancelAnimationFrame(canvas._globeAnim);canvas._globeAnim=null;}
+  var previousState=canvas._globeState||null;
+
+  var size=interactive?Math.min(canvas.parentElement.clientWidth-40,canvas.parentElement.clientHeight-40):canvas.offsetWidth;
+  size=Math.min(size||300,680);
+  if(size<10)return;
+  if(interactive){canvas.style.width=size+"px";canvas.style.height=size+"px";}
+  var dpr=Math.min(window.devicePixelRatio||1,2);
+  if(size<200)dpr=1;
+  var buf=size*dpr;
+  canvas.width=buf;
+  canvas.height=buf;
+
+  var R=buf*0.42;
+  var cx=buf/2,cy=buf/2;
+  var tilt=previousState?previousState.tilt:0.15;
+
+  var maxSessions=Math.max.apply(null,countries.map(function(c){return c.sessions}))||1;
+  var markers=[];
+  countries.forEach(function(c){
+    var coords=countryCoords[c.country_code];
+    if(!coords)return;
+    var lat=coords[0]*Math.PI/180;
+    var lng=coords[1]*Math.PI/180;
+    var s=(interactive?5:3)+(interactive?8:6)*(c.sessions/maxSessions);
+    markers.push({lat:lat,lng:lng,size:s*dpr,country:c,screen:null});
+  });
+
+  var rotation=previousState?previousState.rotation:0;
+  var targetRotation=null;
+  var selectedCode=previousState?previousState.selectedCode:(interactive&&countries[0]?countries[0].country_code:"");
+  if(selectedCode&&!countries.some(function(c){return c.country_code===selectedCode}))selectedCode=countries[0]?countries[0].country_code:"";
+  var hoverPaused=false;
+  var manualPaused=interactive&&previousState?previousState.manualPaused:false;
+  var dragging=false;
+  var lastPointerX=0;
+  var lastPointerY=0;
+
+  function selectCountry(country,rotate){
+    selectedCode=country.country_code;
+    updateGlobeDetail(country);
+    if(rotate){
+      for(var i=0;i<markers.length;i++){
+        if(markers[i].country.country_code===country.country_code){
+          targetRotation=-markers[i].lng;
+          break;
+        }
+      }
+    }
+  }
+
+  if(interactive){
+    canvas._selectCountry=function(country){selectCountry(country,true)};
+    canvas._toggleAutoSpin=function(){
+      manualPaused=!manualPaused;
+      setGlobeSpinButton(!manualPaused);
+    };
+    setGlobeSpinButton(!manualPaused);
+    canvas.onpointerenter=function(){hoverPaused=true};
+    canvas.onpointerleave=function(){hoverPaused=false;if(!dragging)canvas.style.cursor="crosshair"};
+    canvas.onpointerdown=function(event){
+      dragging=true;
+      manualPaused=true;
+      targetRotation=null;
+      lastPointerX=event.clientX;
+      lastPointerY=event.clientY;
+      canvas.setPointerCapture(event.pointerId);
+      canvas.style.cursor="grabbing";
+      setGlobeSpinButton(false);
+      event.preventDefault();
+    };
+    canvas.onpointerup=canvas.onpointercancel=function(event){
+      dragging=false;
+      if(canvas.hasPointerCapture(event.pointerId))canvas.releasePointerCapture(event.pointerId);
+      canvas.style.cursor="crosshair";
+    };
+    canvas.onkeydown=function(event){
+      if(event.key!=="ArrowLeft"&&event.key!=="ArrowRight"&&event.key!=="ArrowUp"&&event.key!=="ArrowDown")return;
+      manualPaused=true;
+      targetRotation=null;
+      if(event.key==="ArrowLeft")rotation-=0.16;
+      if(event.key==="ArrowRight")rotation+=0.16;
+      if(event.key==="ArrowUp")tilt=Math.max(-1.1,tilt-0.12);
+      if(event.key==="ArrowDown")tilt=Math.min(1.1,tilt+0.12);
+      setGlobeSpinButton(false);
+      event.preventDefault();
+    };
+    canvas.onpointermove=function(event){
+      if(dragging){
+        rotation+=(event.clientX-lastPointerX)/size*Math.PI*2;
+        tilt=Math.max(-1.1,Math.min(1.1,tilt+(event.clientY-lastPointerY)/size*Math.PI));
+        lastPointerX=event.clientX;
+        lastPointerY=event.clientY;
+        return;
+      }
+      var rect=canvas.getBoundingClientRect();
+      var x=(event.clientX-rect.left)*(canvas.width/rect.width);
+      var y=(event.clientY-rect.top)*(canvas.height/rect.height);
+      var hit=null;
+      var nearest=Infinity;
+      markers.forEach(function(marker){
+        if(!marker.screen||marker.screen.z<0)return;
+        var dx=marker.screen.x-x;
+        var dy=marker.screen.y-y;
+        var distance=Math.sqrt(dx*dx+dy*dy);
+        if(distance<Math.max(marker.size*2.5,14*dpr)&&distance<nearest){hit=marker;nearest=distance}
+      });
+      canvas.style.cursor=hit?"pointer":"crosshair";
+      if(hit)selectCountry(hit.country,false);
+    };
+    var selectedCountry=countries.find(function(c){return c.country_code===selectedCode})||countries[0];
+    if(selectedCountry)selectCountry(selectedCountry,!previousState);
+  }
+
+  function project(latD,lngD){
+    var lat=latD*Math.PI/180;
+    var lng=lngD*Math.PI/180+rotation;
+    var x=Math.cos(lat)*Math.sin(lng);
+    var y=Math.sin(lat)*Math.cos(tilt)-Math.cos(lat)*Math.cos(lng)*Math.sin(tilt);
+    var z=Math.sin(lat)*Math.sin(tilt)+Math.cos(lat)*Math.cos(lng)*Math.cos(tilt);
+    return{x:cx+x*R,y:cy-y*R,z:z};
+  }
+  function projectRad(lat,lng){
+    var l=lng+rotation;
+    var x=Math.cos(lat)*Math.sin(l);
+    var y=Math.sin(lat)*Math.cos(tilt)-Math.cos(lat)*Math.cos(l)*Math.sin(tilt);
+    var z=Math.sin(lat)*Math.sin(tilt)+Math.cos(lat)*Math.cos(l)*Math.cos(tilt);
+    return{x:cx+x*R,y:cy-y*R,z:z};
+  }
+
+  loadLand(function(land){
+    function draw(){
+      ctx.clearRect(0,0,buf,buf);
+
+      /* Glow */
+      var glow=ctx.createRadialGradient(cx,cy,R*0.8,cx,cy,R*1.2);
+      glow.addColorStop(0,"rgba(55,245,160,0.06)");
+      glow.addColorStop(1,"rgba(0,0,0,0)");
+      ctx.fillStyle=glow;
+      ctx.fillRect(0,0,buf,buf);
+
+      /* Ocean */
+      ctx.beginPath();
+      ctx.arc(cx,cy,R,0,Math.PI*2);
+      ctx.fillStyle="rgba(6,8,6,0.95)";
+      ctx.fill();
+      ctx.strokeStyle="rgba(55,245,160,0.20)";
+      ctx.lineWidth=1*dpr;
+      ctx.stroke();
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx,cy,R,0,Math.PI*2);
+      ctx.clip();
+
+      /* Land */
+      for(var i=0;i<land.length;i++){
+        var ring=land[i];
+        var visible=false;
+        ctx.beginPath();
+        for(var j=0;j<ring.length;j++){
+          var p=project(ring[j][1],ring[j][0]);
+          if(p.z>0)visible=true;
+          if(j===0)ctx.moveTo(p.x,p.y);
+          else ctx.lineTo(p.x,p.y);
+        }
+        ctx.closePath();
+        if(visible){
+          ctx.fillStyle="rgba(55,245,160,0.09)";
+          ctx.fill();
+          ctx.strokeStyle="rgba(55,245,160,0.24)";
+          ctx.lineWidth=0.5*dpr;
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+
+      /* Markers */
+      var selectedMarker=null;
+      for(var j=0;j<markers.length;j++){
+        var m=markers[j];
+        var p=projectRad(m.lat,m.lng);
+        m.screen=p;
+        if(p.z<0)continue;
+        var alpha=0.3+0.7*p.z;
+
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,m.size*2,0,Math.PI*2);
+        ctx.fillStyle="rgba(255,180,84,"+alpha*0.16+")";
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,m.size,0,Math.PI*2);
+        ctx.fillStyle="rgba(255,180,84,"+alpha+")";
+        ctx.fill();
+        if(m.country.country_code===selectedCode)selectedMarker={marker:m,point:p};
+      }
+
+      if(interactive&&selectedMarker){
+        var label=selectedMarker.marker.country.country+"  "+selectedMarker.marker.country.sessions.toLocaleString();
+        ctx.font="700 "+11*dpr+"px monospace";
+        var labelWidth=ctx.measureText(label).width+16*dpr;
+        var labelX=Math.min(Math.max(selectedMarker.point.x+14*dpr,4*dpr),buf-labelWidth-4*dpr);
+        var labelY=Math.max(selectedMarker.point.y-28*dpr,4*dpr);
+        ctx.fillStyle="rgba(5,8,6,0.94)";
+        ctx.fillRect(labelX,labelY,labelWidth,24*dpr);
+        ctx.strokeStyle="#42ff88";
+        ctx.lineWidth=1*dpr;
+        ctx.strokeRect(labelX,labelY,labelWidth,24*dpr);
+        ctx.fillStyle="#f4fff5";
+        ctx.textBaseline="middle";
+        ctx.fillText(label,labelX+8*dpr,labelY+12*dpr);
+      }
+
+      if(targetRotation!==null){
+        var delta=targetRotation-rotation;
+        while(delta>Math.PI)delta-=Math.PI*2;
+        while(delta<-Math.PI)delta+=Math.PI*2;
+        rotation+=delta*0.08;
+        if(Math.abs(delta)<0.002)targetRotation=null;
+      }else if(!hoverPaused&&!manualPaused&&!dragging){
+        rotation+=0.003;
+      }
+      canvas._globeState={rotation:rotation,tilt:tilt,manualPaused:manualPaused,selectedCode:selectedCode};
+      canvas._globeAnim=requestAnimationFrame(draw);
+    }
+    draw();
+    canvas.classList.add("loaded");
+  });
+}
+
+window.addEventListener("resize",function(){
+  clearTimeout(_globeResizeTimer);
+  _globeResizeTimer=setTimeout(function(){
+    if(!window._radioCountries)return;
+    initGlobe(window._radioCountries);
+    var dialog=document.getElementById("globe-dialog");
+    if(dialog.open)initGlobe(window._radioCountries,document.getElementById("radio-globe-full"),true);
+  },300);
+});
+
+document.getElementById("globe-dialog").addEventListener("close",function(){
+  document.body.classList.remove("globe-open");
+  var canvas=document.getElementById("radio-globe-full");
+  if(canvas._globeAnim){cancelAnimationFrame(canvas._globeAnim);canvas._globeAnim=null;}
+});
+
 /* ── Playlist: keyboard activation (click plays via inline onclick) ── */
 document.querySelectorAll('.t-pl-item[data-station]').forEach(function(it){
   it.addEventListener('keydown',function(e){
@@ -1176,6 +1946,8 @@ document.querySelectorAll('.t-pl-item[data-station]').forEach(function(it){
   document.querySelectorAll('.reveal').forEach(function(n){io.observe(n)});
 })();
 
+renderRadioStats();
+setInterval(renderRadioStats,10000);
 </script>
 </body>
 </html>
