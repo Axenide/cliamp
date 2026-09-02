@@ -44,6 +44,14 @@ type State struct {
 	StationCount int    `json:"stationcount"`
 }
 
+// Tag is one entry of the directory's community-maintained tag index. Tags
+// include music genres as well as formats, eras, languages, and other useful
+// station descriptors.
+type Tag struct {
+	Name         string `json:"name"`
+	StationCount int    `json:"stationcount"`
+}
+
 var catalogClient = &http.Client{Timeout: 10 * time.Second}
 
 // StationQuery narrows a station listing. The zero value lists everything.
@@ -55,6 +63,7 @@ var catalogClient = &http.Client{Timeout: 10 * time.Second}
 // code, by contrast, is present on ~99% of entries.
 type StationQuery struct {
 	Name        string // free-text station name
+	Tag         string // exact directory tag
 	CountryCode string // ISO 3166-1 alpha-2
 	State       string // region within CountryCode
 	Order       string // one of SortVotes, SortClicks, … ; defaults to SortVotes
@@ -95,6 +104,10 @@ func (q StationQuery) values() url.Values {
 	}
 	if name := strings.TrimSpace(q.Name); name != "" {
 		v.Set("name", name)
+	}
+	if tag := strings.TrimSpace(q.Tag); tag != "" {
+		v.Set("tag", tag)
+		v.Set("tagExact", "true")
 	}
 	if code := normalizeCountryCode(q.CountryCode); code != "" {
 		v.Set("countrycode", code)
@@ -195,6 +208,46 @@ func FetchStates(country string) ([]State, error) {
 		return strings.Compare(a.Name, b.Name)
 	})
 	return states, nil
+}
+
+// FetchTags returns the complete tag index, most stations first. Empty tags,
+// tags without stations, and case-only duplicates are removed. Radio Browser
+// matches tags case-insensitively, so combining duplicate counts loses no
+// distinct filter.
+func FetchTags() ([]Tag, error) {
+	v := url.Values{}
+	v.Set("order", "stationcount")
+	v.Set("reverse", "true")
+	v.Set("hidebroken", "true")
+	v.Set("limit", "100000")
+
+	var raw []Tag
+	if err := fetchJSON(radioBrowserBase+"/tags?"+v.Encode(), &raw); err != nil {
+		return nil, fmt.Errorf("fetch tags: %w", err)
+	}
+
+	tags := make([]Tag, 0, len(raw))
+	byName := make(map[string]int, len(raw))
+	for _, tag := range raw {
+		name := strings.TrimSpace(tag.Name)
+		if name == "" || tag.StationCount <= 0 {
+			continue
+		}
+		key := strings.ToLower(name)
+		if i, seen := byName[key]; seen {
+			tags[i].StationCount += tag.StationCount
+			continue
+		}
+		byName[key] = len(tags)
+		tags = append(tags, Tag{Name: name, StationCount: tag.StationCount})
+	}
+	slices.SortFunc(tags, func(a, b Tag) int {
+		if a.StationCount != b.StationCount {
+			return b.StationCount - a.StationCount
+		}
+		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+	})
+	return tags, nil
 }
 
 // fetchJSON reads a JSON document from the Radio Browser API.
