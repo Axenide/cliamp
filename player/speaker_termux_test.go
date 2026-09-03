@@ -104,11 +104,13 @@ func TestDiscoverPulseSocket_TMPDIRFallback(t *testing.T) {
 }
 
 func TestDiscoverPulseSocket_TermuxPREFIXPath(t *testing.T) {
-	// $PREFIX/tmp is the canonical Termux runtime location when XDG
-	// and TMPDIR are absent; the PREFIX contains "com.termux" so the
-	// Termux-specific fallback engages.
-	const termuxRoot = "/tmp/cliamp-com.termux-test"
-	prefixPath := termuxRoot + "/files/usr"
+	// $PREFIX/tmp is the canonical Termux runtime location when XDG and
+	// TMPDIR are absent; the PREFIX contains "com.termux" so the
+	// Termux-specific fallback engages. We construct the prefix path under
+	// t.TempDir() with a "com.termux" segment so pulseSocketBases'
+	// strings.Contains check fires, without depending on a hardcoded /tmp
+	// path that could collide with parallel runs or system state.
+	prefixPath := filepath.Join(t.TempDir(), "com.termux-test", "files", "usr")
 	tmpDir := filepath.Join(prefixPath, "tmp")
 	sockPath := filepath.Join(tmpDir, "pulse-AbC", "native")
 	if err := os.MkdirAll(filepath.Dir(sockPath), 0o700); err != nil {
@@ -388,5 +390,109 @@ func TestTermuxSpeakerInit_DoesNotReturnNoValidServer(t *testing.T) {
 	}
 	if msg := err.Error(); strings.Contains(msg, "no valid server") {
 		t.Fatalf("Init returned %q: our server-string selection must have failed", msg)
+	}
+}
+
+// --- Lifecycle invariants ---
+
+// runClearWithTimeout invokes Clear in a goroutine and waits up to the
+// timeout for it to return. Clear can take ~1s on a fake server because
+// stream.Close / client.Close do proto.Request calls that block until
+// the 1s Request timeout fires. The timeout gives the test a deterministic
+// bound so a regression that turns Clear into an infinite hang fails fast.
+func runClearWithTimeout(t *testing.T, sp *termuxSpeaker) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		sp.Clear()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Clear hung beyond reasonable timeout")
+	}
+}
+
+// TestClear_DoesNotTouchStream verifies that Clear mirrors
+// gopxl/beep/v2/speaker.Clear: it clears the mixer and resets state
+// without closing the PulseAudio stream or client. Closing them under
+// a concurrent runStream would race with stream.Start's <-started
+// receive and could panic on a closed request channel.
+func TestClear_DoesNotTouchStream(t *testing.T) {
+	dir := makeSocket(t, "pulse-AbCd", "native")
+	clearEnv(t, "XDG_RUNTIME_DIR", "TMPDIR", "PREFIX", "PULSE_SERVER")
+	withEnv(t, map[string]string{"TMPDIR": dir})
+
+	sp := &termuxSpeaker{}
+	if err := sp.Init(44100, 4096); err != nil {
+		t.Skipf("Init failed (expected on fake socket): %v", err)
+	}
+
+	runClearWithTimeout(t, sp)
+
+	sp.mu.Lock()
+	stream := sp.stream
+	sp.mu.Unlock()
+	if stream == nil {
+		t.Errorf("Clear must not nil out t.stream (would race with runStream)")
+	}
+}
+
+// TestClear_ResetsStartedAndErrored verifies the post-Clear state that
+// enables subsequent Play to re-establish a runStream goroutine.
+func TestClear_ResetsStartedAndErrored(t *testing.T) {
+	dir := makeSocket(t, "pulse-AbCd", "native")
+	clearEnv(t, "XDG_RUNTIME_DIR", "TMPDIR", "PREFIX", "PULSE_SERVER")
+	withEnv(t, map[string]string{"TMPDIR": dir})
+
+	sp := &termuxSpeaker{}
+	if err := sp.Init(44100, 4096); err != nil {
+		t.Skipf("Init failed (expected on fake socket): %v", err)
+	}
+
+	sp.started.Store(true)
+	sp.errored.Store(true)
+
+	runClearWithTimeout(t, sp)
+
+	if sp.started.Load() {
+		t.Errorf("started must be false after Clear")
+	}
+	if sp.errored.Load() {
+		t.Errorf("errored must be false after Clear")
+	}
+}
+
+// TestPlay_NoGoroutineWhenStreamNil verifies that Play is safe to call
+// before Init (or after an Init failure): the snapshot is nil, so no
+// goroutine is spawned and no panic occurs.
+func TestPlay_NoGoroutineWhenStreamNil(t *testing.T) {
+	sp := &termuxSpeaker{} // no Init; client and stream are nil
+
+	sp.Play()
+
+	if sp.started.Load() {
+		t.Errorf("started must remain false when stream is nil")
+	}
+}
+
+// --- Retry deadline ---
+
+// TestDiscoverPulseSocketWithProbe_RespectsDeadline verifies the retry
+// budget: even with a probe that always fails, total elapsed time stays
+// within discoveryTotalDeadline plus a small slack. Each sleep is
+// capped to the remaining deadline so we never overshoot.
+func TestDiscoverPulseSocketWithProbe_RespectsDeadline(t *testing.T) {
+	useFakeClock(t)
+
+	const slack = time.Millisecond
+	probe := func() string { return "" }
+	start := nowFunc()
+	_ = discoverPulseSocketWithProbe(probe)
+	elapsed := nowFunc().Sub(start)
+
+	if elapsed > discoveryTotalDeadline+slack {
+		t.Errorf("elapsed = %v, want <= %v (deadline + %v slack)", elapsed, discoveryTotalDeadline, slack)
 	}
 }

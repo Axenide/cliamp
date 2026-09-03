@@ -3,6 +3,7 @@
 package player
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -78,41 +79,45 @@ func (t *termuxSpeaker) newClientOptions() []pulse.ClientOption {
 func (t *termuxSpeaker) Play(s ...beep.Streamer) {
 	t.mu.Lock()
 	t.mixer.Add(s...)
+	stream := t.stream // snapshot; defensive against any future change that
+	// might invalidate t.stream concurrently with the runStream goroutine.
 	t.mu.Unlock()
 
-	if t.started.CompareAndSwap(false, true) {
-		go t.runStream()
+	if stream != nil && t.started.CompareAndSwap(false, true) {
+		go t.runStream(stream)
 	}
 }
 
 // runStream calls Start() which blocks until the daemon has begun requesting
-// samples. There is no server-side close supervision: if PulseAudio dies
-// mid-session the user has to restart cliamp.
-func (t *termuxSpeaker) runStream() {
-	t.stream.Start()
-	if err := t.stream.Error(); err != nil {
+// samples. Operates exclusively on the snapshot passed by Play; never
+// touches t.stream directly. If PulseAudio dies mid-session the user has
+// to restart cliamp.
+func (t *termuxSpeaker) runStream(stream *pulse.PlaybackStream) {
+	stream.Start()
+	if err := stream.Error(); err != nil {
 		t.errored.Store(true)
 	}
 }
 
 func (t *termuxSpeaker) Clear() {
+	// Mirror gopxl/beep/v2/speaker.Clear: clear the mixer and reset state.
+	// We intentionally do NOT close stream/client because:
+	//   1. jfreymuth/pulse's stream.Close()/client.Close() can race with
+	//      a concurrent runStream blocked on stream.Start(): closing
+	//      p.request under it leads to a "send on closed channel" panic
+	//      inside Start, and the <-started channel is never written to on
+	//      connection drop.
+	//   2. The Linux speaker (gopxl/beep/v2/speaker) does not close
+	//      anything in Clear() either.
+	// Audio thread + PulseAudio stream stay alive across Clear so
+	// subsequent Play can re-add streamers to the mixer. Resources are
+	// released at process exit (Player.Close → SpeakerClear → process
+	// exit → OS reaps the socket).
 	t.mu.Lock()
 	t.mixer.Clear()
-	stream := t.stream
-	client := t.client
-	t.stream = nil
-	t.client = nil
+	t.started.Store(false)
+	t.errored.Store(false)
 	t.mu.Unlock()
-
-	// SpeakerClear is invoked exactly once per Player lifetime
-	// (from Player.Close). Release the PulseAudio resources now so the
-	// daemon doesn't keep our sink input registered.
-	if stream != nil {
-		stream.Close()
-	}
-	if client != nil {
-		client.Close()
-	}
 }
 
 func (t *termuxSpeaker) Lock()   { t.mu.Lock() }
@@ -122,12 +127,18 @@ func (t *termuxSpeaker) Suspend() error {
 	if t.errored.Load() || !t.started.Load() {
 		return nil
 	}
+	if t.stream == nil {
+		return nil
+	}
 	t.stream.Pause()
 	return nil
 }
 
 func (t *termuxSpeaker) Resume() error {
 	if t.errored.Load() || !t.started.Load() {
+		return nil
+	}
+	if t.stream == nil {
 		return nil
 	}
 	t.stream.Resume()
@@ -245,7 +256,16 @@ func discoverPulseSocketWithProbe(probe func() string) string {
 		if !nowFunc().Before(deadline) {
 			return ""
 		}
-		sleepFunc(backoff)
+		// Cap each sleep to the remaining deadline so we never overshoot.
+		remaining := deadline.Sub(nowFunc())
+		if remaining <= 0 {
+			return ""
+		}
+		sleepFor := backoff
+		if sleepFor > remaining {
+			sleepFor = remaining
+		}
+		sleepFunc(sleepFor)
 		backoff *= 2
 		if backoff > discoveryMaxBackoff {
 			backoff = discoveryMaxBackoff
@@ -345,6 +365,12 @@ func isUnixSocket(path string) bool {
 // trySpawnPulseaudioImpl; tests can swap it for a deterministic stub.
 var spawnPulseaudioFn = trySpawnPulseaudioImpl
 
+// pulseaudioSpawnTimeout bounds how long trySpawnPulseaudioImpl will wait
+// for `pulseaudio --start` to return. Without this, a stalled daemon
+// could block Player.New indefinitely. 5s is generous (a healthy
+// daemon completes the spawn in well under a second).
+const pulseaudioSpawnTimeout = 5 * time.Second
+
 // trySpawnPulseaudio invokes `pulseaudio --start`, the same way libpulse's
 // autospawn does (see pulseaudio/src/pulse/context.c context_autospawn).
 // The parent returns 0 once the daemon has forked and bound its socket.
@@ -360,7 +386,9 @@ func trySpawnPulseaudioImpl() bool {
 		debugPulseLog("pulseaudio not in PATH: %v", err)
 		return false
 	}
-	cmd := exec.Command(bin, "--start")
+	ctx, cancel := context.WithTimeout(context.Background(), pulseaudioSpawnTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, bin, "--start")
 	if err := cmd.Run(); err != nil {
 		debugPulseLog("pulseaudio --start failed: %v", err)
 		return false
