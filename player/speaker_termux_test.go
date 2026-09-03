@@ -439,9 +439,12 @@ func TestClear_DoesNotTouchStream(t *testing.T) {
 	}
 }
 
-// TestClear_ResetsStartedAndErrored verifies the post-Clear state that
-// enables subsequent Play to re-establish a runStream goroutine.
-func TestClear_ResetsStartedAndErrored(t *testing.T) {
+// TestClear_DoesNotResetStarted verifies that Clear preserves the started
+// flag so a subsequent Play cannot launch a second runStream on the same
+// PulseAudio stream. The previous design reset started in Clear, which let
+// Play → Clear → Play deadlock on jfreymuth/pulse's unbuffered started
+// notification (only one is emitted per stream).
+func TestClear_DoesNotResetStarted(t *testing.T) {
 	dir := makeSocket(t, "pulse-AbCd", "native")
 	clearEnv(t, "XDG_RUNTIME_DIR", "TMPDIR", "PREFIX", "PULSE_SERVER")
 	withEnv(t, map[string]string{"TMPDIR": dir})
@@ -456,11 +459,41 @@ func TestClear_ResetsStartedAndErrored(t *testing.T) {
 
 	runClearWithTimeout(t, sp)
 
-	if sp.started.Load() {
-		t.Errorf("started must be false after Clear")
+	if !sp.started.Load() {
+		t.Errorf("Clear must not reset started (lets Play spawn a competing runStream)")
 	}
-	if sp.errored.Load() {
-		t.Errorf("errored must be false after Clear")
+	if !sp.errored.Load() {
+		t.Errorf("Clear must not reset errored (Suspend/Resume skip when errored)")
+	}
+}
+
+// TestPlay_ClearThenPlay_PreservesStarted is the regression guard for the
+// Play → Clear → Play deadlock: a prior Play schedules a runStream goroutine
+// that is still pending PlaybackStream.Start (blocking on the unbuffered
+// started channel). Clear must leave started set so the next Play's
+// CompareAndSwap fails and no second runStream is spawned — otherwise both
+// goroutines would race into Start and one would wait forever for a
+// "started" notification that jfreymuth/pulse only emits once per stream.
+func TestPlay_ClearThenPlay_PreservesStarted(t *testing.T) {
+	dir := makeSocket(t, "pulse-AbCd", "native")
+	clearEnv(t, "XDG_RUNTIME_DIR", "TMPDIR", "PREFIX", "PULSE_SERVER")
+	withEnv(t, map[string]string{"TMPDIR": dir})
+
+	sp := &termuxSpeaker{}
+	if err := sp.Init(44100, 4096); err != nil {
+		t.Skipf("Init failed (expected on fake socket): %v", err)
+	}
+
+	sp.started.Store(true)
+
+	sp.Clear()
+	if !sp.started.Load() {
+		t.Fatal("Clear must not reset started (precondition for Play to skip a new runStream)")
+	}
+
+	sp.Play()
+	if !sp.started.Load() {
+		t.Fatal("Play must not have spawned a competing runStream")
 	}
 }
 

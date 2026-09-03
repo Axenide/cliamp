@@ -35,16 +35,30 @@ func debugPulseLog(format string, args ...any) {
 // using jfreymuth/pulse (pure-Go, no CGO, no ALSA). The PulseAudio daemon
 // is expected to be running on Termux with a usable sink (e.g. OpenSL_ES).
 type termuxSpeaker struct {
-	mu       sync.Mutex
-	mixer    beep.Mixer
-	client   *pulse.Client
-	stream   *pulse.PlaybackStream
-	started  atomic.Bool
-	errored  atomic.Bool
-	frameBuf [][2]float64 // reused across callbacks; guarded by mu
+	mu         sync.Mutex
+	mixer      beep.Mixer
+	client     *pulse.Client
+	stream     *pulse.PlaybackStream
+	sampleRate beep.SampleRate // remembered so Play can lazily recreate after errors
+	bufferSize int
+	started    atomic.Bool
+	errored    atomic.Bool
+	frameBuf   [][2]float64 // reused across callbacks; guarded by mu
 }
 
 func (t *termuxSpeaker) Init(sampleRate beep.SampleRate, bufferSize int) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.initLocked(sampleRate, bufferSize)
+}
+
+// initLocked is Init's body. Caller must hold t.mu. Idempotent: a previous
+// client/stream is closed first so the speaker can be reinitialized without
+// leaking the PulseAudio socket. After it returns successfully, t.stream is
+// non-nil and ready to be started by the next Play.
+func (t *termuxSpeaker) initLocked(sampleRate beep.SampleRate, bufferSize int) error {
+	t.closeLocked()
+
 	client, err := pulse.NewClient(t.newClientOptions()...)
 	if err != nil {
 		debugPulseLog("pulse.NewClient failed: %v", err)
@@ -64,8 +78,26 @@ func (t *termuxSpeaker) Init(sampleRate beep.SampleRate, bufferSize int) error {
 	}
 	t.client = client
 	t.stream = stream
+	t.sampleRate = sampleRate
+	t.bufferSize = bufferSize
 	t.frameBuf = make([][2]float64, bufferSize)
+	t.started.Store(false)
+	t.errored.Store(false)
 	return nil
+}
+
+// closeLocked releases the current PulseAudio client and stream. Caller must
+// hold t.mu. After it returns, t.stream and t.client are nil and the next
+// Play will lazily recreate via initLocked.
+func (t *termuxSpeaker) closeLocked() {
+	if t.stream != nil {
+		t.stream.Close()
+		t.stream = nil
+	}
+	if t.client != nil {
+		t.client.Close()
+		t.client = nil
+	}
 }
 
 func (t *termuxSpeaker) newClientOptions() []pulse.ClientOption {
@@ -78,9 +110,31 @@ func (t *termuxSpeaker) newClientOptions() []pulse.ClientOption {
 
 func (t *termuxSpeaker) Play(s ...beep.Streamer) {
 	t.mu.Lock()
+
+	// Recovery path: if the previous stream was torn down (Init failure or
+	// post-Start error) the next streamer is added straight away, so we
+	// re-establish the PulseAudio connection lazily. If the daemon went
+	// away after Start succeeded, Closed() reports serverLost; rebuild
+	// before the user notices silence.
+	if t.stream == nil && t.sampleRate != 0 {
+		if err := t.initLocked(t.sampleRate, t.bufferSize); err != nil {
+			debugPulseLog("Play: recovery init failed: %v", err)
+			t.mu.Unlock()
+			return
+		}
+	} else if t.stream != nil && t.stream.Closed() {
+		t.closeLocked()
+		t.started.Store(false)
+		t.errored.Store(false)
+		if err := t.initLocked(t.sampleRate, t.bufferSize); err != nil {
+			debugPulseLog("Play: recovery init failed: %v", err)
+			t.mu.Unlock()
+			return
+		}
+	}
+
 	t.mixer.Add(s...)
-	stream := t.stream // snapshot; defensive against any future change that
-	// might invalidate t.stream concurrently with the runStream goroutine.
+	stream := t.stream
 	t.mu.Unlock()
 
 	if stream != nil && t.started.CompareAndSwap(false, true) {
@@ -88,35 +142,38 @@ func (t *termuxSpeaker) Play(s ...beep.Streamer) {
 	}
 }
 
-// runStream calls Start() which blocks until the daemon has begun requesting
-// samples. Operates exclusively on the snapshot passed by Play; never
-// touches t.stream directly. If PulseAudio dies mid-session the user has
-// to restart cliamp.
+// runStream calls Start(), which blocks until the PulseAudio daemon has
+// begun requesting samples (the unbuffered "<-started" handoff inside
+// PlaybackStream.Start). Operates exclusively on the snapshot passed by
+// Play. If Start returns successfully and Error() reports a failure (for
+// example the daemon disconnected during startup), the stream and client
+// are released so the next Play can recreate them — otherwise started
+// would stay set forever and the speaker would silently drop new audio.
 func (t *termuxSpeaker) runStream(stream *pulse.PlaybackStream) {
 	stream.Start()
 	if err := stream.Error(); err != nil {
+		debugPulseLog("stream error after Start: %v", err)
 		t.errored.Store(true)
+		t.mu.Lock()
+		if t.stream == stream {
+			t.closeLocked()
+			t.started.Store(false)
+		}
+		t.mu.Unlock()
 	}
 }
 
+// Clear mirrors gopxl/beep/v2/speaker.Clear: it empties the mixer and leaves
+// the PulseAudio stream running. The stream does NOT need to be restarted
+// after a Clear — the next Play just adds fresh streamers to the mixer and
+// the audio callback resumes pulling from it. Critically, Clear must not
+// reset started while a runStream goroutine may still be blocked inside
+// PlaybackStream.Start; doing so would let a subsequent Play launch a
+// second runStream on the same stream and deadlock on the unbuffered
+// started notification (jfreymuth/pulse only emits one per stream).
 func (t *termuxSpeaker) Clear() {
-	// Mirror gopxl/beep/v2/speaker.Clear: clear the mixer and reset state.
-	// We intentionally do NOT close stream/client because:
-	//   1. jfreymuth/pulse's stream.Close()/client.Close() can race with
-	//      a concurrent runStream blocked on stream.Start(): closing
-	//      p.request under it leads to a "send on closed channel" panic
-	//      inside Start, and the <-started channel is never written to on
-	//      connection drop.
-	//   2. The Linux speaker (gopxl/beep/v2/speaker) does not close
-	//      anything in Clear() either.
-	// Audio thread + PulseAudio stream stay alive across Clear so
-	// subsequent Play can re-add streamers to the mixer. Resources are
-	// released at process exit (Player.Close → SpeakerClear → process
-	// exit → OS reaps the socket).
 	t.mu.Lock()
 	t.mixer.Clear()
-	t.started.Store(false)
-	t.errored.Store(false)
 	t.mu.Unlock()
 }
 
