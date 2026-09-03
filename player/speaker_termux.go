@@ -10,11 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/gopxl/beep/v2"
-	"github.com/jfreymuth/pulse"
 )
 
 // CLIAMP_DEBUG_PULSE=1 prints diagnostic information about the audio
@@ -31,175 +29,396 @@ func debugPulseLog(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "[cliamp:pulse] "+format+"\n", args...)
 }
 
-// termuxSpeaker drives a beep.Mixer through a PulseAudio playback stream
-// using jfreymuth/pulse (pure-Go, no CGO, no ALSA). The PulseAudio daemon
-// is expected to be running on Termux with a usable sink (e.g. OpenSL_ES).
+type termuxPlayback interface {
+	StartContext(context.Context) error
+	Done() <-chan struct{}
+	Pause()
+	Resume()
+	Close()
+}
+
+type termuxSession struct {
+	stream   termuxPlayback
+	closeFn  func()
+	closeOne sync.Once
+}
+
+func (s *termuxSession) Close() {
+	if s == nil {
+		return
+	}
+	s.closeOne.Do(func() {
+		if s.closeFn != nil {
+			s.closeFn()
+			return
+		}
+		if s.stream != nil {
+			s.stream.Close()
+		}
+	})
+}
+
+type termuxSessionFactory func(beep.SampleRate, int, func([]float32) (int, error)) (*termuxSession, error)
+
+// termuxSpeaker drives a beep.Mixer through one supervised PulseAudio
+// playback session. The mixer lock is intentionally separate from the
+// lifecycle lock: PulseAudio requests can block, while the mixer callback
+// must remain compatible with SpeakerLock/ SpeakerUnlock.
 type termuxSpeaker struct {
-	mu         sync.Mutex
-	mixer      beep.Mixer
-	client     *pulse.Client
-	stream     *pulse.PlaybackStream
-	sampleRate beep.SampleRate // remembered so Play can lazily recreate after errors
-	bufferSize int
-	started    atomic.Bool
-	errored    atomic.Bool
-	frameBuf   [][2]float64 // reused across callbacks; guarded by mu
+	mu       sync.Mutex
+	mixer    beep.Mixer
+	frameBuf [][2]float64 // reused across callbacks; guarded by mu
+
+	lifecycleMu    sync.Mutex
+	session        *termuxSession
+	sampleRate     beep.SampleRate
+	bufferSize     int
+	wantPlayback   bool
+	suspended      bool
+	closed         bool
+	startupCancel  context.CancelFunc
+	wake           chan struct{}
+	stop           chan struct{}
+	supervisorDone chan struct{}
+	factory        termuxSessionFactory
 }
 
 func (t *termuxSpeaker) Init(sampleRate beep.SampleRate, bufferSize int) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.initLocked(sampleRate, bufferSize)
-}
-
-// initLocked is Init's body. Caller must hold t.mu. Idempotent: a previous
-// client/stream is closed first so the speaker can be reinitialized without
-// leaking the PulseAudio socket. After it returns successfully, t.stream is
-// non-nil and ready to be started by the next Play.
-func (t *termuxSpeaker) initLocked(sampleRate beep.SampleRate, bufferSize int) error {
-	t.closeLocked()
-
-	client, err := pulse.NewClient(t.newClientOptions()...)
-	if err != nil {
-		debugPulseLog("pulse.NewClient failed: %v", err)
-		return err
+	t.lifecycleMu.Lock()
+	defer t.lifecycleMu.Unlock()
+	if t.supervisorDone != nil {
+		return fmt.Errorf("speaker already initialized")
 	}
-	debugPulseLog("pulse.NewClient succeeded")
-	stream, err := client.NewPlayback(
-		pulse.Float32Reader(t.fillSamples),
-		pulse.PlaybackStereo,
-		pulse.PlaybackSampleRate(int(sampleRate)),
-		pulse.PlaybackLatency(float64(bufferSize)/float64(sampleRate)),
-		pulse.PlaybackMediaName("cliamp"),
-	)
-	if err != nil {
-		client.Close()
-		return err
-	}
-	t.client = client
-	t.stream = stream
+
 	t.sampleRate = sampleRate
 	t.bufferSize = bufferSize
-	t.frameBuf = make([][2]float64, bufferSize)
-	t.started.Store(false)
-	t.errored.Store(false)
+	factory := t.factory
+	if factory == nil {
+		factory = newTermuxSession
+	}
+	session, err := factory(sampleRate, bufferSize, t.fillSamples)
+	if err != nil {
+		debugPulseLog("PulseAudio session initialization failed: %v", err)
+		return err
+	}
+	if session == nil || session.stream == nil {
+		if session != nil {
+			session.Close()
+		}
+		return fmt.Errorf("PulseAudio session initialization returned no stream")
+	}
+
+	t.session = session
+	t.wantPlayback = false
+	t.suspended = false
+	t.closed = false
+	t.wake = make(chan struct{}, 1)
+	t.stop = make(chan struct{})
+	t.supervisorDone = make(chan struct{})
+	go t.runLifecycle(t.supervisorDone)
 	return nil
-}
-
-// closeLocked releases the current PulseAudio client and stream. Caller must
-// hold t.mu. After it returns, t.stream and t.client are nil and the next
-// Play will lazily recreate via initLocked.
-func (t *termuxSpeaker) closeLocked() {
-	if t.stream != nil {
-		t.stream.Close()
-		t.stream = nil
-	}
-	if t.client != nil {
-		t.client.Close()
-		t.client = nil
-	}
-}
-
-func (t *termuxSpeaker) newClientOptions() []pulse.ClientOption {
-	opts := []pulse.ClientOption{pulse.ClientApplicationName("cliamp")}
-	if server := pulseServerOption(); server != "" {
-		opts = append(opts, pulse.ClientServerString(server))
-	}
-	return opts
 }
 
 func (t *termuxSpeaker) Play(s ...beep.Streamer) {
 	t.mu.Lock()
-
-	// Recovery path: if the previous stream was torn down (Init failure or
-	// post-Start error) the next streamer is added straight away, so we
-	// re-establish the PulseAudio connection lazily. If the daemon went
-	// away after Start succeeded, Closed() reports serverLost; rebuild
-	// before the user notices silence.
-	if t.stream == nil && t.sampleRate != 0 {
-		if err := t.initLocked(t.sampleRate, t.bufferSize); err != nil {
-			debugPulseLog("Play: recovery init failed: %v", err)
-			t.mu.Unlock()
-			return
-		}
-	} else if t.stream != nil && t.stream.Closed() {
-		t.closeLocked()
-		t.started.Store(false)
-		t.errored.Store(false)
-		if err := t.initLocked(t.sampleRate, t.bufferSize); err != nil {
-			debugPulseLog("Play: recovery init failed: %v", err)
-			t.mu.Unlock()
-			return
-		}
-	}
-
 	t.mixer.Add(s...)
-	stream := t.stream
 	t.mu.Unlock()
 
-	if stream != nil && t.started.CompareAndSwap(false, true) {
-		go t.runStream(stream)
+	t.lifecycleMu.Lock()
+	if !t.closed {
+		t.wantPlayback = true
+		t.signalWakeLocked()
 	}
+	t.lifecycleMu.Unlock()
 }
 
-// runStream calls Start(), which blocks until the PulseAudio daemon has
-// begun requesting samples (the unbuffered "<-started" handoff inside
-// PlaybackStream.Start). Operates exclusively on the snapshot passed by
-// Play. If Start returns successfully and Error() reports a failure (for
-// example the daemon disconnected during startup), the stream and client
-// are released so the next Play can recreate them — otherwise started
-// would stay set forever and the speaker would silently drop new audio.
-func (t *termuxSpeaker) runStream(stream *pulse.PlaybackStream) {
-	stream.Start()
-	if err := stream.Error(); err != nil {
-		debugPulseLog("stream error after Start: %v", err)
-		t.errored.Store(true)
-		t.mu.Lock()
-		if t.stream == stream {
-			t.closeLocked()
-			t.started.Store(false)
-		}
-		t.mu.Unlock()
-	}
-}
-
-// Clear mirrors gopxl/beep/v2/speaker.Clear: it empties the mixer and leaves
-// the PulseAudio stream running. The stream does NOT need to be restarted
-// after a Clear — the next Play just adds fresh streamers to the mixer and
-// the audio callback resumes pulling from it. Critically, Clear must not
-// reset started while a runStream goroutine may still be blocked inside
-// PlaybackStream.Start; doing so would let a subsequent Play launch a
-// second runStream on the same stream and deadlock on the unbuffered
-// started notification (jfreymuth/pulse only emits one per stream).
 func (t *termuxSpeaker) Clear() {
 	t.mu.Lock()
 	t.mixer.Clear()
 	t.mu.Unlock()
+
+	t.lifecycleMu.Lock()
+	t.wantPlayback = false
+	t.signalWakeLocked()
+	t.lifecycleMu.Unlock()
 }
 
 func (t *termuxSpeaker) Lock()   { t.mu.Lock() }
 func (t *termuxSpeaker) Unlock() { t.mu.Unlock() }
 
 func (t *termuxSpeaker) Suspend() error {
-	if t.errored.Load() || !t.started.Load() {
-		return nil
+	t.lifecycleMu.Lock()
+	t.suspended = true
+	if t.startupCancel != nil {
+		t.startupCancel()
 	}
-	if t.stream == nil {
-		return nil
-	}
-	t.stream.Pause()
+	t.signalWakeLocked()
+	t.lifecycleMu.Unlock()
 	return nil
 }
 
 func (t *termuxSpeaker) Resume() error {
-	if t.errored.Load() || !t.started.Load() {
-		return nil
-	}
-	if t.stream == nil {
-		return nil
-	}
-	t.stream.Resume()
+	t.lifecycleMu.Lock()
+	t.suspended = false
+	t.signalWakeLocked()
+	t.lifecycleMu.Unlock()
 	return nil
+}
+
+func (t *termuxSpeaker) Close() {
+	t.lifecycleMu.Lock()
+	done := t.supervisorDone
+	if done == nil {
+		t.closed = true
+		t.lifecycleMu.Unlock()
+		t.clearMixer()
+		return
+	}
+	if !t.closed {
+		t.closed = true
+		close(t.stop)
+		if t.startupCancel != nil {
+			t.startupCancel()
+		}
+	}
+	t.lifecycleMu.Unlock()
+	<-done
+
+	t.lifecycleMu.Lock()
+	t.session = nil
+	t.supervisorDone = nil
+	t.startupCancel = nil
+	t.wake = nil
+	t.stop = nil
+	t.wantPlayback = false
+	t.suspended = false
+	t.lifecycleMu.Unlock()
+	t.clearMixer()
+}
+
+func (t *termuxSpeaker) clearMixer() {
+	t.mu.Lock()
+	t.mixer.Clear()
+	t.mu.Unlock()
+}
+
+func (t *termuxSpeaker) signalWakeLocked() {
+	if t.wake == nil {
+		return
+	}
+	select {
+	case t.wake <- struct{}{}:
+	default:
+	}
+}
+
+func (t *termuxSpeaker) lifecycleState() (want, suspended, closed bool) {
+	t.lifecycleMu.Lock()
+	want = t.wantPlayback
+	suspended = t.suspended
+	closed = t.closed
+	t.lifecycleMu.Unlock()
+	return
+}
+
+func (t *termuxSpeaker) waitLifecycle() bool {
+	t.lifecycleMu.Lock()
+	wake := t.wake
+	stop := t.stop
+	closed := t.closed
+	t.lifecycleMu.Unlock()
+	if closed {
+		return false
+	}
+	select {
+	case <-wake:
+		return true
+	case <-stop:
+		return false
+	}
+}
+
+func (t *termuxSpeaker) waitRecovery(delay time.Duration) bool {
+	t.lifecycleMu.Lock()
+	wake := t.wake
+	stop := t.stop
+	closed := t.closed
+	t.lifecycleMu.Unlock()
+	if closed {
+		return false
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return true
+	case <-wake:
+		return true
+	case <-stop:
+		return false
+	}
+}
+
+func (t *termuxSpeaker) createSession() (*termuxSession, error) {
+	t.lifecycleMu.Lock()
+	factory := t.factory
+	sampleRate := t.sampleRate
+	bufferSize := t.bufferSize
+	t.lifecycleMu.Unlock()
+	if factory == nil {
+		factory = newTermuxSession
+	}
+	return factory(sampleRate, bufferSize, t.fillSamples)
+}
+
+func (t *termuxSpeaker) installSession(session *termuxSession) bool {
+	t.lifecycleMu.Lock()
+	defer t.lifecycleMu.Unlock()
+	if t.closed {
+		return false
+	}
+	t.session = session
+	return true
+}
+
+func (t *termuxSpeaker) forgetSession(session *termuxSession) {
+	t.lifecycleMu.Lock()
+	if t.session == session {
+		t.session = nil
+	}
+	t.lifecycleMu.Unlock()
+}
+
+func (t *termuxSpeaker) setStartupCancel(cancel context.CancelFunc) {
+	t.lifecycleMu.Lock()
+	t.startupCancel = cancel
+	t.lifecycleMu.Unlock()
+}
+
+func (t *termuxSpeaker) clearStartupCancel() {
+	t.lifecycleMu.Lock()
+	t.startupCancel = nil
+	t.lifecycleMu.Unlock()
+}
+
+func (t *termuxSpeaker) applySessionState(session *termuxSession, started bool) bool {
+	_, suspended, closed := t.lifecycleState()
+	if closed {
+		return false
+	}
+	if started && suspended {
+		session.stream.Pause()
+	}
+	if started && !suspended {
+		session.stream.Resume()
+	}
+	return true
+}
+
+func (t *termuxSpeaker) runLifecycle(done chan struct{}) {
+	defer close(done)
+	t.lifecycleMu.Lock()
+	session := t.session
+	t.lifecycleMu.Unlock()
+	started := false
+	backoff := 100 * time.Millisecond
+
+	for {
+		if session == nil {
+			want, suspended, closed := t.lifecycleState()
+			if closed {
+				return
+			}
+			if !want || suspended {
+				if !t.waitLifecycle() {
+					return
+				}
+				continue
+			}
+
+			created, err := t.createSession()
+			if err != nil {
+				debugPulseLog("PulseAudio session recovery failed: %v", err)
+				if !t.waitRecovery(backoff) {
+					return
+				}
+				backoff = min(backoff*2, time.Second)
+				continue
+			}
+			if !t.installSession(created) {
+				created.Close()
+				return
+			}
+			session = created
+			started = false
+			backoff = 100 * time.Millisecond
+		}
+
+		if !started {
+			want, suspended, closed := t.lifecycleState()
+			if closed {
+				session.Close()
+				return
+			}
+			if !want || suspended {
+				if !t.waitLifecycle() {
+					session.Close()
+					return
+				}
+				continue
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			t.setStartupCancel(cancel)
+			err := session.stream.StartContext(ctx)
+			cancel()
+			t.clearStartupCancel()
+			if err != nil {
+				session.Close()
+				t.forgetSession(session)
+				session = nil
+				started = false
+				if _, _, closed := t.lifecycleState(); closed {
+					return
+				}
+				if !t.waitRecovery(backoff) {
+					return
+				}
+				backoff = min(backoff*2, time.Second)
+				continue
+			}
+			started = true
+			if !t.applySessionState(session, started) {
+				session.Close()
+				return
+			}
+		}
+
+		select {
+		case <-session.stream.Done():
+			session.Close()
+			t.forgetSession(session)
+			session = nil
+			started = false
+			if _, _, closed := t.lifecycleState(); closed {
+				return
+			}
+			if !t.waitRecovery(backoff) {
+				return
+			}
+			backoff = min(backoff*2, time.Second)
+		case <-t.stop:
+			session.Close()
+			t.forgetSession(session)
+			return
+		case <-t.wake:
+			if !t.applySessionState(session, started) {
+				session.Close()
+				t.forgetSession(session)
+				return
+			}
+		}
+	}
 }
 
 // fillSamples is invoked by PulseAudio's internal goroutine when the daemon

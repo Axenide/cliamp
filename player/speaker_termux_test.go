@@ -3,12 +3,17 @@
 package player
 
 import (
+	"context"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/gopxl/beep/v2"
 )
 
 // makeSocket creates a real Unix domain socket at <dir>/<sub>/<name> and
@@ -396,10 +401,7 @@ func TestTermuxSpeakerInit_DoesNotReturnNoValidServer(t *testing.T) {
 // --- Lifecycle invariants ---
 
 // runClearWithTimeout invokes Clear in a goroutine and waits up to the
-// timeout for it to return. Clear can take ~1s on a fake server because
-// stream.Close / client.Close do proto.Request calls that block until
-// the 1s Request timeout fires. The timeout gives the test a deterministic
-// bound so a regression that turns Clear into an infinite hang fails fast.
+// timeout for it to return.
 func runClearWithTimeout(t *testing.T, sp *termuxSpeaker) {
 	t.Helper()
 	done := make(chan struct{})
@@ -414,87 +416,146 @@ func runClearWithTimeout(t *testing.T, sp *termuxSpeaker) {
 	}
 }
 
-// TestClear_DoesNotTouchStream verifies that Clear mirrors
-// gopxl/beep/v2/speaker.Clear: it clears the mixer and resets state
-// without closing the PulseAudio stream or client. Closing them under
-// a concurrent runStream would race with stream.Start's <-started
-// receive and could panic on a closed request channel.
+type fakeTermuxPlayback struct {
+	startEntered  chan struct{}
+	startRelease  chan struct{}
+	startReturned chan struct{}
+	done          chan struct{}
+
+	startOnce        sync.Once
+	startReleaseOnce sync.Once
+	startReturnOnce  sync.Once
+	doneOnce         sync.Once
+	startCalls       atomic.Int32
+	closeCalls       atomic.Int32
+}
+
+func newFakeTermuxPlayback() *fakeTermuxPlayback {
+	return &fakeTermuxPlayback{
+		startEntered:  make(chan struct{}),
+		startRelease:  make(chan struct{}),
+		startReturned: make(chan struct{}),
+		done:          make(chan struct{}),
+	}
+}
+
+func (f *fakeTermuxPlayback) StartContext(ctx context.Context) error {
+	f.startCalls.Add(1)
+	f.startOnce.Do(func() { close(f.startEntered) })
+	var err error
+	select {
+	case <-f.startRelease:
+	case <-f.done:
+		err = errTermuxPulseConnectionClosed
+	case <-ctx.Done():
+		err = ctx.Err()
+	}
+	f.startReturnOnce.Do(func() { close(f.startReturned) })
+	return err
+}
+
+func (f *fakeTermuxPlayback) Done() <-chan struct{} { return f.done }
+
+func (f *fakeTermuxPlayback) Pause()  {}
+func (f *fakeTermuxPlayback) Resume() {}
+
+func (f *fakeTermuxPlayback) Close() {
+	f.closeCalls.Add(1)
+	f.disconnect()
+}
+
+func (f *fakeTermuxPlayback) releaseStart() {
+	f.startReleaseOnce.Do(func() { close(f.startRelease) })
+}
+
+func (f *fakeTermuxPlayback) disconnect() {
+	f.doneOnce.Do(func() { close(f.done) })
+}
+
+type fakeTermuxSessionFactory struct {
+	mu       sync.Mutex
+	sessions []*fakeTermuxPlayback
+	created  chan *fakeTermuxPlayback
+}
+
+func newFakeTermuxSessionFactory() *fakeTermuxSessionFactory {
+	return &fakeTermuxSessionFactory{created: make(chan *fakeTermuxPlayback, 8)}
+}
+
+func (f *fakeTermuxSessionFactory) newSession(beep.SampleRate, int, func([]float32) (int, error)) (*termuxSession, error) {
+	stream := newFakeTermuxPlayback()
+	f.mu.Lock()
+	f.sessions = append(f.sessions, stream)
+	f.mu.Unlock()
+	f.created <- stream
+	return &termuxSession{stream: stream}, nil
+}
+
+func (f *fakeTermuxSessionFactory) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.sessions)
+}
+
+func waitForFakeSession(t *testing.T, created <-chan *fakeTermuxPlayback) *fakeTermuxPlayback {
+	t.Helper()
+	select {
+	case stream := <-created:
+		return stream
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for fake PulseAudio session")
+		return nil
+	}
+}
+
+func newFakeTermuxSpeaker(t *testing.T) (*termuxSpeaker, *fakeTermuxSessionFactory, *fakeTermuxPlayback) {
+	t.Helper()
+	factory := newFakeTermuxSessionFactory()
+	sp := &termuxSpeaker{factory: factory.newSession}
+	if err := sp.Init(44100, 4096); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	first := waitForFakeSession(t, factory.created)
+	t.Cleanup(sp.Close)
+	return sp, factory, first
+}
+
+// TestClear_DoesNotTouchStream verifies that Clear only empties the mixer and
+// leaves the current session owned by the lifecycle supervisor.
 func TestClear_DoesNotTouchStream(t *testing.T) {
-	dir := makeSocket(t, "pulse-AbCd", "native")
-	clearEnv(t, "XDG_RUNTIME_DIR", "TMPDIR", "PREFIX", "PULSE_SERVER")
-	withEnv(t, map[string]string{"TMPDIR": dir})
-
-	sp := &termuxSpeaker{}
-	if err := sp.Init(44100, 4096); err != nil {
-		t.Skipf("Init failed (expected on fake socket): %v", err)
-	}
-
+	sp, _, first := newFakeTermuxSpeaker(t)
 	runClearWithTimeout(t, sp)
 
-	sp.mu.Lock()
-	stream := sp.stream
-	sp.mu.Unlock()
-	if stream == nil {
-		t.Errorf("Clear must not nil out t.stream (would race with runStream)")
+	sp.lifecycleMu.Lock()
+	current := sp.session
+	sp.lifecycleMu.Unlock()
+	if current == nil || current.stream != first {
+		t.Errorf("Clear replaced the current PulseAudio session")
 	}
 }
 
-// TestClear_DoesNotResetStarted verifies that Clear preserves the started
-// flag so a subsequent Play cannot launch a second runStream on the same
-// PulseAudio stream. The previous design reset started in Clear, which let
-// Play → Clear → Play deadlock on jfreymuth/pulse's unbuffered started
-// notification (only one is emitted per stream).
-func TestClear_DoesNotResetStarted(t *testing.T) {
-	dir := makeSocket(t, "pulse-AbCd", "native")
-	clearEnv(t, "XDG_RUNTIME_DIR", "TMPDIR", "PREFIX", "PULSE_SERVER")
-	withEnv(t, map[string]string{"TMPDIR": dir})
-
-	sp := &termuxSpeaker{}
-	if err := sp.Init(44100, 4096); err != nil {
-		t.Skipf("Init failed (expected on fake socket): %v", err)
-	}
-
-	sp.started.Store(true)
-	sp.errored.Store(true)
-
-	runClearWithTimeout(t, sp)
-
-	if !sp.started.Load() {
-		t.Errorf("Clear must not reset started (lets Play spawn a competing runStream)")
-	}
-	if !sp.errored.Load() {
-		t.Errorf("Clear must not reset errored (Suspend/Resume skip when errored)")
-	}
-}
-
-// TestPlay_ClearThenPlay_PreservesStarted is the regression guard for the
-// Play → Clear → Play deadlock: a prior Play schedules a runStream goroutine
-// that is still pending PlaybackStream.Start (blocking on the unbuffered
-// started channel). Clear must leave started set so the next Play's
-// CompareAndSwap fails and no second runStream is spawned — otherwise both
-// goroutines would race into Start and one would wait forever for a
-// "started" notification that jfreymuth/pulse only emits once per stream.
-func TestPlay_ClearThenPlay_PreservesStarted(t *testing.T) {
-	dir := makeSocket(t, "pulse-AbCd", "native")
-	clearEnv(t, "XDG_RUNTIME_DIR", "TMPDIR", "PREFIX", "PULSE_SERVER")
-	withEnv(t, map[string]string{"TMPDIR": dir})
-
-	sp := &termuxSpeaker{}
-	if err := sp.Init(44100, 4096); err != nil {
-		t.Skipf("Init failed (expected on fake socket): %v", err)
-	}
-
-	sp.started.Store(true)
-
-	sp.Clear()
-	if !sp.started.Load() {
-		t.Fatal("Clear must not reset started (precondition for Play to skip a new runStream)")
-	}
+// TestPlay_ClearThenPlay_UsesOneSession guards the Play -> Clear -> Play race
+// while startup is pending. Clear and Play must not create a second session
+// while the supervisor owns the first StartContext call.
+func TestPlay_ClearThenPlay_UsesOneSession(t *testing.T) {
+	sp, factory, first := newFakeTermuxSpeaker(t)
 
 	sp.Play()
-	if !sp.started.Load() {
-		t.Fatal("Play must not have spawned a competing runStream")
+	select {
+	case <-first.startEntered:
+	case <-time.After(time.Second):
+		t.Fatal("startup did not begin")
 	}
+	sp.Clear()
+	sp.Play()
+
+	if got := factory.count(); got != 1 {
+		t.Fatalf("session count after Play -> Clear -> Play = %d, want 1", got)
+	}
+	if got := first.startCalls.Load(); got != 1 {
+		t.Fatalf("start calls after Play → Clear → Play = %d, want 1", got)
+	}
+	first.releaseStart()
 }
 
 // TestPlay_NoGoroutineWhenStreamNil verifies that Play is safe to call
@@ -505,9 +566,118 @@ func TestPlay_NoGoroutineWhenStreamNil(t *testing.T) {
 
 	sp.Play()
 
-	if sp.started.Load() {
-		t.Errorf("started must remain false when stream is nil")
+	sp.lifecycleMu.Lock()
+	session := sp.session
+	sp.lifecycleMu.Unlock()
+	if session != nil {
+		t.Errorf("session must remain nil when Play is called before Init")
 	}
+}
+
+func TestTermuxSpeaker_ReconnectsBeforeStarted(t *testing.T) {
+	sp, factory, first := newFakeTermuxSpeaker(t)
+
+	sp.Play()
+	select {
+	case <-first.startEntered:
+	case <-time.After(time.Second):
+		t.Fatal("startup did not begin")
+	}
+	first.disconnect()
+
+	second := waitForFakeSession(t, factory.created)
+	select {
+	case <-second.startEntered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("replacement startup did not begin after pre-start disconnect")
+	}
+	if got := first.closeCalls.Load(); got == 0 {
+		t.Fatal("lost pre-start session was not closed")
+	}
+	second.releaseStart()
+}
+
+func TestTermuxSpeaker_ReconnectsAfterStarted(t *testing.T) {
+	sp, factory, first := newFakeTermuxSpeaker(t)
+
+	sp.Play()
+	select {
+	case <-first.startEntered:
+	case <-time.After(time.Second):
+		t.Fatal("startup did not begin")
+	}
+	first.releaseStart()
+	select {
+	case <-first.startReturned:
+	case <-time.After(time.Second):
+		t.Fatal("startup did not return")
+	}
+	first.disconnect()
+
+	second := waitForFakeSession(t, factory.created)
+	select {
+	case <-second.startEntered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("replacement startup did not begin after post-start disconnect")
+	}
+	if got := first.closeCalls.Load(); got == 0 {
+		t.Fatal("lost post-start session was not closed")
+	}
+	second.releaseStart()
+}
+
+func TestTermuxSpeaker_CloseCancelsPendingStart(t *testing.T) {
+	sp, _, first := newFakeTermuxSpeaker(t)
+	sp.Play()
+	select {
+	case <-first.startEntered:
+	case <-time.After(time.Second):
+		t.Fatal("startup did not begin")
+	}
+
+	done := make(chan struct{})
+	go func() {
+		sp.Close()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Close did not cancel pending startup")
+	}
+}
+
+func TestTermuxSpeaker_CloseAllowsReinitialization(t *testing.T) {
+	sp, factory, first := newFakeTermuxSpeaker(t)
+
+	sp.Play()
+	select {
+	case <-first.startEntered:
+	case <-time.After(time.Second):
+		t.Fatal("initial startup did not begin")
+	}
+	first.releaseStart()
+	select {
+	case <-first.startReturned:
+	case <-time.After(time.Second):
+		t.Fatal("initial startup did not return")
+	}
+	sp.Close()
+
+	if err := sp.Init(44100, 4096); err != nil {
+		t.Fatalf("reinitialize after Close: %v", err)
+	}
+	second := waitForFakeSession(t, factory.created)
+	sp.Play()
+	select {
+	case <-second.startEntered:
+	case <-time.After(time.Second):
+		t.Fatal("replacement startup did not begin")
+	}
+	if got := factory.count(); got != 2 {
+		t.Fatalf("session count after Close -> Init = %d, want 2", got)
+	}
+	second.releaseStart()
 }
 
 // --- Retry deadline ---

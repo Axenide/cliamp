@@ -14,6 +14,7 @@ type Speaker interface {
 	Init(sampleRate beep.SampleRate, bufferSize int) error
 	Play(s ...beep.Streamer)
 	Clear()
+	Close()
 	Lock()
 	Unlock()
 	Suspend() error
@@ -38,6 +39,9 @@ func SpeakerPlay(s ...beep.Streamer) { backend.Play(s...) }
 
 // SpeakerClear removes all currently playing Streamers from the mixer.
 func SpeakerClear() { backend.Clear() }
+
+// SpeakerClose stops audio playback and releases backend resources.
+func SpeakerClose() { backend.Close() }
 
 // SpeakerLock locks the backend's mixer against concurrent reads/writes.
 // Pair with SpeakerUnlock. Not reentrant.

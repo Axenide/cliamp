@@ -1159,5 +1159,5 @@ func (p *Player) resumeSpeaker() {
 // Close fully stops the speaker and cleans up all resources.
 func (p *Player) Close() {
 	p.Stop()
-	SpeakerClear()
+	SpeakerClose()
 }
