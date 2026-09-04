@@ -390,7 +390,7 @@ func (t *termuxSpeaker) runLifecycle(done chan struct{}) {
 				continue
 			}
 			started = true
-			startedAt = time.Now()
+			startedAt = nowFunc()
 			if !t.applySessionState(session, started) {
 				session.Close()
 				return
@@ -399,7 +399,7 @@ func (t *termuxSpeaker) runLifecycle(done chan struct{}) {
 
 		select {
 		case <-session.stream.Done():
-			if !startedAt.IsZero() && time.Since(startedAt) >= termuxSessionStableTime {
+			if !startedAt.IsZero() && nowFunc().Sub(startedAt) >= termuxSessionStableTime {
 				backoff = 100 * time.Millisecond
 			}
 			session.Close()
