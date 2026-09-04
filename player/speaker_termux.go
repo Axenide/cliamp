@@ -321,6 +321,7 @@ func (t *termuxSpeaker) runLifecycle(done chan struct{}) {
 	session := t.session
 	t.lifecycleMu.Unlock()
 	started := false
+	startedAt := time.Time{}
 	backoff := 100 * time.Millisecond
 
 	for {
@@ -351,7 +352,7 @@ func (t *termuxSpeaker) runLifecycle(done chan struct{}) {
 			}
 			session = created
 			started = false
-			backoff = 100 * time.Millisecond
+			startedAt = time.Time{}
 		}
 
 		if !started {
@@ -378,6 +379,7 @@ func (t *termuxSpeaker) runLifecycle(done chan struct{}) {
 				t.forgetSession(session)
 				session = nil
 				started = false
+				startedAt = time.Time{}
 				if _, _, closed := t.lifecycleState(); closed {
 					return
 				}
@@ -388,6 +390,7 @@ func (t *termuxSpeaker) runLifecycle(done chan struct{}) {
 				continue
 			}
 			started = true
+			startedAt = time.Now()
 			if !t.applySessionState(session, started) {
 				session.Close()
 				return
@@ -396,10 +399,14 @@ func (t *termuxSpeaker) runLifecycle(done chan struct{}) {
 
 		select {
 		case <-session.stream.Done():
+			if !startedAt.IsZero() && time.Since(startedAt) >= termuxSessionStableTime {
+				backoff = 100 * time.Millisecond
+			}
 			session.Close()
 			t.forgetSession(session)
 			session = nil
 			started = false
+			startedAt = time.Time{}
 			if _, _, closed := t.lifecycleState(); closed {
 				return
 			}
@@ -483,6 +490,7 @@ const (
 	discoveryTotalDeadline  = 500 * time.Millisecond
 	discoveryInitialBackoff = 25 * time.Millisecond
 	discoveryMaxBackoff     = 100 * time.Millisecond
+	termuxSessionStableTime = time.Second
 )
 
 // nowFunc and sleepFunc are swapped in tests so retry behavior can be

@@ -120,6 +120,9 @@ func (c *termuxPulseClient) monitor() {
 	for {
 		select {
 		case <-ticker.C:
+			if !c.hasActivePlayback() {
+				continue
+			}
 			var reply pulseproto.GetServerInfoReply
 			if err := c.protocol.Request(&pulseproto.GetServerInfo{}, &reply); err != nil {
 				c.markLost(err)
@@ -129,6 +132,17 @@ func (c *termuxPulseClient) monitor() {
 			return
 		}
 	}
+}
+
+func (c *termuxPulseClient) hasActivePlayback() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, stream := range c.playback {
+		if stream.isRunning() {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *termuxPulseClient) newPlayback(sampleRate beep.SampleRate, bufferSize int, fill func([]float32) (int, error)) (*termuxPulsePlayback, error) {
@@ -411,7 +425,7 @@ func (p *termuxPulsePlayback) deliverRequest(length int) {
 
 func (p *termuxPulsePlayback) notifyStarted() {
 	p.stateMu.RLock()
-	ready := p.state == termuxPulseRunning && !p.underflow
+	ready := p.state == termuxPulseRunning
 	p.stateMu.RUnlock()
 	if !ready {
 		return

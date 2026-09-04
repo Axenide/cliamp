@@ -680,6 +680,45 @@ func TestTermuxSpeaker_CloseAllowsReinitialization(t *testing.T) {
 	second.releaseStart()
 }
 
+func TestTermuxPulseClient_HasActivePlayback(t *testing.T) {
+	stream := &termuxPulsePlayback{state: termuxPulseIdle}
+	client := &termuxPulseClient{
+		playback: map[uint32]*termuxPulsePlayback{1: stream},
+	}
+
+	if client.hasActivePlayback() {
+		t.Fatal("idle playback must not trigger health checks")
+	}
+	stream.stateMu.Lock()
+	stream.state = termuxPulseRunning
+	stream.stateMu.Unlock()
+	if !client.hasActivePlayback() {
+		t.Fatal("running playback must trigger health checks")
+	}
+	stream.stateMu.Lock()
+	stream.state = termuxPulsePaused
+	stream.stateMu.Unlock()
+	if client.hasActivePlayback() {
+		t.Fatal("paused playback must not trigger health checks")
+	}
+}
+
+func TestTermuxPulsePlayback_StartedAfterUnderflow(t *testing.T) {
+	stream := &termuxPulsePlayback{
+		started:   make(chan struct{}, 1),
+		done:      make(chan struct{}),
+		state:     termuxPulseRunning,
+		underflow: true,
+	}
+
+	stream.notifyStarted()
+	select {
+	case <-stream.started:
+	default:
+		t.Fatal("Started notification must not be suppressed by an earlier underflow")
+	}
+}
+
 // --- Retry deadline ---
 
 // TestDiscoverPulseSocketWithProbe_RespectsDeadline verifies the retry

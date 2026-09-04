@@ -17,7 +17,7 @@ func (beepSpeaker) Init(sampleRate beep.SampleRate, bufferSize int) error {
 
 func (beepSpeaker) Play(s ...beep.Streamer) { bspe.Play(s...) }
 func (beepSpeaker) Clear()                  { bspe.Clear() }
-func (beepSpeaker) Close()                  { bspe.Close() }
+func (beepSpeaker) Close()                  { bspe.Clear() }
 func (beepSpeaker) Lock()                   { bspe.Lock() }
 func (beepSpeaker) Unlock()                 { bspe.Unlock() }
 func (beepSpeaker) Suspend() error          { return bspe.Suspend() }

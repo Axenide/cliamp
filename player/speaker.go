@@ -40,7 +40,7 @@ func SpeakerPlay(s ...beep.Streamer) { backend.Play(s...) }
 // SpeakerClear removes all currently playing Streamers from the mixer.
 func SpeakerClear() { backend.Clear() }
 
-// SpeakerClose stops audio playback and releases backend resources.
+// SpeakerClose stops audio playback and releases backend resources when supported.
 func SpeakerClose() { backend.Close() }
 
 // SpeakerLock locks the backend's mixer against concurrent reads/writes.
